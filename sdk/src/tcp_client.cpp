@@ -132,7 +132,8 @@ namespace zvision
     {
         try
         {
-            iip = inet_addr(ip.c_str());
+            unsigned int net_byte_order = inet_addr(ip.c_str());
+            NetworkToHost((const unsigned char*)&net_byte_order, (char*)&iip);
         }
         catch (std::exception e)
         {
@@ -709,7 +710,7 @@ namespace zvision
                 Close();
                 return -1;
             }
-            PrintLog("Set block ok.\n");
+            
             #else
             #if 1
             int flags = fcntl(this->socket_, F_GETFL);
@@ -768,7 +769,7 @@ namespace zvision
     }
 
     //////////////////////////////////////////////////////////////////////////////////////////////
-    int UdpReceiver::SyncRecv(std::string& data, int& len, int& ip)
+    int UdpReceiver::SyncRecv(std::string& data, int& len, uint32_t& ip)
     {
         len = 0;
         if (!Env::Ok())
@@ -800,7 +801,6 @@ namespace zvision
             if (SOCKET_ERROR == ret)
             {
                 int er = GetSysErrorCode();
-                std::cout << ErrorString("recvfrom error, value is %d\n", er);
                 #ifdef WIN32
                 if (WSAETIMEDOUT == er)
                 #else
@@ -815,12 +815,12 @@ namespace zvision
             }
             else if (0 == ret)
             {
-                std::cout << ErrorString("The connection has been gracefully closed, recv return\n");
+                LOG_ERROR("The connection has been gracefully closed, recv return.\n");
                 return -2;
             }
             else
             {
-                ip = sender_addr.sin_addr.s_addr;
+                ip = ntohl(sender_addr.sin_addr.s_addr);
                 len = ret;
                 return 0;
             }

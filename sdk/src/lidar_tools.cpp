@@ -25,6 +25,7 @@
 #include "packet.h"
 #include "lidar_tools.h"
 #include "print.h"
+#include <set>
 #include <math.h>
 #include <cstring>
 #include <iostream>
@@ -53,15 +54,18 @@ namespace zvision
     {
         const auto before = std::chrono::system_clock::now();
 
-        UdpReceiver recv(55000, 100);
+        const int heart_beat_port = 55000;
+        UdpReceiver recv(heart_beat_port, 100);
         std::string data;
-        int len = 48;
-        int ip = 0;
+        const int heart_beat_len = 48;
+        int len = 0;
+        uint32_t ip = 0;
         int ret = 0;
-        std::string packet_header = "ZVI";
+        std::string packet_header = "ZVS";
         std::vector<std::string> lidars;
         device_list.clear();
 
+        LOG_DEBUG("\nScan device on the heart beat port %d for %d second(s).\n", heart_beat_port, scan_time);
         while (1)
         {
             if (0 != (ret = recv.SyncRecv(data, len, ip)))
@@ -70,7 +74,7 @@ namespace zvision
                 break;
             }
 
-            if (0 == packet_header.compare(0, packet_header.size(), data)) // heart beat packet
+            if ((heart_beat_len == len) && (0 == packet_header.compare(0, packet_header.size(), data.substr(0, packet_header.size())))) // heart beat packet
             {
                 std::string ip_string = IpToString(ip);
                 lidars.push_back(ip_string);
@@ -81,6 +85,13 @@ namespace zvision
             if (duration.count() >= scan_time)
                 break;
         }
+
+        // remove the same value
+        // https://stackoverflow.com/questions/1041620/whats-the-most-efficient-way-to-erase-duplicates-and-sort-a-vector
+        std::set<std::string> set;
+        unsigned size = lidars.size();
+        for (unsigned i = 0; i < size; ++i) set.insert(lidars[i]);
+        lidars.assign(set.begin(), set.end());
 
         for (unsigned int i = 0; i < lidars.size(); ++i)
         {
@@ -998,9 +1009,15 @@ namespace zvision
 
     }
 
-    int LidarTools::FirmwareUpdate(std::string& filename, ProgressCallback& cb)
+    int LidarTools::FirmwareUpdate(std::string& filename, ProgressCallback cb)
     {
         std::ifstream in(filename, std::ifstream::ate | std::ifstream::binary);
+        if (!in.is_open())
+        {
+            LOG_ERROR("Open file error.\n");
+            return -1;
+        }
+
         std::streampos end = in.tellg();
         int size = static_cast<int>(end);
         in.close();
@@ -1143,6 +1160,41 @@ namespace zvision
 
         return 0;
 
+    }
+
+    int LidarTools::RebootDevice()
+    {
+        if (!CheckConnection())
+            return -1;
+
+        /*Set device timestamp type*/
+        const int send_len = 4;
+        char set_cmd[send_len] = { (char)0xBA, (char)0x0C, (char)0x00, (char)0x00 };
+
+        std::string cmd(set_cmd, send_len);
+
+        const int recv_len = 4;
+        std::string recv(recv_len, 'x');
+
+        if (client_->SyncSend(cmd, send_len))//send cmd
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (client_->SyncRecv(recv, recv_len))//recv ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (!CheckDeviceRet(recv))//check ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        return 0;
     }
 
     bool LidarTools::CheckConnection()

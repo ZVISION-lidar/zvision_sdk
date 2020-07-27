@@ -274,7 +274,7 @@ namespace zvision
     {
         if (this->receiver_)
         {
-            int ip;
+            uint32_t ip;
             int len;
             int ret = 0;
             while (!need_stop_)
@@ -283,7 +283,7 @@ namespace zvision
                 ret = receiver_->SyncRecv(data, len, ip);
                 if (ret >= 0)
                 {
-                    if ((len > 0) && ((ip > 0) && ((unsigned int)ip == this->filter_ip_)))
+                    if ((len > 0) && (ip == this->filter_ip_))
                     {
                         std::string* packet = new std::string(data.c_str(), len);
                         this->packets_->enqueue(packet);

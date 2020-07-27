@@ -248,10 +248,10 @@ namespace zvision
         /** \brief Calls the SyncRecv method to reveive data from local udp port.
           * \param[in] data the buffer to store the data received.
           * \param[in] len  the length received.
-          * \param[in] ip   the sender's ip address.
+          * \param[in] ip   the sender's ip address in host byte order.
           * \return 0 for success, others for failure.
           */
-        int SyncRecv(std::string& data, int& len, int& ip);
+        int SyncRecv(std::string& data, int& len, uint32_t& ip);
 
         /** \brief Calls the Close method to close the socket.
           * \return 0 for success, others for failure.

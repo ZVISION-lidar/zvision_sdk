@@ -4,6 +4,12 @@
 #include <fstream>
 #include <iostream>
 
+//Callback function for progress notify
+void print_current_progress(int percent)
+{
+    LOG_INFO("# Current progress %3d.\n", percent);
+}
+
 //Sample code 0 : Set lidar's mac address
 int sample_config_lidar_mac_address(std::string lidar_ip, std::string mac)
 {
@@ -181,7 +187,37 @@ int sample_get_lidar_calibration(std::string lidar_ip)
     return ret;
 }
 
-//Sample code 12 : Scan lidar on the heart beat port
+//Sample code 12 : Firmware update.
+int sample_firmware_update(std::string lidar_ip)
+{
+    int ret = 0;
+    std::string firmware_filename = "xxx.pack";
+    zvision::LidarTools config(lidar_ip, 1000, 500, 500);
+    if (ret = config.FirmwareUpdate(firmware_filename, print_current_progress))
+        LOG_ERROR("Update device [%s]'s firmware %s failed, ret = %d.\n", lidar_ip.c_str(), firmware_filename.c_str(), ret);
+    else
+    {
+        LOG_INFO("Update device [%s] fireware %s ok.\n", lidar_ip.c_str(), firmware_filename.c_str());
+    }
+    return ret;
+}
+
+//Sample code 13 : Reboot lidar by tcp connection.
+int sample_reboot_lidar(std::string lidar_ip)
+{
+    int ret = 0;
+    zvision::LidarTools config(lidar_ip, 1000, 500, 500);
+    if (ret = config.RebootDevice())
+        LOG_ERROR("Reboot device [%s]'s failed, ret = %d.\n", lidar_ip.c_str(), ret);
+    else
+    {
+        LOG_INFO("Reboot device [%s] ok.\n", lidar_ip.c_str());
+    }
+    return ret;
+}
+
+
+//Sample code 14 : Scan lidar on the heart beat port
 //Notice, this function is supported by the lidar's new firmware kernel version, at least 0.1.20
 int sample_scan_lidar_on_heat_beat_port()
 {
@@ -255,7 +291,13 @@ int main()
     //Sample code 11 : Get lidar's calibration file by tcp connection.
     sample_get_lidar_calibration(lidar_ip);
 
-    //Sample code 12 : Scan lidar on the heart beat port
+    //Sample code 12 : Firmware update.
+    sample_firmware_update(lidar_ip);
+
+    //Sample code 13 : Reboot lidar by tcp connection.
+    sample_reboot_lidar(lidar_ip);
+
+    //Sample code 14 : Scan lidar on the heart beat port
     //Notice, this function is supported by the lidar's new firmware kernel version, at least 0.1.20
     sample_scan_lidar_on_heat_beat_port();
 

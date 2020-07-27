@@ -155,7 +155,12 @@ namespace zvision
         /** \brief Firmware update.
           * \param[in] filename        firmware filename
           */
-        int FirmwareUpdate(std::string& filename, ProgressCallback& cb);
+        int FirmwareUpdate(std::string& filename, ProgressCallback cb);
+
+        /** \brief Reboot device.
+        * \return 0 for ok, others for failure.
+        */
+        int RebootDevice();
 
 	protected:
         

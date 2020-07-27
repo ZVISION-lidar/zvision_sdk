@@ -308,8 +308,9 @@ namespace zvision
             unsigned int ip_network_order = 0;
             u_short port = 0;
 
-            SwapByteOrder((char*)pc + 14 + 12, (char*)&ip_network_order);//big endian
-            NetworkToHost((const unsigned char*)&ip_network_order, (char*)&ip_host_order);
+            //SwapByteOrder((char*)pc + 14 + 12, (char*)&ip_network_order);//big endian
+            //NetworkToHost((const unsigned char*)&ip_network_order, (char*)&ip_host_order);
+            NetworkToHost(pc + 14 + 12, (char*)&ip_host_order);
             NetworkToHostShort(pc + 36 +  0, (char*)&port);
             
             //std::cout << "read: " << std::hex << ip << std::dec << " port :" << port << std::endl;
