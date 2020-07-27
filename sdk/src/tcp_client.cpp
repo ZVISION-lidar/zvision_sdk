@@ -43,13 +43,17 @@
 #if defined WIN32
 #include <windows.h>
 #include <winsock.h>
+#pragma comment(lib,"ws2_32.lib") //Winsock Library
+
 #else
 #define closesocket close
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <fcntl.h>
 #include <unistd.h>
 #endif
 #include "print.h"
+#include <cstring>
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
@@ -64,8 +68,6 @@
 #define IN
 #define OUT
 #define INOUT
-# pragma comment(lib,"ws2_32.lib") //Winsock Library
-
 
 #ifdef WIN32
 
@@ -126,7 +128,7 @@ namespace zvision
         mac = std::string(cmac);
     }
 
-    bool StringToIp(std::string ip, int& iip)
+    bool StringToIp(std::string ip, unsigned int& iip)
     {
         try
         {
@@ -193,7 +195,7 @@ namespace zvision
 #ifdef WIN32
         err = WSAGetLastError();
 #else
-        err = getlasterror();
+        err = errno;
 #endif
 
         return err;
@@ -246,7 +248,7 @@ namespace zvision
 
         return std::string(buffer);
     }
-
+#if 0
     static void PrintLog(const char* format, ...)
     {
 
@@ -270,7 +272,7 @@ namespace zvision
         printf("%s", buffer);
 #endif
     }
-
+#endif
 
     static void PrintError(const char *msg)
     {
@@ -310,7 +312,7 @@ namespace zvision
                 env.socket_env_status_ = (int)ReturnCode::InitSuccess;
             }
 #else
-            socket_env_status_ = (int)ReturnCode::INIT_SUCCESS;
+            env.socket_env_status_ = (int)ReturnCode::InitSuccess;
 #endif
         }
         return ((int)ReturnCode::InitSuccess == env.socket_env_status_);
@@ -342,6 +344,7 @@ namespace zvision
         if (!Env::Ok())
             return -1;
 
+        LOG_DEBUG("Connect to %s:%d.\n", dst_ip.c_str(), dst_port);
         // Socket creation
         this->socket_ = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
         if (this->socket_ == INVALID_SOCKET)
@@ -368,7 +371,7 @@ namespace zvision
         }
 
         struct timeval time_out = { 0 };
-        time_out.tv_sec = 1;
+        time_out.tv_sec = this->conn_timeout_ms_ / 1000;
         time_out.tv_usec = (this->conn_timeout_ms_ % 1000) * 1000;
 
         LOG_DEBUG("Connect to %s:%d.\n", dst_ip.c_str(), dst_port);
@@ -447,33 +450,100 @@ namespace zvision
         return 0;
 
 #else
-        addr.sin_addr.s_addr = inet_addr(this->server_ip_.c_str());// server IP
+        int ret = 0;
+        addr.sin_addr.s_addr = inet_addr(dst_ip.c_str());// lidar IP
+        int timeout = this->send_timeout_ms_;
+        struct timeval time_out = { 0 };
+        time_out.tv_sec = this->conn_timeout_ms_ / 1000;
+        time_out.tv_usec = (this->conn_timeout_ms_ % 1000) * 1000;
 
-        if (0 != setsockopt(client, SOL_SOCKET, SO_SNDTIMEO, (const char*)&time_out, sizeof(time_out)))
+        if(0 > (ret = fcntl(this->socket_, F_SETFL, O_NONBLOCK)))
         {
-            PrintError("Set send timeout error ");
-            CloseSocket(client);
+            LOG_ERROR("Set non-block mode error, error code = %d.\n", GetSysErrorCode());
+            Close();
+            return -1;
+        }
+
+        if(0 > (ret = connect(this->socket_, (struct sockaddr *)&addr, sizeof(addr)))) // connect
+        {
+            int err = GetSysErrorCode();
+            if((EINPROGRESS == err) || (EWOULDBLOCK == err))
+            {
+                fd_set fdset;
+                FD_ZERO(&fdset);
+                FD_SET(this->socket_, &fdset);
+
+                if (select(this->socket_ + 1, NULL, &fdset, NULL, &time_out) == 1)
+                {
+                    int so_error;
+                    socklen_t len = sizeof so_error;
+
+                    getsockopt(this->socket_, SOL_SOCKET, SO_ERROR, &so_error, &len);
+
+                    if (so_error == 0)
+                    {
+                        ;
+                    }
+                    else
+                    {
+                        LOG_ERROR("Connect error, error code = %d\n", so_error);
+                        Close();
+                        return -1;
+                    }
+                }
+                else
+                {
+                    LOG_ERROR("Connect error, error code = %d.\n", this->GetSysErrorCode());
+                    Close();
+                    return -1;
+                }
+            }
+            else
+            {
+                LOG_ERROR("Connect error, error code = %d.\n", err);
+                Close();
+                return -1;
+            }
+
+
+        }
+
+        LOG_DEBUG("Connect to %s ok.\n", dst_ip.c_str());;
+
+        int flag = fcntl(this->socket_, F_GETFL, 0);
+        if(0 > (ret = fcntl(this->socket_, F_SETFL, flag & ~O_NONBLOCK)))
+        {
+            LOG_ERROR("Set block mode error, error code = %d.\n", GetSysErrorCode());
+            Close();
+            return -1;
+        }
+
+        time_out.tv_sec = this->send_timeout_ms_ / 1000;
+        time_out.tv_usec = (this->send_timeout_ms_ % 1000) * 1000;
+        if (0 != setsockopt(this->socket_, SOL_SOCKET, SO_SNDTIMEO, (const char*)&time_out, sizeof(time_out)))
+        {
+            LOG_ERROR("Set send timeout error, error code = %d.\n", this->GetSysErrorCode());
+            Close();
             return -1;
         }
         else
         {
-            PrintLog("Set send timeout ok, %u", uiTimeoutms);
+            LOG_DEBUG("Set send timeout ok, %d ms\n", timeout);
         }
 
-        if (0 != setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, (const char*)&time_out, sizeof(time_out)))
+        time_out.tv_sec = this->recv_timeout_ms_ / 1000;
+        time_out.tv_usec = (this->recv_timeout_ms_ % 1000) * 1000;
+        if (0 != setsockopt(this->socket_, SOL_SOCKET, SO_RCVTIMEO, (const char*)&time_out, sizeof(time_out)))
         {
-            PrintError("Set receive timeout error ");
-            CloseSocket(client);
+            LOG_ERROR("Set receive timeout error, error code = %d.\n ", timeout);
+            Close();
             return -1;
         }
         else
         {
-            PrintLog("Set receive timeout ok, %u", uiTimeoutms);
+            LOG_DEBUG("Set receive timeout ok, %d ms\n", timeout);
         }
-
-        struct timeval timeout = { uiTimeoutms / 1000,  (timeout % 1000) * 1000 };//3s
-        int ret = setsockopt(sock_fd, SOL_SOCKET, SO_SNDTIMEO, (const char*)&timeout, sizeof(timeout));
-        int ret = setsockopt(sock_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
+        return 0;
 #endif
 
 
@@ -493,12 +563,12 @@ namespace zvision
             ret = send(this->socket_, buf + count, len - count, flags);
             if (SOCKET_ERROR == ret)
             {
-                ErrorString("send error, return value is %d", GetSysErrorCode());
+                LOG_ERROR("send error, return value is %d", GetSysErrorCode());
                 return -1;
             }
             else if (0 == ret)
             {
-                ErrorString("The connection has been gracefully closed, send return");
+                LOG_ERROR("The connection has been gracefully closed, send return");
                 return -1;
             }
 
@@ -513,29 +583,37 @@ namespace zvision
     {
         int flags = 0;
         char *buf = const_cast<char*>(data.c_str());
-
-        //Windows: https://docs.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-recv
-        int ret = recv(this->socket_, buf, len, flags);
-        if (SOCKET_ERROR == ret)
+        unsigned int total_read = 0;
+        int need_read = len;
+        while(1)
         {
-            ErrorString("recv error, value is %d", GetSysErrorCode());
-            return -1;
-        }
-        else if (0 == ret)
-        {
-            ErrorString("The connection has been gracefully closed, recv return");
-            return -2;
-        }
-        else
-        {
-            //printf("%x %x %x %x\n", buf[0], buf[1], buf[2], buf[3]);
-            if (len == ret)
-                return 0;
+            //Windows: https://docs.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-recv
+            buf += total_read;
+            int ret = recv(this->socket_, buf, need_read, flags);
+            if (SOCKET_ERROR == ret)
+            {
+                LOG_ERROR("Recv error, value is %d", GetSysErrorCode());
+                return -1;
+            }
+            else if (0 == ret)
+            {
+                LOG_ERROR("The connection has been gracefully closed, recv return");
+                return -2;
+            }
             else
             {
-                return ret;
+                // printf("%x %x %x %x, ret = %d.\n", buf[0], buf[1], buf[2], buf[3], ret);
+                total_read += ret;
+                if ((len >= 0) && ((unsigned int)len <= total_read))
+                    return 0;
+                else
+                {
+                    need_read = len - total_read;
+                    continue;
+                }
             }
         }
+
     }
 
     //////////////////////////////////////////////////////////////////////////////////////////////
@@ -550,8 +628,8 @@ namespace zvision
         status = shutdown(this->socket_, SD_BOTH);
         if (status == 0) { status = closesocket(this->socket_); }
 #else
-        status = shutdown(sock_, SHUT_RDWR);
-        if (status == 0) { status = close(sock_); }
+        status = shutdown(this->socket_, SHUT_RDWR);
+        if (status == 0) { status = close(this->socket_); }
 #endif
         this->socket_ = INVALID_SOCKET;
         return status;
@@ -564,7 +642,7 @@ namespace zvision
 #ifdef WIN32
         err = WSAGetLastError();
 #else
-        err = getlasterror();
+        err = errno;
 #endif
 
         return err;
@@ -577,8 +655,9 @@ namespace zvision
 #ifdef WIN32
         err = WSAGetLastError();
 #else
-        err = getlasterror();
+        err = errno;
 #endif
+        err+=1;
         return std::string("");
     }
 
@@ -622,6 +701,7 @@ namespace zvision
             addr.sin_addr.s_addr = htonl(INADDR_ANY);// local ip
 
             // set socket blocking mode...
+            #ifdef WIN32
             u_long block = 0;
             if (ioctlsocket(this->socket_, FIONBIO, &block) == SOCKET_ERROR)
             {
@@ -630,57 +710,75 @@ namespace zvision
                 return -1;
             }
             PrintLog("Set block ok.\n");
+            #else
+            #if 1
+            int flags = fcntl(this->socket_, F_GETFL);
+            if(0 > fcntl(this->socket_, flags & ~O_NONBLOCK))
+            {
+                LOG_ERROR("Set block error, error code  %d.\n", GetSysErrorCode());
+                Close();
+                return -1;
+            }
+            #endif
+            #endif
 
             int reuseaddr = 1;
             if (0 != setsockopt(this->socket_, SOL_SOCKET, SO_REUSEADDR, (const char *)&reuseaddr, sizeof(reuseaddr)))
             {
-                PrintError("Set receive timeout error ");
+                LOG_ERROR("Set reuse addr error, error code = %d.\n", GetSysErrorCode());
                 Close();
                 return -1;
             }
             else
             {
-                PrintLog("Set reuseaddr ok\n");
+                ;
             }
 
             //set timeout
+            #ifdef WIN32
+            int recv_timeout = this->recv_timeout_ms_;
+            #else
+            struct timeval recv_timeout = { 0 };
+            recv_timeout.tv_sec = this->recv_timeout_ms_ / 1000;
+            recv_timeout.tv_usec = (this->recv_timeout_ms_ % 1000) * 1000;
+            #endif
             // return value reference: https://docs.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-setsockopt
-            int timeout = this->recv_timeout_ms_;
-            if (0 != setsockopt(this->socket_, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout, sizeof(timeout)))
+            if (0 != setsockopt(this->socket_, SOL_SOCKET, SO_RCVTIMEO, (const char *)&recv_timeout, sizeof(recv_timeout)))
             {
-                PrintError("Set receive timeout error ");
+                LOG_ERROR("Set receive timeout %d ms error, error code = %d.\n", this->recv_timeout_ms_, GetSysErrorCode());
                 Close();
                 return -1;
             }
             else
             {
-                PrintLog("Set receive timeout ok, %d ms\n", timeout);
+                LOG_DEBUG("Set receive timeout ok, %d ms.\n", this->recv_timeout_ms_);
             }
 
             // return value reference: https://docs.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-bind
             if (bind(this->socket_, (struct sockaddr*)&addr, sizeof(addr)))
             {
-                std::cout << ErrorString("bind error, return value is %d", GetSysErrorCode());
+                LOG_ERROR("Bind error, error code = %d.\n", GetSysErrorCode());
                 Close();
                 return -1;
             }
 
             init_ok_ = true;
         }
-
+        return 0;
     }
 
     //////////////////////////////////////////////////////////////////////////////////////////////
     int UdpReceiver::SyncRecv(std::string& data, int& len, int& ip)
     {
         len = 0;
-
         if (!Env::Ok())
             return InitFailure;
 
         if (!init_ok_)
         {
-            this->Bind();
+            int ret = 0;
+            if(0 != (ret = this->Bind()))
+                LOG_ERROR("Bind error.\n");
         }
 
         if(init_ok_)
@@ -694,16 +792,25 @@ namespace zvision
             int sender_addr_size = sizeof(sender_addr);
 
             //Windows: https://docs.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-recv
-            int ret = recvfrom(this->socket_, buf, buffer_len, flags, (SOCKADDR *)&sender_addr, &sender_addr_size);
+            #ifdef WIN32
+            int ret = recvfrom(this->socket_, buf, buffer_len, flags, (sockaddr *)&sender_addr, &sender_addr_size);
+            #else
+            int ret = recvfrom(this->socket_, buf, buffer_len, flags, (sockaddr *)&sender_addr, (socklen_t*)&sender_addr_size);
+            #endif
             if (SOCKET_ERROR == ret)
             {
                 int er = GetSysErrorCode();
                 std::cout << ErrorString("recvfrom error, value is %d\n", er);
+                #ifdef WIN32
                 if (WSAETIMEDOUT == er)
+                #else
+                if ((EAGAIN == er) || (EWOULDBLOCK == er))
+                #endif
                 {
                     len = 0;
                     return 0;
                 }
+                LOG_ERROR(" Recvfrom error, error code = %d.\n", er);
                 return -1;
             }
             else if (0 == ret)
@@ -734,8 +841,8 @@ namespace zvision
         status = shutdown(this->socket_, SD_BOTH);
         if (status == 0) { status = closesocket(this->socket_); }
 #else
-        status = shutdown(sock, SHUT_RDWR);
-        if (status == 0) { status = close(sock); }
+        status = shutdown(this->socket_, SHUT_RDWR);
+        if (status == 0) { status = close(this->socket_); }
 #endif
 
         return status;

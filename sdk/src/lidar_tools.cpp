@@ -25,6 +25,8 @@
 #include "packet.h"
 #include "lidar_tools.h"
 #include "print.h"
+#include <math.h>
+#include <cstring>
 #include <iostream>
 #include <functional>
 #include <fstream>
@@ -35,9 +37,9 @@
 namespace zvision
 {
     LidarTools::LidarTools(std::string lidar_ip, int con_timeout, int send_timeout, int recv_timeout):
+        client_(new TcpClient(con_timeout, send_timeout, recv_timeout)),
         device_ip_(lidar_ip),
-        conn_ok_(false),
-        client_(new TcpClient(con_timeout, send_timeout, recv_timeout))
+        conn_ok_(false)
     {
 
     }
@@ -62,7 +64,7 @@ namespace zvision
 
         while (1)
         {
-            if (ret = recv.SyncRecv(data, len, ip))
+            if (0 != (ret = recv.SyncRecv(data, len, ip)))
             {
                 LOG_ERROR("Scan device error, receive failed ret = %d.\n", ret);
                 break;
@@ -80,11 +82,11 @@ namespace zvision
                 break;
         }
 
-        for (int i = 0; i < lidars.size(); ++i)
+        for (unsigned int i = 0; i < lidars.size(); ++i)
         {
             LidarTools config(lidars[0], 1000);
             DeviceConfigurationInfo info;
-            if (ret = config.QueryDeviceConfigurationInfo(info))
+            if (0 != (ret = config.QueryDeviceConfigurationInfo(info)))
             {
                 LOG_ERROR("Scan device error, query device info failed, ret = %d.\n", ret);
                 break;
@@ -97,9 +99,6 @@ namespace zvision
 
     int LidarTools::ReadCalibrationData(std::string filename, CalibrationData& cal)
     {
-        DeviceType tp = DeviceType::LidarUnknown;
-        int file_lines = 0;
-        int file_cols = 0;
         std::ifstream file;
         file.open(filename, std::ios::in);
         std::string line;
@@ -128,7 +127,6 @@ namespace zvision
                 for (int i = 0; i < 10000; i++)
                 {
                     const int column = 7;
-                    const int fovs = 3;
 
                     std::vector<std::string>& datas = lines[i];
                     if (datas.size() != column)
@@ -217,7 +215,7 @@ namespace zvision
             {
                 outfile.setf(std::ios::fixed, std::ios::floatfield);
                 outfile.precision(3);
-                for (int i = 0; i < cal.data.size(); i++)
+                for (unsigned int i = 0; i < cal.data.size(); i++)
                 {
                     if (0 == (i % data_in_line))
                     {
@@ -278,23 +276,23 @@ namespace zvision
 
         if (LidarML30B1 == cal.device_type)
         {
-            for (int i = 0; i < cal.data.size() / 2; ++i)
+            for (unsigned int i = 0; i < cal.data.size() / 2; ++i)
             {
                 float azi = static_cast<float>(cal.data[i * 2] / 180.0 * 3.1416);
                 float ele = static_cast<float>(cal.data[i * 2 + 1] / 180.0 * 3.1416);
 
                 CalibrationDataSinCos& point_cal = cal_cos_sin_lut.data[i];
-                point_cal.cos_ele = std::cosf(ele);
-                point_cal.sin_ele = std::sinf(ele);
-                point_cal.cos_azi = std::cosf(azi);
-                point_cal.sin_azi = std::sinf(azi);
+                point_cal.cos_ele = std::cos(ele);
+                point_cal.sin_ele = std::sin(ele);
+                point_cal.cos_azi = std::cos(azi);
+                point_cal.sin_azi = std::sin(azi);
             }
         }
         else if (LidarML30SA1 == cal.device_type)
         {
             const int start = 8;
             int fov_index[start] = { 0, 6, 1, 7, 2, 4, 3, 5 };
-            for (int i = 0; i < cal.data.size() / 2; ++i)
+            for (unsigned int i = 0; i < cal.data.size() / 2; ++i)
             {
                 int start_number = i % start;
                 int group_number = i / start;
@@ -303,10 +301,10 @@ namespace zvision
                 float azi = static_cast<float>(cal.data[point_numer * 2 + 1] / 180.0 * 3.1416);
 
                 CalibrationDataSinCos& point_cal = cal_cos_sin_lut.data[i];
-                point_cal.cos_ele = std::cosf(ele);
-                point_cal.sin_ele = std::sinf(ele);
-                point_cal.cos_azi = std::cosf(azi);
-                point_cal.sin_azi = std::sinf(azi);
+                point_cal.cos_ele = std::cos(ele);
+                point_cal.sin_ele = std::sin(ele);
+                point_cal.cos_azi = std::cos(azi);
+                point_cal.sin_azi = std::sin(azi);
 
             }
         }
@@ -314,7 +312,7 @@ namespace zvision
         {
             const int start = 3;
             int fov_index[start] = { 2, 1, 0 };
-            for (int i = 0; i < cal.data.size() / 2; ++i)
+            for (unsigned int i = 0; i < cal.data.size() / 2; ++i)
             {
                 int start_number = i % start;
                 int group_number = i / start;
@@ -323,10 +321,10 @@ namespace zvision
                 float azi = static_cast<float>(cal.data[point_numer * 2 + 1] / 180.0 * 3.1416);
 
                 CalibrationDataSinCos& point_cal = cal_cos_sin_lut.data[i];
-                point_cal.cos_ele = std::cosf(ele);
-                point_cal.sin_ele = std::sinf(ele);
-                point_cal.cos_azi = std::cosf(azi);
-                point_cal.sin_azi = std::sinf(azi);
+                point_cal.cos_ele = std::cos(ele);
+                point_cal.sin_ele = std::sin(ele);
+                point_cal.cos_azi = std::cos(azi);
+                point_cal.sin_azi = std::sin(azi);
             }
         }
         else
@@ -584,15 +582,11 @@ namespace zvision
     int LidarTools::GetDeviceCalibrationData(CalibrationData& cal)
     {
         std::string ec;
-        int packets = 0;
         const int ppf = 256000; // points per frame, 256000 reserved
         const int ppk = 128; // points per cal udp packet
-        std::unique_ptr<float> angle_data(new float[ppf * 2]); // points( azimuh, elevation)
-        float *p = angle_data.get();
+        std::unique_ptr<float> angle_data(new float[ppf * 2]); // points( azimuh, elevation);
         int packet_buffer_size = 1040 * (ppf / ppk) + 4; // 128 points in one packet, buffer reserved for ppf points.
-        int data_per_pkt = ppk * 4 * 2; //128 points per pkt, 4 bytes per angle, 2 angle(azimuth and elevation)
         std::unique_ptr<unsigned char> packet_data(new unsigned char[packet_buffer_size]);
-        unsigned char *pcal = packet_data.get();
         const int send_len = 4;
         char cal_cmd[send_len] = { (char)0xBA, (char)0x07, (char)0x00, (char)0x00 };
         std::string cmd(cal_cmd, send_len);
@@ -660,13 +654,13 @@ namespace zvision
         }
         if (0x00 == check_all_00)
         {
-            std::cerr << "Check calibration data error, data is all 0x00" << std::endl;
+            LOG_ERROR("Check calibration data error, data is all 0x00.\n");
             DisConnect();
             return -1;
         }
         if (0xFF == check_all_ff)
         {
-            std::cerr << "Check calibration data error, data is all 0xFF" << std::endl;
+            LOG_ERROR("Check calibration data error, data is all 0xFF.\n");
             DisConnect();
             return -1;
         }
@@ -675,10 +669,12 @@ namespace zvision
 
         for (int i = 0; i < total_packet - 1; i++)
         {
+            //LOG_DEBUG("Get calibration data %d.\n", i);
             std::this_thread::sleep_for(std::chrono::microseconds(110));
             int ret = client_->SyncRecv(cal_recv, cal_pkt_len);
             if (ret)
             {
+                LOG_ERROR("Receive calibration data error, ret = %d.\n", ret);
                 DisConnect();
                 return -1;
             }
@@ -710,6 +706,7 @@ namespace zvision
 
         }
 
+        LOG_DEBUG("Get calibration data ok.\n");
         cal.device_type = tp;
         return 0;
     }
@@ -1039,8 +1036,6 @@ namespace zvision
         int start_percent = 10;
         int block_total = static_cast<int>(ceil(size / 256.0));
         int step_per_percent = block_total / 30;//old is 90
-        int block_writed = 0;
-        int arm_step = 0;
 
         std::ifstream idata(filename, std::ios::in | std::ios::binary);
         const int pkt_len = 256;

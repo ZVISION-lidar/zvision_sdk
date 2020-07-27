@@ -95,13 +95,13 @@ namespace zvision
 
         unsigned int size()
         {
-            boost::unique_lock<boost::mutex> lock(mutex_);
+            std::unique_lock<std::mutex> lock(mutex_);
             return static_cast<unsigned int>(queue_.size());
         }
 
         bool isEmpty() const
         {
-            boost::unique_lock<boost::mutex> lock(mutex_);
+            std::unique_lock<std::mutex> lock(mutex_);
             return (queue_.empty());
         }
 
@@ -125,19 +125,19 @@ namespace zvision
     };
 
     PointCloudProducer::PointCloudProducer(int data_port, std::string lidar_ip, std::string cal_filename = ""):
-        data_port_(data_port),
-        device_ip_(lidar_ip),
-        init_ok_(false),
         cal_(new CalibrationData()),
         points_(new PointCloud()),
+        device_ip_(lidar_ip),
         cal_filename_(cal_filename),
-        need_stop_(false),
         device_type_(LidarUnknown),
         last_seq_(-1),
+        data_port_(data_port),
+        init_ok_(false),
+        need_stop_(false),
         pointcloud_cb_(nullptr),
-        max_pointcloud_count_(200),
+        mutex_(),
         cond_(),
-        mutex_()
+        max_pointcloud_count_(200)
     {
     }
 
@@ -155,7 +155,7 @@ namespace zvision
                 return false;
             }
 
-            LidarTools tool(this->device_ip_);
+            LidarTools tool(this->device_ip_, 1000, 1000, 1000);
             DeviceConfigurationInfo cfg;
 
             // if port is negative, we need to get the port from lidar by tcp connection
@@ -192,7 +192,6 @@ namespace zvision
 
     void PointCloudProducer::ProcessLidarPacket(std::string& packet)
     {
-        unsigned char* data = const_cast<unsigned char*>((unsigned char*)packet.c_str());
         //pkt content len: 42 + 1304
         if (packet.size() != 1304)
         {
@@ -284,7 +283,7 @@ namespace zvision
                 ret = receiver_->SyncRecv(data, len, ip);
                 if (ret >= 0)
                 {
-                    if ((len > 0) && (ip == this->filter_ip_))
+                    if ((len > 0) && ((ip > 0) && ((unsigned int)ip == this->filter_ip_)))
                     {
                         std::string* packet = new std::string(data.c_str(), len);
                         this->packets_->enqueue(packet);
@@ -364,7 +363,7 @@ namespace zvision
             this->producer_ = std::shared_ptr<std::thread>(
                 new std::thread(std::bind(&PointCloudProducer::Producer, this)));
         }
-
+        return 0;
     }
 
     void PointCloudProducer::Stop()/*start the thread*/
@@ -397,14 +396,14 @@ namespace zvision
 
     OfflinePointCloudProducer::OfflinePointCloudProducer(std::string pcap_filename, std::string cal_filename, std::string lidar_ip, int data_port):
         pcap_filename_(pcap_filename),
-        cal_filename_(cal_filename),
-        device_ip_(lidar_ip),
-        data_port_(data_port),
-        init_ok_(false),
         cal_lut_(new CalibrationDataSinCosTable()),
+        cal_filename_(cal_filename),
         device_type_(LidarUnknown),
         count_(0),
+        device_ip_(lidar_ip),
         last_seq_(-1),
+        data_port_(data_port),
+        init_ok_(false),
         pointcloud_cb_(nullptr)
     {
 
@@ -427,13 +426,13 @@ namespace zvision
         this->packet_source_.reset(new PcapUdpSource(this->device_ip_, this->data_port_, this->pcap_filename_));
 
         int ret = 0;
-        if (ret = this->packet_source_->ReadFrameInfo(count_, type))
+        if (0 != (ret = this->packet_source_->ReadFrameInfo(count_, type)))
             return ret;
 
         if (cal_filename_.size())
         {
             CalibrationData cal;
-            if (ret = LidarTools::ReadCalibrationData(cal_filename_, cal))
+            if (0 != (ret = LidarTools::ReadCalibrationData(cal_filename_, cal)))
                 return ret;
             LidarTools::ComputeCalibrationSinCos(cal, *(this->cal_lut_.get()));
         }
@@ -452,13 +451,13 @@ namespace zvision
         //get one full pointcloud's udp packets
         std::vector<PointCloudPacket> packets;
         int ret = 0;
-        if (ret = this->packet_source_->GetPointCloudPackets(frame_number, packets))
+        if (0 != (ret = this->packet_source_->GetPointCloudPackets(frame_number, packets)))
             return ret;
 
         //process udp packets and generate poincloud
-        for (int i = 0; i < packets.size(); ++i)
+        for (unsigned int i = 0; i < packets.size(); ++i)
         {
-            if (ret = PointCloudPacket::ProcessPacket(packets[i], *(this->cal_lut_.get()), points))
+            if (0 != (ret = PointCloudPacket::ProcessPacket(packets[i], *(this->cal_lut_.get()), points)))
                 return ret;
         }
 

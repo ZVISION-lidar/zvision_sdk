@@ -24,6 +24,7 @@
 #include "define.h"
 #include "packet.h"
 #include "point_cloud.h"
+#include <cstring>
 
 
 namespace zvision
@@ -105,9 +106,7 @@ namespace zvision
         //UDP packet parameters
         unsigned int groups_in_one_udp = 0;
         unsigned int points_in_one_group = 0;
-        unsigned int udp_in_one_frame = 125;
         unsigned int point_position_in_group = 0;
-        unsigned int point_in_group = 0;
         unsigned int group_len = 0;
         unsigned int point_len = 4;
         unsigned int group_position_in_packet = 4;
@@ -116,9 +115,7 @@ namespace zvision
         {
             groups_in_one_udp = 80;
             points_in_one_group = 3;
-            udp_in_one_frame = 125;
             point_position_in_group = 4;
-            point_in_group = 3;
             group_len = 16;
             if (30000 != cloud.points.size())
                 cloud.points.resize(30000);
@@ -127,9 +124,7 @@ namespace zvision
         {
             groups_in_one_udp = 40;
             points_in_one_group = 8;
-            udp_in_one_frame = 200;
             point_position_in_group = 0;
-            point_in_group = 8;
             group_len = 32;
             if (51200 != cloud.points.size())
                 cloud.points.resize(51200);
@@ -138,9 +133,7 @@ namespace zvision
         {
             groups_in_one_udp = 40;
             points_in_one_group = 8;
-            udp_in_one_frame = 200;
             point_position_in_group = 0;
-            point_in_group = 3;
             group_len = 16;
             if (96000 != cloud.points.size())
                 cloud.points.resize(96000);

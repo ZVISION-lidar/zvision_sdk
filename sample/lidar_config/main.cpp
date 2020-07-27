@@ -215,15 +215,15 @@ int sample_scan_lidar_on_heat_beat_port()
     return ret;
 }
 
-void main()
+int main()
 {
-    std::string lidar_ip = "192.168.10.107";
+    std::string lidar_ip = "192.168.10.108";
 
     //Sample code 0 : Set lidar's mac address
     sample_config_lidar_mac_address(lidar_ip, "76-66-66-66-66-66");
 
     //Sample code 1 : Set lidar's static ip address
-    sample_config_lidar_ip(lidar_ip, "192.168.10.107");
+    sample_config_lidar_ip(lidar_ip, "192.168.10.108");
 
     //Sample code 2 : Set lidar's subnet mask
     sample_config_lidar_subnet_mask(lidar_ip, "255.255.255.0");
@@ -259,4 +259,5 @@ void main()
     //Notice, this function is supported by the lidar's new firmware kernel version, at least 0.1.20
     sample_scan_lidar_on_heat_beat_port();
 
+    return 0;
 }

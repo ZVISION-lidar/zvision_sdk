@@ -25,6 +25,7 @@
 #include "packet_source.h"
 #include "tcp_client.h"
 #include "lidar_tools.h"
+#include <cstring>
 #include <limits>
 #include <iostream>
 
@@ -55,8 +56,8 @@ namespace zvision
     }
 
     PcapReader::PcapReader(std::string filename):
-        filename_(filename),
-        init_ok_(false)
+        init_ok_(false),
+        filename_(filename)
     {
 
     }
@@ -87,7 +88,7 @@ namespace zvision
             if (file_.is_open())
             {
                 file_.read(buffer, PCAP_HEADER_LEN); /*20 bytes pcap file header*/
-                if (ret = file_.fail())
+                if (0 != (ret = file_.fail()))
                 {
                     init_ok_ = false;
                     return ret;
@@ -179,10 +180,10 @@ namespace zvision
 
 
     PcapUdpSource::PcapUdpSource(std::string ip, int port, std::string filename):
+        init_ok_(false),
         sender_ip_(ip),
         destination_port_(port),
-        filename_(filename),
-        init_ok_(false)
+        filename_(filename)
     {
 
     }
@@ -203,7 +204,7 @@ namespace zvision
             }
 
             reader_.reset(new PcapReader(filename_));
-            if (ret = reader_->Open())
+            if (0 != (ret = reader_->Open()))
                 return ret;
             else
                 init_ok_ = true;
@@ -217,14 +218,14 @@ namespace zvision
         int ret = 0;
         if (!init_ok_)
         {
-            if (ret = this->Open())
+            if (0 != (ret = this->Open()))
                 return ret;
         }
 
-        if (frame_number >= this->position_.size())
+        if ((unsigned int)frame_number >= this->position_.size())
             return InvalidParameter;
 
-        if (ret = this->reader_->SetFilePosition(this->position_[frame_number]))
+        if (0 != (ret = this->reader_->SetFilePosition(this->position_[frame_number])))
             return ret;
 
         std::string data;
@@ -233,7 +234,7 @@ namespace zvision
 
         while (1)
         {
-            if (ret = ReadOne(data, len))
+            if (0 != (ret = ReadOne(data, len)))
             {
                 if (EndOfFile == ret)
                 {
@@ -280,7 +281,7 @@ namespace zvision
         int ret = 0;
         if (!init_ok_)
         {
-            if (ret = this->Open())
+            if (0 != (ret = this->Open()))
                 return ret;
         }
 
@@ -325,7 +326,7 @@ namespace zvision
         int ret = 0;
         if (!init_ok_)
         {
-            if (ret = this->Open())
+            if (0 != (ret = this->Open()))
                 return ret;
         }
         
@@ -340,10 +341,10 @@ namespace zvision
             int len = 0;
             std::streampos pos = 0;
 
-            if (ret = reader_->GetFilePosition(pos))
+            if (0 != (ret = reader_->GetFilePosition(pos)))
                 break;
 
-            if (ret = ReadOne(data, len))
+            if (0 != (ret = ReadOne(data, len)))
             {
                 if (EndOfFile == ret)
                 {

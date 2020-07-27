@@ -74,7 +74,7 @@ namespace zvision
     * \param[in] iip   ip address in integer format
     * \return true for success, false for failure.
     */
-    bool StringToIp(std::string ip, int& iip);
+    bool StringToIp(std::string ip, unsigned int& iip);
 
     /** \brief Convert the  to integer(host byte order) to ip string in the standard IPv4 dotted decimal notation.
     * \param[in] ip    ip address in integer format

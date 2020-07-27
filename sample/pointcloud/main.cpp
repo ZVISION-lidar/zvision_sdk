@@ -51,8 +51,7 @@ void sample_online_pointcloud()
     player.RegisterPointCloudCallback(sample_pointcloud_callback);
 
     //Start to receive the pointcloud packet and process it.
-    player.Start();
-
+    int ret = player.Start();
 #ifdef USING_PCL_VISUALIZATION
     boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
     viewer.reset(new pcl::visualization::PCLVisualizer("cloudviewtest"));
@@ -89,14 +88,14 @@ void sample_offline_pointcloud()
     int ret = 0;
 
     //Specify a pcap file, which contain the lidar's pointcloud packet.
-    std::string pcap_filename = "xxxx.pcap";
+    std::string pcap_filename = "/ssd/Project/SLAM/02_ML30SA1/200716_39/campus_06_ok.pcap_2020-07-16_20_38_36.827718_LiDAR_2368.pcap";
 
     //Specify a calibration file, which contain the lidar's calibration data.
-    std::string cal_filename = "xxxx.cal";
+    std::string cal_filename = "/ssd/Project/SLAM/02_ML30SA1/200716_39/15-Jul-2020-ML30SA1039-LiDAR.cal";
 
     //Specify the pcap file, calibtation file to play.
     //The ip address and udp destination port is used to filter the pcap file to play the special lidar data. 
-    zvision::OfflinePointCloudProducer player(pcap_filename, cal_filename, "192.168.100.120", 3500);
+    zvision::OfflinePointCloudProducer player(pcap_filename, cal_filename, "192.168.1.200", 2368);
 
     int size = 0;
     zvision::DeviceType type = zvision::LidarUnknown;
@@ -162,12 +161,12 @@ static void export_point_cloud(zvision::PointCloud& points, std::string filename
     }
 }
 
-void main()
+int main()
 {
     //sample 0 : get online pointcloud. You can get poincloud from online device.
-    //sample_online_pointcloud();
+    sample_online_pointcloud();
 
     //sample 1 : get offline pointcloud. You can get poincloud from pcap file.
-    sample_offline_pointcloud();
-
+    //sample_offline_pointcloud();
+    return 0;
 }

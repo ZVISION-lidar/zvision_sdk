@@ -251,7 +251,7 @@ namespace zvision
         std::string sender_ip_;
 
         /** \brief filter ip address. */
-        int filter_ip_;
+        unsigned int filter_ip_;
 
         /** \brief Server listening port. */
         int destination_port_;

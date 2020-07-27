@@ -30,6 +30,7 @@
 #include <thread>
 #include <mutex>
 #include <deque>
+#include <condition_variable>
 #include "define.h"
 
 
@@ -62,7 +63,7 @@ namespace zvision
         /** \brief zvision PointCloudProducer constructor.
         * \param[in] data_port       lidar udp destination port.
         * \param[in] lidar_ip        lidar's ip address
-        * \param[in] cal_filename    lidar's calibration file name£¬ if empty string, using online calibration data
+        * \param[in] cal_filename    lidar's calibration file name, if empty string, using online calibration data
         */
         PointCloudProducer(int data_port, std::string lidar_ip, std::string cal_filename);
 
@@ -149,7 +150,7 @@ namespace zvision
         /** \brief end of a full pointcloud's udp seq. It depends on lidar type*/
         int end_seq_;
 
-        int filter_ip_;
+        unsigned int filter_ip_;
         int data_port_;
 
         bool init_ok_;
@@ -162,7 +163,7 @@ namespace zvision
         std::condition_variable cond_;
 
         /** \brief pointclopud cache size.*/
-        int max_pointcloud_count_;
+        unsigned int max_pointcloud_count_;
 
     };
 
