@@ -88,10 +88,10 @@ void sample_offline_pointcloud()
     int ret = 0;
 
     //Specify a pcap file, which contain the lidar's pointcloud packet.
-    std::string pcap_filename = "/ssd/Project/SLAM/02_ML30SA1/200716_39/campus_06_ok.pcap_2020-07-16_20_38_36.827718_LiDAR_2368.pcap";
+    std::string pcap_filename = "xxxx.pcap";
 
     //Specify a calibration file, which contain the lidar's calibration data.
-    std::string cal_filename = "/ssd/Project/SLAM/02_ML30SA1/200716_39/15-Jul-2020-ML30SA1039-LiDAR.cal";
+    std::string cal_filename = "xxxx.cal";
 
     //Specify the pcap file, calibtation file to play.
     //The ip address and udp destination port is used to filter the pcap file to play the special lidar data. 
