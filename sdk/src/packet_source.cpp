@@ -305,7 +305,6 @@ namespace zvision
             }
 
             unsigned int ip_host_order = 0;
-            unsigned int ip_network_order = 0;
             u_short port = 0;
 
             //SwapByteOrder((char*)pc + 14 + 12, (char*)&ip_network_order);//big endian

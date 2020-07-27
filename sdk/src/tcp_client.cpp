@@ -228,6 +228,7 @@ namespace zvision
         }
     };
 
+    #if 0
     static std::string ErrorString(const char* format, ...)
     {
         va_list args;
@@ -249,6 +250,7 @@ namespace zvision
 
         return std::string(buffer);
     }
+    #endif
 #if 0
     static void PrintLog(const char* format, ...)
     {
