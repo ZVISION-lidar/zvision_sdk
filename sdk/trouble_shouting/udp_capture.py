@@ -1,11 +1,18 @@
 #! /bin/python
 
+import sys
+import socket
+
 #Specify the port number to capture.
 UDP_PORT = 2368
 
 
-print "This is a test script"
-import socket
+if 2 != len(sys.argv):
+    print("No specified port available, detect on default port ", UDP_PORT)
+else:
+    UDP_PORT = sys.argv[1]
+    print("Detect on port ", UDP_PORT)
+
 
 
 def udp_pkt_cap(port=None, cnt=125):
