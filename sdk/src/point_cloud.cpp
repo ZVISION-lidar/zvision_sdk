@@ -21,7 +21,7 @@
 // SOFTWARE.
 
 
-#include "tcp_client.h"
+#include "client.h"
 #include "point_cloud.h"
 #include "lidar_tools.h"
 #include "packet.h"
@@ -155,7 +155,7 @@ namespace zvision
                 return false;
             }
 
-            LidarTools tool(this->device_ip_, 1000, 1000, 1000);
+            LidarTools tool(this->device_ip_, 5000, 5000, 5000);
             DeviceConfigurationInfo cfg;
 
             // if port is negative, we need to get the port from lidar by tcp connection

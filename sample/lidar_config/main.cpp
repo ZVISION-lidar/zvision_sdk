@@ -14,7 +14,7 @@ void print_current_progress(int percent)
 int sample_config_lidar_mac_address(std::string lidar_ip, std::string mac)
 {
     int ret = 0;
-    zvision::LidarTools config(lidar_ip, 1000, 500, 500);
+    zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
     if (ret = config.SetDeviceMacAddress(mac))
         LOG_ERROR("Set device [%s]'s MAC address to [%s] failed, ret = %d.\n", lidar_ip.c_str(), mac.c_str(), ret);
     else
@@ -26,7 +26,7 @@ int sample_config_lidar_mac_address(std::string lidar_ip, std::string mac)
 int sample_config_lidar_ip(std::string lidar_ip, std::string new_ip)
 {
     int ret = 0;
-    zvision::LidarTools config(lidar_ip, 1000, 500, 500);
+    zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
     if (ret = config.SetDeviceStaticIpAddress(new_ip))
         LOG_ERROR("Set device [%s]'s IP address to [%s] failed, ret = %d.\n", lidar_ip.c_str(), new_ip.c_str(), ret);
     else
@@ -38,7 +38,7 @@ int sample_config_lidar_ip(std::string lidar_ip, std::string new_ip)
 int sample_config_lidar_subnet_mask(std::string lidar_ip, std::string subnetmask)
 {
     int ret = 0;
-    zvision::LidarTools config(lidar_ip, 1000, 500, 500);
+    zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
     if (ret = config.SetDeviceSubnetMask(subnetmask))
         LOG_ERROR("Set device [%s]'s subnet mask to [%s] failed, ret = %d.\n", lidar_ip.c_str(), subnetmask.c_str(), ret);
     else
@@ -50,7 +50,7 @@ int sample_config_lidar_subnet_mask(std::string lidar_ip, std::string subnetmask
 int sample_config_lidar_udp_destination_ip(std::string lidar_ip, std::string dst_ip)
 {
     int ret = 0;
-    zvision::LidarTools config(lidar_ip, 1000, 500, 500);
+    zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
     if (ret = config.SetDeviceUdpDestinationIpAddress(dst_ip))
         LOG_ERROR("Set device [%s]'s UDP destination ip to [%s] failed, ret = %d.\n", lidar_ip.c_str(), dst_ip.c_str(), ret);
     else
@@ -62,7 +62,7 @@ int sample_config_lidar_udp_destination_ip(std::string lidar_ip, std::string dst
 int sample_config_lidar_udp_destination_port(std::string lidar_ip, int dst_port)
 {
     int ret = 0;
-    zvision::LidarTools config(lidar_ip, 1000, 500, 500);
+    zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
     if (ret = config.SetDeviceUdpDestinationPort(dst_port))
         LOG_ERROR("Set device [%s]'s UDP destination port to [%d] failed, ret = %d.\n", lidar_ip.c_str(), dst_port, ret);
     else
@@ -74,7 +74,7 @@ int sample_config_lidar_udp_destination_port(std::string lidar_ip, int dst_port)
 int sample_config_lidar_retro_enable(std::string lidar_ip, bool enable)
 {
     int ret = 0;
-    zvision::LidarTools config(lidar_ip, 1000, 500, 500);
+    zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
     if (ret = config.SetDeviceRetroEnable(enable))
         LOG_ERROR("Set device [%s]'s retro to [%d] failed, ret = %d.\n", lidar_ip.c_str(), enable, ret);
     else
@@ -86,7 +86,7 @@ int sample_config_lidar_retro_enable(std::string lidar_ip, bool enable)
 int sample_config_lidar_time_sync(std::string lidar_ip, zvision::TimestampType type)
 {
     int ret = 0;
-    zvision::LidarTools config(lidar_ip, 1000, 500, 500);
+    zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
     if (ret = config.SetDeviceTimestampType(type))
         LOG_ERROR("Set device [%s]'s timestamp type to [%d] failed, ret = %d.\n", lidar_ip.c_str(), type, ret);
     else
@@ -98,7 +98,7 @@ int sample_config_lidar_time_sync(std::string lidar_ip, zvision::TimestampType t
 int sample_query_lidar_firmware_version(std::string lidar_ip)
 {
     int ret = 0;
-    zvision::LidarTools config(lidar_ip, 1000, 500, 500);
+    zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
     std::string boot_version, kernel_version;
     zvision::FirmwareVersion version;
     if (ret = config.QueryDeviceFirmwareVersion(version))
@@ -116,7 +116,7 @@ int sample_query_lidar_firmware_version(std::string lidar_ip)
 int sample_query_lidar_serial_number(std::string lidar_ip)
 {
     int ret = 0;
-    zvision::LidarTools config(lidar_ip, 1000, 500, 500);
+    zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
     std::string serial_number;
     if (ret = config.QueryDeviceSnCode(serial_number))
         LOG_ERROR("Query device [%s]'s serial number failed, ret = %d.\n", lidar_ip.c_str(), ret);
@@ -132,7 +132,7 @@ int sample_query_lidar_serial_number(std::string lidar_ip)
 int sample_query_lidar_hardware_temperature(std::string lidar_ip)
 {
     int ret = 0;
-    zvision::LidarTools config(lidar_ip, 1000, 500, 500);
+    zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
     float temperature0 = 0.0, temperature1 = 0.0;
     if (ret = config.QueryDeviceTemperature(temperature0, temperature1))
         LOG_ERROR("Query device [%s]'s hardware temperature failed, ret = %d.\n", lidar_ip.c_str(), ret);
@@ -149,7 +149,7 @@ int sample_query_lidar_hardware_temperature(std::string lidar_ip)
 int sample_query_lidar_configuration(std::string lidar_ip)
 {
     int ret = 0;
-    zvision::LidarTools config(lidar_ip, 1000, 500, 500);
+    zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
     zvision::DeviceConfigurationInfo info;
     if (ret = config.QueryDeviceConfigurationInfo(info))
         LOG_ERROR("Query device [%s]'s configuration info failed, ret = %d.\n", lidar_ip.c_str(), ret);
@@ -175,7 +175,7 @@ int sample_query_lidar_configuration(std::string lidar_ip)
 int sample_get_lidar_calibration(std::string lidar_ip, std::string savefilename)
 {
     int ret = 0;
-    zvision::LidarTools config(lidar_ip, 1000, 500, 500);
+    zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
     if (ret = config.GetDeviceCalibrationDataToFile(savefilename))
         LOG_ERROR("Get device [%s]'s calibration data failed, ret = %d.\n", lidar_ip.c_str(), ret);
     else
@@ -190,7 +190,7 @@ int sample_get_lidar_calibration(std::string lidar_ip, std::string savefilename)
 int sample_firmware_update(std::string lidar_ip, std::string filename)
 {
     int ret = 0;
-    zvision::LidarTools config(lidar_ip, 1000, 500, 500);
+    zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
     if (ret = config.FirmwareUpdate(filename, print_current_progress))
         LOG_ERROR("Update device [%s]'s firmware %s failed, ret = %d.\n", lidar_ip.c_str(), filename.c_str(), ret);
     else
@@ -204,7 +204,7 @@ int sample_firmware_update(std::string lidar_ip, std::string filename)
 int sample_reboot_lidar(std::string lidar_ip)
 {
     int ret = 0;
-    zvision::LidarTools config(lidar_ip, 1000, 500, 500);
+    zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
     if (ret = config.RebootDevice())
         LOG_ERROR("Reboot device [%s] failed, ret = %d.\n", lidar_ip.c_str(), ret);
     else
@@ -321,7 +321,7 @@ int main(int argc, char** argv)
     }
     std::string lidar_ip = std::string(argv[2]);
 
-    if(0 == std::string(argv[1]).compare("-config_mac") && argc == 4)
+    if (0 == std::string(argv[1]).compare("-config_mac") && argc == 4)
         //Sample code 0 : Set lidar's mac address
         sample_config_lidar_mac_address(lidar_ip, std::string(argv[3]));
 
@@ -381,6 +381,11 @@ int main(int argc, char** argv)
         //Sample code 14 : Scan lidar on the heart beat port
         //Notice, this function is supported by the lidar's new firmware kernel version, at least 0.1.20
         sample_scan_lidar_on_heat_beat_port(std::atoi(argv[2]));
+    else
+    {
+        LOG_ERROR("Invalid parameters\n.");
+        return zvision::InvalidParameter;
+    }
 
     return 0;
 }

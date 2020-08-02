@@ -59,7 +59,7 @@
 #include <iostream>
 //#include <cstdarg>
 
-#include "tcp_client.h"
+#include "client.h"
 
 #define BUFFERSIZE 2048
 #define PROTOPORT 5193 // Default port number
@@ -400,7 +400,7 @@ namespace zvision
             ret = select(0, NULL, &setW, &setE, &time_out);
             if (ret <= 0)
             {
-                LOG_ERROR("Select error, error code = %d.\n", ret);
+                LOG_ERROR("Select error, ret = %d error code = %d.\n", ret, this->GetSysErrorCode());
                 Close();
                 return -1;
             }
@@ -605,7 +605,8 @@ namespace zvision
             }
             else
             {
-                // printf("%x %x %x %x, ret = %d.\n", buf[0], buf[1], buf[2], buf[3], ret);
+                //if(ret >= 4)
+                //    printf("%x %x %x %x, ret = %d.\n", buf[0], buf[1], buf[2], buf[3], ret);
                 total_read += ret;
                 if ((len >= 0) && ((unsigned int)len <= total_read))
                     return 0;
