@@ -104,7 +104,7 @@ void sample_offline_pointcloud(std::string lidar_ip = "192.168.10.108", int port
 
     //Step 2 : Specify the pcap file, calibtation file to play.
     //The ip address and udp destination port is used to filter the pcap file to play the special lidar data. 
-    zvision::OfflinePointCloudProducer player(pcap_filename, cal_filename, "192.168.100.120", 3500);
+    zvision::OfflinePointCloudProducer player(pcap_filename, cal_filename, "192.168.100.120", port);
 
     int size = 0;
     zvision::DeviceType type = zvision::LidarUnknown;
