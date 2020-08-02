@@ -21,7 +21,7 @@
 // SOFTWARE.
 
 
-#include "tcp_client.h"
+#include "client.h"
 #include "packet.h"
 #include "lidar_tools.h"
 #include "print.h"
@@ -1011,6 +1011,9 @@ namespace zvision
 
     int LidarTools::FirmwareUpdate(std::string& filename, ProgressCallback cb)
     {
+        if (!CheckConnection())
+            return -1;
+
         std::ifstream in(filename, std::ifstream::ate | std::ifstream::binary);
         if (!in.is_open())
         {
@@ -1105,7 +1108,6 @@ namespace zvision
                 ok = false;
                 break;
             }
-
             unsigned char step = (unsigned char)recv_step[4];
             cb(40 + int((double)step / 3.3));
             if (100 == step)
@@ -1129,7 +1131,6 @@ namespace zvision
                 ok = false;
                 break;
             }
-
             unsigned char step = (unsigned char)recv_step[4];
             cb(70 + int((double)step / 3.3));
             if (100 == step)

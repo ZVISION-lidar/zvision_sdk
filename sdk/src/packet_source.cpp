@@ -23,7 +23,7 @@
 
 #include "packet.h"
 #include "packet_source.h"
-#include "tcp_client.h"
+#include "client.h"
 #include "lidar_tools.h"
 #include <cstring>
 #include <limits>

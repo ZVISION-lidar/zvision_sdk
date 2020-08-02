@@ -21,8 +21,8 @@
 // SOFTWARE.
 
 
-#ifndef TCP_CLIENT_H_
-#define TCP_CLIENT_H_
+#ifndef CLIENT_H_
+#define CLIENT_H_
 
 #include "pub.h"
 #include "define.h"

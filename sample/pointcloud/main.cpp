@@ -40,17 +40,22 @@ void sample_pointcloud_callback(zvision::PointCloud& pc, int& status)
 }
 
 //sample 0 : get online pointcloud. You can get poincloud from online device.
-void sample_online_pointcloud()
+//parameter lidar_ip              lidar ipaddress
+//parameter port                  lidar pointcloud udp destination port
+//parameter calfilename(optional) calibration filename, if pcapfilename is empty, online cal will be used.
+void sample_online_pointcloud(std::string lidar_ip = "192.168.10.108", int port = 2368, std::string calfilename = "")
 {
+    //Step 1 : Init a online player.
     //If you want to specify the calibration file for the pointcloud, cal_filename is used to load the calibtation data.
     //Otherwise, the PointCloudProducer will connect to lidar and get the calibtation data by tcp connection.
-    zvision::PointCloudProducer player(2368, "192.168.10.108", "");
+    zvision::PointCloudProducer player(port, lidar_ip, calfilename);
 
+    //Step 2 (Optioncal): Regist a callback function.
     //If a callback function registered, the callback function will be called when a new pointcloud is ready.
     //Otherwise, you can call PointCloudProducer's member function "GetPointCloud" to get the pointcloud.
     player.RegisterPointCloudCallback(sample_pointcloud_callback);
 
-    //Start to receive the pointcloud packet and process it.
+    //Step 3 : Start to receive the pointcloud packet and process it.
     int ret = player.Start();
 #ifdef USING_PCL_VISUALIZATION
     boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
@@ -62,7 +67,7 @@ void sample_online_pointcloud()
         int ret = 0;
         zvision::PointCloud cloud;
 
-        // Wait the pointcloud for 100 ms. this function return when get poincloud ok or timeout. 
+        //Step 3 : Wait the pointcloud for 200 ms. this function return when get poincloud ok or timeout. 
         if (ret = player.GetPointCloud(cloud, 200))
             LOG_ERROR("GetPointCloud error, ret = %d.\n", ret);
         else
@@ -83,24 +88,28 @@ void sample_online_pointcloud()
 }
 
 //sample 1 : get offline pointcloud. You can get poincloud from pcap file.
-void sample_offline_pointcloud()
+//parameter lidar_ip                lidar ipaddress
+//parameter port                    lidar pointcloud udp destination port
+//parameter calfilename             calibration filename
+//parameter pcapfilename(required)  pcap filename
+void sample_offline_pointcloud(std::string lidar_ip = "192.168.10.108", int port = 2368, std::string calfilename = "", std::string pcapfilename = "")
 {
     int ret = 0;
 
-    //Specify a pcap file, which contain the lidar's pointcloud packet.
-    std::string pcap_filename = "xxxx.pcap";
+    //Step 1 : Specify a pcap file, which contain the lidar's pointcloud packet.
+    std::string pcap_filename = pcapfilename;
 
     //Specify a calibration file, which contain the lidar's calibration data.
-    std::string cal_filename = "xxxx.cal";
+    std::string cal_filename = calfilename;
 
-    //Specify the pcap file, calibtation file to play.
+    //Step 2 : Specify the pcap file, calibtation file to play.
     //The ip address and udp destination port is used to filter the pcap file to play the special lidar data. 
-    zvision::OfflinePointCloudProducer player(pcap_filename, cal_filename, "192.168.1.200", 2368);
+    zvision::OfflinePointCloudProducer player(pcap_filename, cal_filename, "192.168.100.120", 3500);
 
     int size = 0;
     zvision::DeviceType type = zvision::LidarUnknown;
 
-    //Read pointcloud info from file.
+    //Step 3 : Read pointcloud info from file.
     if (ret = player.GetPointCloudInfo(size, type))
     {
         LOG_ERROR("OfflinePointCloudProducer GetPointCloudInfo failed, ret = %d.\n", ret);
@@ -113,7 +122,7 @@ void sample_offline_pointcloud()
         boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
         viewer.reset(new pcl::visualization::PCLVisualizer("cloudviewtest"));
 #endif
-        //Iterate the pointcloud.
+        //Step 4: Iterate the pointcloud.
         for (int i = 0; i < size; ++i)
         {
             zvision::PointCloud pointcloud;
@@ -161,12 +170,64 @@ static void export_point_cloud(zvision::PointCloud& points, std::string filename
     }
 }
 
+int main(int argc, char** argv)
+{
+    if (argc <= 4)
+    {
+        std::cout << "############################# USER GUIDE ################################\n\n"
+            << "Sample 0 : play online pointcloud\n"
+            << "Format: -online lidar_ip lidar_port calfilename(if use online cal, ignore this parameter)\n"
+            << "Demo:   -online 192.168.10.108 2368\n\n"
+
+            << "Sample 1 : play offline pointcloud\n"
+            << "Format: -offline lidar_ip lidar_port pcapfilename calfilename\n"
+            << "Demo:   -offline 192.168.10.108 2368 xxxx.pcap xxxx.cal\n\n"
+
+            << "############################# END  GUIDE ################################\n\n"
+            ;
+
+        return 0;
+    }
+    std::string lidar_ip = std::string(argv[2]);
+    int port = std::atoi(argv[3]);
+    std::string cal = "";
+    std::string pcapfilename = "";
+
+    if (0 == std::string(argv[1]).compare("-online"))
+    {
+        if (argc == 4)
+            ;
+        else if (argc == 5)
+            cal = std::string(argv[4]);
+        else
+        {
+            LOG_ERROR("Invalid parameter.\n");
+            return -1;
+        }
+        sample_online_pointcloud(lidar_ip, port, cal);
+    }
+    else if (0 == std::string(argv[1]).compare("-offline") && argc == 6)
+    {
+        cal = std::string(argv[4]);
+        pcapfilename = std::string(argv[5]);
+        sample_offline_pointcloud(lidar_ip, port, cal, pcapfilename);
+    }
+    else
+    {
+        LOG_ERROR("Invalid parameters\n.");
+        return zvision::InvalidParameter;
+    }
+    return 0;
+}
+
+#if 0// test code
 int main()
 {
     //sample 0 : get online pointcloud. You can get poincloud from online device.
-    sample_online_pointcloud();
+    //sample_online_pointcloud();
 
     //sample 1 : get offline pointcloud. You can get poincloud from pcap file.
-    //sample_offline_pointcloud();
+    sample_offline_pointcloud();
     return 0;
 }
+#endif
