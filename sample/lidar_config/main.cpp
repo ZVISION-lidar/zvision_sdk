@@ -311,8 +311,8 @@ int main(int argc, char** argv)
             << "Demo:   -reboot 192.168.10.108\n\n"
 
             << "Sample 14 : scan device\n"
-            << "Format: -scan_device\n"
-            << "Demo:   -scan_device\n\n"
+            << "Format: -scan_device scan_time(s)\n"
+            << "Demo:   -scan_device 5\n\n"
 
             << "############################# END  GUIDE ################################\n\n"
             ;
