@@ -316,7 +316,7 @@ int main(int argc, char** argv)
 
             << "############################# END  GUIDE ################################\n\n"
             ;
-
+        getchar();
         return 0;
     }
     std::string lidar_ip = std::string(argv[2]);
