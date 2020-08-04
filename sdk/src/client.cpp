@@ -21,7 +21,7 @@
 // SOFTWARE.
 
 
-//copy from https://gist.github.com/FedericoPonzi/2a37799b6c601cce6c1b
+//reference: https://gist.github.com/FedericoPonzi/2a37799b6c601cce6c1b
 //cross platform https://stackoverflow.com/questions/28027937/cross-platform-sockets
 
 #ifdef WIN32
