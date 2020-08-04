@@ -577,13 +577,23 @@ namespace zvision
         }
         else
         {
-            std::string ml30b1_sn_prefix = "10X0";
-            std::string ml30sa1_sn_prefix = "10X0";
+            std::string ml30b1_sn_prefix = "1000";
+            std::string ml30sa1_sn_prefix = "1001";
+            std::string mlx_sn_prefix = "1002";
 
-            if (0 == sn.compare(0, ml30sa1_sn_prefix.size(), ml30sa1_sn_prefix)) // ML30SA1
+            if (0 == sn.compare(0, ml30b1_sn_prefix.size(), ml30b1_sn_prefix)) // ML30B1
+            {
+                info.device = DeviceType::LidarML30B1;
+            }
+            else if (0 == sn.compare(0, ml30sa1_sn_prefix.size(), ml30sa1_sn_prefix)) // ML30SA1
             {
                 info.device = DeviceType::LidarML30SA1;
             }
+            else if (0 == sn.compare(0, mlx_sn_prefix.size(), mlx_sn_prefix)) // MLX
+            {
+                info.device = DeviceType::LidarMLX;
+            }
+
             info.serial_number = sn;
         }
         return 0;

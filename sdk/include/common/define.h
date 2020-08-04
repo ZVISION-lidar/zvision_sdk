@@ -188,6 +188,31 @@ namespace zvision
         u_short crc;            // Checksum
     }pcap_packet_header;
 
+    /** \brief DeviceType to string
+    * \param[in] tp      the DeviceType
+    * \return string.
+    */
+    std::string get_device_type_string(DeviceType tp);
+
+    /** \brief TimestampType to string
+    * \param[in] tp      the TimestampType
+    * \return string.
+    */
+    std::string get_time_sync_type_string(TimestampType tp);
+
+    /** \brief RetroMode to string
+    * \param[in] tp      the RetroMode
+    * \return string.
+    */
+    std::string get_retro_mode_string(RetroMode tp);
+
+    /** \brief ReturnCode to string
+    * \param[in] tp      the ReturnCode
+    * \return string.
+    */
+    std::string get_return_code_string(ReturnCode tp);
+
+
 }
 
 #endif //end DEFINE_H_

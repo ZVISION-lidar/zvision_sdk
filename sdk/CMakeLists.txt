@@ -30,7 +30,8 @@ target_sources(${ZVISION_SDK_LIBRARY}
         src/packet_source.cpp
         src/point_cloud.cpp
         src/print.cpp
-        src/client.cpp)
+        src/client.cpp
+        src/define.cpp)
 
 install(TARGETS ${ZVISION_SDK_LIBRARY}
         PUBLIC_HEADER DESTINATION include

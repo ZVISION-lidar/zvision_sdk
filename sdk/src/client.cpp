@@ -377,7 +377,6 @@ namespace zvision
         time_out.tv_sec = this->conn_timeout_ms_ / 1000;
         time_out.tv_usec = (this->conn_timeout_ms_ % 1000) * 1000;
 
-        LOG_DEBUG("Connect to %s:%d.\n", dst_ip.c_str(), dst_port);
         if (connect(this->socket_, (struct sockaddr *) &addr, sizeof(addr)) < 0)
         {
             int ret = GetSysErrorCode();

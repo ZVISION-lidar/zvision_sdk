@@ -162,11 +162,11 @@ int sample_query_lidar_configuration(std::string lidar_ip)
         LOG_INFO("Device mac: %s\n", info.device_mac.c_str());
         LOG_INFO("Destination ip: %s\n", info.destination_ip.c_str());
         LOG_INFO("Destination port: %d\n", info.destination_port);
-        LOG_INFO("Timestamp syn mode: %d\n", info.time_sync);
-        LOG_INFO("Retro enbale: %d\n", info.retro_enable);
+        LOG_INFO("Timestamp syn mode: %s\n", zvision::get_time_sync_type_string(info.time_sync).c_str());
+        LOG_INFO("Retro enbale: %s\n", zvision::get_retro_mode_string(info.retro_enable).c_str());
         LOG_INFO("Boot   version: %u.%u.%u\n", info.version.boot_version[0], info.version.boot_version[1], info.version.boot_version[2], info.version.boot_version[3]);
         LOG_INFO("Kernel version: %u.%u.%u\n", info.version.kernel_version[0], info.version.kernel_version[1], info.version.kernel_version[2], info.version.kernel_version[3]);
-        LOG_INFO("Device type: %d\n", info.device);
+        LOG_INFO("Device type: %s\n", zvision::get_device_type_string(info.device).c_str());
     }
     return ret;
 }
