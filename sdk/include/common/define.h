@@ -57,7 +57,7 @@ namespace zvision
 
     typedef enum TimestampType
     {
-        TimestampPtp = 1,
+        TimestampPtp = 0,
         TimestampPpsGps,
         TimestampUnknown,
     }TimestampType;

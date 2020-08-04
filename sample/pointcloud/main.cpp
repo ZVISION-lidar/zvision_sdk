@@ -127,7 +127,7 @@ void sample_offline_pointcloud(std::string lidar_ip = "192.168.10.108", int port
 
     //Step 2 : Specify the pcap file, calibtation file to play.
     //The ip address and udp destination port is used to filter the pcap file to play the special lidar data. 
-    zvision::OfflinePointCloudProducer player(pcap_filename, cal_filename, "192.168.100.120", port);
+    zvision::OfflinePointCloudProducer player(pcap_filename, cal_filename, lidar_ip, port);
 
     int size = 0;
     zvision::DeviceType type = zvision::LidarUnknown;
@@ -141,6 +141,11 @@ void sample_offline_pointcloud(std::string lidar_ip = "192.168.10.108", int port
     {
         LOG_INFO("OfflinePointCloudProducer GetPointCloudInfo ok, count is %d, type is %d\n", size, type);
 
+        if (0 == size)
+        {
+            LOG_ERROR("No pointcloud found for lidar %s:%d.\n", lidar_ip.c_str(), port);
+            return;
+        }
 #ifdef USING_PCL_VISUALIZATION
         boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer;
         viewer.reset(new pcl::visualization::PCLVisualizer("cloudviewtest"));
@@ -195,7 +200,7 @@ static void export_point_cloud(zvision::PointCloud& points, std::string filename
 
 int main(int argc, char** argv)
 {
-    if (argc <= 4)
+    if (argc < 4)
     {
         std::cout << "############################# USER GUIDE ################################\n\n"
             << "Sample 0 : play online pointcloud\n"
@@ -231,8 +236,8 @@ int main(int argc, char** argv)
     }
     else if (0 == std::string(argv[1]).compare("-offline") && argc == 6)
     {
-        cal = std::string(argv[4]);
-        pcapfilename = std::string(argv[5]);
+        cal = std::string(argv[5]);
+        pcapfilename = std::string(argv[4]);
         sample_offline_pointcloud(lidar_ip, port, cal, pcapfilename);
     }
     else
