@@ -399,7 +399,11 @@ namespace zvision
             ret = select(0, NULL, &setW, &setE, &time_out);
             if (ret <= 0)
             {
-                LOG_ERROR("Select error, ret = %d error code = %d.\n", ret, this->GetSysErrorCode());
+                // https://docs.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-select
+                if(0 == ret)
+                    LOG_ERROR("Connect timeout.\n");
+                else
+                    LOG_ERROR("Select error, ret = %d error code = %d.\n", ret, this->GetSysErrorCode());
                 Close();
                 return -1;
             }
