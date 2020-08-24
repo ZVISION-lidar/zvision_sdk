@@ -40,7 +40,7 @@ namespace zvision
     LidarTools::LidarTools(std::string lidar_ip, int con_timeout, int send_timeout, int recv_timeout):
         client_(new TcpClient(con_timeout, send_timeout, recv_timeout)),
         device_ip_(lidar_ip),
-        conn_ok_(false)
+        conn_ok_(false)                                                                                                                                             
     {
 
     }
@@ -308,8 +308,8 @@ namespace zvision
                 int start_number = i % start;
                 int group_number = i / start;
                 int point_numer = group_number * start + fov_index[start_number];
-                float ele = static_cast<float>(cal.data[point_numer * 2] / 180.0 * 3.1416);
-                float azi = static_cast<float>(cal.data[point_numer * 2 + 1] / 180.0 * 3.1416);
+                float azi = static_cast<float>(cal.data[point_numer * 2] / 180.0 * 3.1416);
+                float ele = static_cast<float>(cal.data[point_numer * 2 + 1] / 180.0 * 3.1416);
 
                 CalibrationDataSinCos& point_cal = cal_cos_sin_lut.data[i];
                 point_cal.cos_ele = std::cos(ele);
@@ -328,8 +328,8 @@ namespace zvision
                 int start_number = i % start;
                 int group_number = i / start;
                 int point_numer = group_number * start + fov_index[start_number];
-                float ele = static_cast<float>(cal.data[point_numer * 2] / 180.0 * 3.1416);
-                float azi = static_cast<float>(cal.data[point_numer * 2 + 1] / 180.0 * 3.1416);
+                float azi = static_cast<float>(cal.data[point_numer * 2] / 180.0 * 3.1416);
+                float ele = static_cast<float>(cal.data[point_numer * 2 + 1] / 180.0 * 3.1416);
 
                 CalibrationDataSinCos& point_cal = cal_cos_sin_lut.data[i];
                 point_cal.cos_ele = std::cos(ele);

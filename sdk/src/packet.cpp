@@ -131,8 +131,8 @@ namespace zvision
         }
         else if (LidarMLX == type)
         {
-            groups_in_one_udp = 40;
-            points_in_one_group = 8;
+            groups_in_one_udp = 80;
+            points_in_one_group = 3;
             point_position_in_group = 0;
             group_len = 16;
             if (96000 != cloud.points.size())
@@ -142,7 +142,6 @@ namespace zvision
         {
             return NotSupport;
         }
-
         for (uint32_t gp = 0; gp < groups_in_one_udp; ++gp)/*every groups*/
         {
             unsigned char* first_point_pos_in_group = data + group_position_in_packet + group_len * gp + point_position_in_group;
