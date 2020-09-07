@@ -98,6 +98,14 @@ namespace zvision
     typedef struct CalibrationData
     {
         DeviceType device_type;
+
+		/** \brief Store every point's calibration data in azimuth elevation point by point.
+		* For the order's example
+		* F0-P0-ath F0-P0-ele F1-P0-ath F1-P0-ele F2-P0-ath F2-P0-ele
+		* F0-P1-ath F0-P1-ele F1-P1-ath F1-P1-ele F2-P1-ath F2-P0-ele
+		* ...........................................................
+		* F0-Pn-ath F0-Pn-ele F1-Pn-ath F1-Pn-ele F2-Pn-ath F2-Pn-ele
+		*/
         std::vector<float> data;
     }CalibrationData;
 
@@ -113,6 +121,15 @@ namespace zvision
     typedef struct CalibrationDataSinCosTable
     {
         DeviceType device_type;
+
+		/** \brief Store every point's calibration data in the format of sin-cos point by point.
+		* The data is orderd by points' order in the udp package.
+		* For the order's example
+		* P0
+		* P1
+		* ...
+		* Pn
+		*/
         std::vector<CalibrationDataSinCos> data;
     }CalibrationDataSinCosTable;
 

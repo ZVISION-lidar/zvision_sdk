@@ -303,6 +303,8 @@ namespace zvision
         while (this->packets_->dequeue(packet))
         {
             this->ProcessLidarPacket(*packet);
+			if (packet)
+				delete packet;
         }
     }
 

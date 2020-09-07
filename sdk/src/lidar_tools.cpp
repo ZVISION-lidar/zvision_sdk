@@ -274,6 +274,36 @@ namespace zvision
                 return OpenFileError;
             }
         }
+        else if (DeviceType::LidarMLX == cal.device_type)
+        {
+            std::fstream outfile;
+            outfile.open(filename, std::ios::out);
+            data_in_line = 6;
+            if (outfile.is_open())
+            {
+                outfile.setf(std::ios::fixed, std::ios::floatfield);
+                outfile.precision(3);
+                int rows = 32000;
+                for (int i = 0; i < rows; i++)
+                {
+                    outfile << i + 1 << " ";
+                    outfile << cal.data[i * 6 + 0] << " ";
+                    outfile << cal.data[i * 6 + 1] << " ";
+                    outfile << cal.data[i * 6 + 2] << " ";
+                    outfile << cal.data[i * 6 + 3] << " ";
+                    outfile << cal.data[i * 6 + 4] << " ";
+                    outfile << cal.data[i * 6 + 5];
+                    if (i < (rows - 1))
+                        outfile << "\n";
+                }
+                outfile.close();
+                return 0;
+            }
+            else
+            {
+                return OpenFileError;
+            }
+        }
         else
         {
             return NotSupport;
@@ -652,11 +682,15 @@ namespace zvision
 
         if (DeviceType::LidarML30B1 == tp)
         {
-            total_packet = 235;
+            total_packet = 235;// 10000 * 3 * 2 * 4 / 1024
         }
         else if (DeviceType::LidarML30SA1 == tp)
         {
-            total_packet = 400;
+            total_packet = 400;// 6400 * 8 * 2 * 4 / 1024
+        }
+        else if (DeviceType::LidarMLX == tp)
+        {
+            total_packet = 750;// 32000 *3 * 2 * 4 / 1024
         }
         else
         {
@@ -721,6 +755,10 @@ namespace zvision
         else if (DeviceType::LidarML30SA1 == tp)
         {
             cal.data.resize(6400 * 8 * 2);
+        }
+        else if (DeviceType::LidarMLX == tp)
+        {
+            cal.data.resize(32000 * 3 * 2);
         }
         else
         {
