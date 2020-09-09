@@ -172,7 +172,10 @@ namespace zvision
             if (cal_filename_.size())
             {
                 if (LidarTools::ReadCalibrationData(cal_filename_, *(this->cal_.get())))
+                {
+                    LOG_ERROR("Load calibration file error, %s\n", cal_filename_.c_str());
                     return false;
+                }
             }
             else
             {
