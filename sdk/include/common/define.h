@@ -69,6 +69,17 @@ namespace zvision
         RetroUnknown,
     }RetroMode;
 
+    typedef enum EchoMode
+    {
+        EchoSingleFirst = 0, //First echo
+        EchoSingleStrongest = 1, //Strongest echo
+        EchoSingleLast = 2, //Last echo
+        EchoDoubleFirstStrongest = 3, //First and strongest
+        EchoDoubleFirstLast = 4, //First and last
+        EchoDoubleStrongestLast = 5, //Strongest and last
+        EchoUnknown,
+    }EchoMode;
+
     typedef enum DeviceType
     {
         LidarML30B1,
@@ -92,6 +103,9 @@ namespace zvision
 
         TimestampType time_sync;
         RetroMode retro_enable;
+
+        uint32_t phase_offset; // 5ns
+        EchoMode echo_mode;
 
     } DeviceConfigurationInfo;
 
@@ -229,7 +243,11 @@ namespace zvision
     */
     std::string get_return_code_string(ReturnCode tp);
 
-
+    /** \brief Echo mode to string
+    * \param[in] mode    the EchoMode
+    * \return string.
+    */
+    std::string get_echo_mode_string(EchoMode mode);
 }
 
 #endif //end DEFINE_H_

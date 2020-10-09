@@ -136,5 +136,35 @@ namespace zvision
         return str;
     }
 
+    std::string get_echo_mode_string(EchoMode mode)
+    {
+        std::string str = "Unknown";
+        switch (mode)
+        {
+        case EchoMode::EchoSingleFirst:
+            str = "Single first echo";
+            break;
+        case EchoMode::EchoSingleStrongest:
+            str = "Singe strongest echo";
+            break;
+        case EchoMode::EchoSingleLast:
+            str = "Singe last echo";
+            break;
+        case EchoMode::EchoDoubleFirstStrongest:
+            str = "Double(first and strongest echo)";
+            break;
+        case EchoMode::EchoDoubleFirstLast:
+            str = "Double(first and last echo)";
+            break;
+        case EchoMode::EchoDoubleStrongestLast:
+            str = "Double(strongest and last echo)";
+            break;
+        default:
+            break;
+        }
+        return str;
+    }
+
+
 } // end namespace zvision
 

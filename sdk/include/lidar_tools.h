@@ -162,6 +162,47 @@ namespace zvision
         */
         int RebootDevice();
 
+        /** \brief Get device's log info.
+        * \param[in] log             log string
+        * \return 0 for ok, others for failure.
+        */
+        int GetDeviceLog(std::string& log);
+
+        /** \brief Set device's phase offset.
+        * \param[in] offset          offset, unit is 2ns 
+        * \return 0 for ok, others for failure.
+        */
+        int SetDevicePhaseOffset(uint32_t offset);
+
+        /** \brief Set device's PTP configuration.
+        * \param[in] ptp_cfg_filename  ptp config filename
+        * \return 0 for ok, others for failure.
+        */
+        int SetDevicePtpConfiguration(std::string ptp_cfg_filename);
+
+        /** \brief Get device's PTP configuration.
+        * \param[out] ptp_cfg          ptp config string
+        * \return 0 for ok, others for failure.
+        */
+        int GetDevicePtpConfiguration(std::string& ptp_cfg);
+
+        /** \brief Backup firmware update.
+        * \param[in] filename        backup firmware filename
+        */
+        int BackupFirmwareUpdate(std::string& filename, ProgressCallback cb);
+
+        /** \brief Get lidar backup-firmware version.
+        * \param[out] version       return the firmware version info
+        */
+        int QueryDeviceBackupFirmwareVersion(FirmwareVersion& version);
+
+        /** \brief Set device's echo mode.
+        * \param[in] mode            echo mode
+        * \return 0 for ok, others for failure.
+        */
+        int SetDeviceEchoMode(EchoMode mode);
+        
+
 	protected:
         
         /** \brief Check the connection to device, if connection is not established, try to connect.

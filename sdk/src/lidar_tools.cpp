@@ -597,6 +597,15 @@ namespace zvision
         ResolveIpString(header + 46, info.subnet_mask);
         ResolveMacAddress(header + 100, info.device_mac);
 
+        //phase offset
+        NetworkToHost(header + 56, (char*)&info.phase_offset);
+
+        //echo mode
+        unsigned char echo_mode = (*(header + 60));
+        info.echo_mode = EchoMode::EchoUnknown;
+        if(echo_mode < EchoMode::EchoUnknown)
+            info.echo_mode = (EchoMode)echo_mode;
+
         std::string sn = "Unknown";
         info.serial_number = "Unknown";
         info.device = DeviceType::LidarUnknown;
@@ -1219,6 +1228,553 @@ namespace zvision
         /*Set device timestamp type*/
         const int send_len = 4;
         char set_cmd[send_len] = { (char)0xBA, (char)0x0C, (char)0x00, (char)0x00 };
+
+        std::string cmd(set_cmd, send_len);
+
+        const int recv_len = 4;
+        std::string recv(recv_len, 'x');
+
+        if (client_->SyncSend(cmd, send_len))//send cmd
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (client_->SyncRecv(recv, recv_len))//recv ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (!CheckDeviceRet(recv))//check ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        return 0;
+    }
+
+    int LidarTools::GetDeviceLog(std::string& log)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        /*Get device log info*/
+        const int send_len = 4;
+        char set_cmd[send_len] = { (char)0xBA, (char)0x0D, (char)0x00, (char)0x00 };
+
+        std::string cmd(set_cmd, send_len);
+
+        const int recv_len = 4;
+        std::string recv(recv_len, 'x');
+
+        if (client_->SyncSend(cmd, send_len))//send cmd
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (client_->SyncRecv(recv, recv_len))//recv ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (!CheckDeviceRet(recv))//check ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        // get log buffer length
+        if (client_->SyncRecv(recv, recv_len))
+        {
+            DisConnect();
+            return -1;
+        }
+        uint32_t log_buffer_len = 0;
+        NetworkToHost((const unsigned char*)recv.c_str(), (char *)&log_buffer_len);
+
+        // get log buffer
+        std::string log_buffer;
+        log_buffer.resize(log_buffer_len);
+        if (client_->SyncRecv(log_buffer, log_buffer_len))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        // assemble the buffer to string
+        unsigned char file_count = reinterpret_cast<unsigned char&>(log_buffer[0]);
+        std::vector<std::string> file_contents;
+        uint32_t position = 1;
+        for (int i = 0; i < file_count; ++i)
+        {
+            uint32_t file_len = 0;
+            NetworkToHost((const unsigned char*)(&log_buffer[position]), (char *)&file_len);
+            std::string content(log_buffer, position + 4, file_len); // copy to file list
+            file_contents.push_back(content);
+            position += file_len;
+        }
+        
+        // reorder the log file
+        log = "";
+        for (int i = file_count; i > 0; i--)
+        {
+            log += file_contents[i];
+        }
+
+        //final ret
+        if (client_->SyncRecv(recv, recv_len))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (!CheckDeviceRet(recv))//check ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        return 0;
+    }
+
+    int LidarTools::SetDevicePhaseOffset(uint32_t offset)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        /*Get device log info*/
+        const int send_len = 6;
+        char set_cmd[send_len] = { (char)0xBA, (char)0x0E, (char)0x00, (char)0x00, (char)0x00, (char)0x00 };
+
+        HostToNetwork((const unsigned char*)&offset, set_cmd + 2);
+
+        std::string cmd(set_cmd, send_len);
+
+        const int recv_len = 4;
+        std::string recv(recv_len, 'x');
+
+        if (client_->SyncSend(cmd, send_len))//send cmd
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (client_->SyncRecv(recv, recv_len))//recv ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (!CheckDeviceRet(recv))//check ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        return 0;
+    }
+
+    int LidarTools::SetDevicePtpConfiguration(std::string ptp_cfg_filename)
+    {
+        // --- read ptp configuration file content
+        std::ifstream infile(ptp_cfg_filename);
+
+        //get length of file
+        infile.seekg(0, std::ios::end);
+        size_t length = infile.tellg();
+        infile.seekg(0, std::ios::beg);
+
+        if (!infile.is_open())
+        {
+            return ReturnCode::OpenFileError;
+        }
+
+        std::unique_ptr<char> data(new char[length]);
+        infile.read(data.get(), length);
+        infile.close();
+
+        std::string content(data.get(), length);
+
+        if (!CheckConnection())
+            return -1;
+
+        // --- send data to device
+        const int send_len = 6;
+        char set_cmd[send_len] = { (char)0xBA, (char)0x0F, (char)0x00, (char)0x00, (char)0x00, (char)0x00 };
+
+        uint32_t file_len = length;
+        HostToNetwork((const unsigned char*)&file_len, set_cmd + 2);
+
+        std::string cmd(set_cmd, send_len);
+
+        const int recv_len = 4;
+        std::string recv(recv_len, 'x');
+
+        if (client_->SyncSend(cmd, send_len))//send cmd
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (client_->SyncRecv(recv, recv_len))//recv ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (!CheckDeviceRet(recv))//check ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        // send file to device
+        if (client_->SyncSend(content, file_len))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        // final ack
+        if (client_->SyncRecv(recv, recv_len))//recv ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (!CheckDeviceRet(recv))//check ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        return ReturnCode::Success;
+
+    }
+
+    int LidarTools::GetDevicePtpConfiguration(std::string& ptp_cfg)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        /*Get device log info*/
+        const int send_len = 4;
+        char set_cmd[send_len] = { (char)0xBA, (char)0x10, (char)0x00, (char)0x00 };
+
+        std::string cmd(set_cmd, send_len);
+
+        const int recv_len = 4;
+        std::string recv(recv_len, 'x');
+
+        if (client_->SyncSend(cmd, send_len))//send cmd
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (client_->SyncRecv(recv, recv_len))//recv ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (!CheckDeviceRet(recv))//check ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        // get ptp configuration data
+        if (client_->SyncRecv(recv, recv_len))
+        {
+            DisConnect();
+            return -1;
+        }
+        uint32_t ptp_buffer_len = 0;
+        NetworkToHost((const unsigned char*)recv.c_str(), (char *)&ptp_buffer_len);
+
+        // get ptp configuration buffer
+        std::string ptp_cfg_buffer;
+        ptp_cfg_buffer.resize(ptp_buffer_len);
+        if (client_->SyncRecv(ptp_cfg_buffer, ptp_buffer_len))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        ptp_cfg = ptp_cfg_buffer;
+
+        //final ret
+        if (client_->SyncRecv(recv, recv_len))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (!CheckDeviceRet(recv))//check ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        return 0;
+
+    }
+
+    int LidarTools::BackupFirmwareUpdate(std::string& filename, ProgressCallback cb)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        std::ifstream in(filename, std::ifstream::ate | std::ifstream::binary);
+        if (!in.is_open())
+        {
+            LOG_ERROR("Open file error.\n");
+            return -1;
+        }
+
+        std::streampos end = in.tellg();
+        int size = static_cast<int>(end);
+        in.close();
+
+        const int send_len = 6;
+        char upgrade_cmd[send_len] = { (char)0xBA, (char)0x11, (char)0x00, (char)0x00, (char)0x00, (char)0x00 };
+        HostToNetwork((const unsigned char *)&size, upgrade_cmd + 2);
+        std::string cmd(upgrade_cmd, send_len);
+
+        const int recv_len = 4;
+        std::string recv(recv_len, 'x');
+
+
+        if (client_->SyncSend(cmd, send_len))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (client_->SyncRecv(recv, recv_len))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (!CheckDeviceRet(recv))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        // transfer, erase flash, write
+        int start_percent = 10;
+        int block_total = static_cast<int>(ceil(size / 256.0));
+        int step_per_percent = block_total / 30;//old is 90
+
+        std::ifstream idata(filename, std::ios::in | std::ios::binary);
+        const int pkt_len = 256;
+        char fw_data[pkt_len] = { 0x00 };
+        int readed = 0;
+
+        // data transfer
+        if (idata.is_open())
+        {
+            for (readed = 0; readed < block_total; readed++)
+            {
+                idata.read(fw_data, pkt_len);
+                std::string fw(fw_data, pkt_len);
+                if (client_->SyncSend(fw, pkt_len))
+                {
+                    break;
+                }
+                if (0 == (readed % step_per_percent))
+                {
+                    cb(start_percent++);
+                }
+            }
+            idata.close();
+        }
+        if (readed != block_total)
+        {
+            client_->Close();
+            return -1;
+        }
+        if (client_->SyncRecv(recv, recv_len))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (!CheckDeviceRet(recv))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        // waitting for step 2
+        const int recv_step_len = 5;
+        std::string recv_step(recv_step_len, 'x');
+        bool ok = false;
+        while (1)
+        {
+            if (client_->SyncRecv(recv_step, recv_step_len))
+            {
+                ok = false;
+                break;
+            }
+            unsigned char step = (unsigned char)recv_step[4];
+            cb(40 + int((double)step / 3.3));
+            if (100 == step)
+            {
+                ok = true;
+                break;
+            }
+        }
+
+        if (!ok)
+        {
+            DisConnect();
+            return -1;
+        }
+
+        // waitting for step 3
+        while (1)
+        {
+            if (client_->SyncRecv(recv_step, recv_step_len))
+            {
+                ok = false;
+                break;
+            }
+            unsigned char step = (unsigned char)recv_step[4];
+            cb(70 + int((double)step / 3.3));
+            if (100 == step)
+            {
+                ok = true;
+                break;
+            }
+        }
+
+        if (!ok)
+        {
+            DisConnect();
+            return -1;
+        }
+
+        //device check data
+        if (client_->SyncRecv(recv, recv_len))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (!CheckDeviceRet(recv))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        return 0;
+
+    }
+
+    int LidarTools::QueryDeviceBackupFirmwareVersion(FirmwareVersion& version)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        /*Read version info*/
+        const int send_len = 4;
+        char bv_read_cmd[send_len] = { (char)0xBA, (char)0x12, (char)0x01, (char)0x00 };
+        std::string bv_cmd(bv_read_cmd, 4);
+
+        const int recv_len = 4;
+        std::string recv(recv_len, 'x');
+
+        if (client_->SyncSend(bv_cmd, send_len))//send cmd
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (client_->SyncRecv(recv, recv_len))//recv ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (!CheckDeviceRet(recv))//check ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (client_->SyncRecv(recv, recv_len))//recv version data
+        {
+            DisConnect();
+            return -1;
+        }
+
+        memcpy(&(version.boot_version), recv.c_str(), 4);
+
+        char kv_read_cmd[send_len] = { (char)0xBA, (char)0x12, (char)0x02, (char)0x00 };
+        std::string kv_cmd(kv_read_cmd, 4);
+
+        if (client_->SyncSend(kv_cmd, send_len))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (client_->SyncRecv(recv, recv_len))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (!CheckDeviceRet(recv))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (client_->SyncRecv(recv, recv_len))//recv version data
+        {
+            DisConnect();
+            return -1;
+        }
+
+        memcpy(&(version.kernel_version), recv.c_str(), 4);
+
+        return 0;
+
+    }
+
+    int LidarTools::SetDeviceEchoMode(EchoMode mode)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        /*Get device log info*/
+        const int send_len = 4;
+        char set_cmd[send_len] = { (char)0xBA, (char)0x13, (char)0x00, (char)0x00 };
+
+        if (EchoSingleFirst == mode)
+            set_cmd[2] = 0x01;
+        else if (EchoSingleStrongest == mode)
+            set_cmd[2] = 0x02;
+        else if (EchoSingleLast == mode)
+            set_cmd[2] = 0x04;
+        else if (EchoDoubleFirstStrongest == mode)
+            set_cmd[2] = 0x03;
+        else if (EchoDoubleFirstLast == mode)
+            set_cmd[2] = 0x05;
+        else if (EchoDoubleStrongestLast == mode)
+            set_cmd[2] = 0x06;
+        else
+            return ReturnCode::InvalidParameter;
+
 
         std::string cmd(set_cmd, send_len);
 
