@@ -248,6 +248,12 @@ namespace zvision
     * \return string.
     */
     std::string get_echo_mode_string(EchoMode mode);
+
+    /** \brief config info to string
+    * \param[in] info    the DeviceConfigurationInfo
+    * \return string.
+    */
+    std::string get_cfg_info_string(DeviceConfigurationInfo& info);
 }
 
 #endif //end DEFINE_H_
