@@ -603,9 +603,20 @@ namespace zvision
         //echo mode
         unsigned char echo_mode = (*(header + 60));
         info.echo_mode = EchoMode::EchoUnknown;
-        if(echo_mode < EchoMode::EchoUnknown)
-            info.echo_mode = (EchoMode)echo_mode;
+        if (0x01 == echo_mode)
+            info.echo_mode = EchoSingleFirst;
+        else if (0x02 == echo_mode)
+            info.echo_mode = EchoSingleStrongest;
+        else if (0x04 == echo_mode)
+            info.echo_mode = EchoSingleLast;
+        else if (0x03 == echo_mode)
+            info.echo_mode = EchoDoubleFirstStrongest;
+        else if (0x05 == echo_mode)
+            info.echo_mode = EchoDoubleFirstLast;
+        else if (0x06 == echo_mode)
+            info.echo_mode = EchoDoubleStrongestLast;
 
+        // sn code and device type
         std::string sn = "Unknown";
         info.serial_number = "Unknown";
         info.device = DeviceType::LidarUnknown;
@@ -634,6 +645,14 @@ namespace zvision
             }
 
             info.serial_number = sn;
+        }
+
+        // backup firmware version
+        memset(info.backup_version.boot_version, 0, 4);
+        memset(info.backup_version.kernel_version, 0, 4);
+        if (0 != QueryDeviceBackupFirmwareVersion(info.backup_version))
+        {
+            LOG_ERROR("Query backup firmware version error.\n");
         }
         return 0;
 
@@ -1142,6 +1161,7 @@ namespace zvision
             client_->Close();
             return -1;
         }
+
         if (client_->SyncRecv(recv, recv_len))
         {
             DisConnect();
@@ -1153,6 +1173,7 @@ namespace zvision
             DisConnect();
             return -1;
         }
+        LOG_DEBUG("Data transfer ok...\n");
 
         // waitting for step 2
         const int recv_step_len = 5;
@@ -1176,9 +1197,11 @@ namespace zvision
 
         if(!ok)
         {
+            LOG_ERROR("Waiting for erase flash failed...\n");
             DisConnect();
             return -1;
         }
+        LOG_DEBUG("Waiting for erase flash ok...\n");
 
         // waitting for step 3
         while (1)
@@ -1199,9 +1222,11 @@ namespace zvision
 
         if (!ok)
         {
+            LOG_ERROR("Waiting for write flash failed...\n");
             DisConnect();
             return -1;
         }
+        LOG_DEBUG("Waiting for write flash ok...\n");
 
         //device check data
         if (client_->SyncRecv(recv, recv_len))
@@ -1307,20 +1332,22 @@ namespace zvision
 
         // assemble the buffer to string
         unsigned char file_count = reinterpret_cast<unsigned char&>(log_buffer[0]);
+
         std::vector<std::string> file_contents;
         uint32_t position = 1;
         for (int i = 0; i < file_count; ++i)
         {
             uint32_t file_len = 0;
             NetworkToHost((const unsigned char*)(&log_buffer[position]), (char *)&file_len);
+            LOG_INFO("FILE %d len %u.\n", i, file_len);
             std::string content(log_buffer, position + 4, file_len); // copy to file list
             file_contents.push_back(content);
-            position += file_len;
+            position += (file_len + 4);
         }
         
         // reorder the log file
         log = "";
-        for (int i = file_count; i > 0; i--)
+        for (int i = file_count - 1; i > 0; i--)
         {
             log += file_contents[i];
         }
@@ -1508,19 +1535,6 @@ namespace zvision
 
         ptp_cfg = ptp_cfg_buffer;
 
-        //final ret
-        if (client_->SyncRecv(recv, recv_len))
-        {
-            DisConnect();
-            return -1;
-        }
-
-        if (!CheckDeviceRet(recv))//check ret
-        {
-            DisConnect();
-            return -1;
-        }
-
         return 0;
 
     }
@@ -1612,6 +1626,7 @@ namespace zvision
             DisConnect();
             return -1;
         }
+        LOG_DEBUG("Data transfer ok...\n");
 
         // waitting for step 2
         const int recv_step_len = 5;
@@ -1622,6 +1637,7 @@ namespace zvision
             if (client_->SyncRecv(recv_step, recv_step_len))
             {
                 ok = false;
+                LOG_ERROR("Waiting for erase flash failed...\n");
                 break;
             }
             unsigned char step = (unsigned char)recv_step[4];
@@ -1638,6 +1654,7 @@ namespace zvision
             DisConnect();
             return -1;
         }
+        LOG_DEBUG("Waiting for erase flash ok...\n");
 
         // waitting for step 3
         while (1)

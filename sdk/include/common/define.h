@@ -71,12 +71,12 @@ namespace zvision
 
     typedef enum EchoMode
     {
-        EchoSingleFirst = 0, //First echo
-        EchoSingleStrongest = 1, //Strongest echo
-        EchoSingleLast = 2, //Last echo
-        EchoDoubleFirstStrongest = 3, //First and strongest
-        EchoDoubleFirstLast = 4, //First and last
-        EchoDoubleStrongestLast = 5, //Strongest and last
+        EchoSingleFirst = 1, //First echo
+        EchoSingleStrongest = 2, //Strongest echo
+        EchoSingleLast = 3, //Last echo
+        EchoDoubleFirstStrongest = 4, //First and strongest
+        EchoDoubleFirstLast = 5, //First and last
+        EchoDoubleStrongestLast = 6, //Strongest and last
         EchoUnknown,
     }EchoMode;
 
@@ -93,6 +93,7 @@ namespace zvision
         DeviceType device;
         std::string serial_number;
         FirmwareVersion version;
+        FirmwareVersion backup_version;
 
         std::string device_mac;
         std::string device_ip;

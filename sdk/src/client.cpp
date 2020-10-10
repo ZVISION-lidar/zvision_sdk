@@ -589,13 +589,15 @@ namespace zvision
     {
         int flags = 0;
         char *buf = const_cast<char*>(data.c_str());
+        char *move = buf;
         unsigned int total_read = 0;
         int need_read = len;
         while(1)
         {
             //Windows: https://docs.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-recv
-            buf += total_read;
-            int ret = recv(this->socket_, buf, need_read, flags);
+            move = buf + total_read;
+
+            int ret = recv(this->socket_, move, need_read, flags);
             if (SOCKET_ERROR == ret)
             {
                 LOG_ERROR("Recv error, value is %d", GetSysErrorCode());
@@ -623,6 +625,42 @@ namespace zvision
 
     }
 
+    int TcpClient::SyncRecv(char* data, int len)
+    {
+        int flags = 0;
+        char *buf = data;
+        unsigned int total_read = 0;
+        int need_read = len;
+        while (1)
+        {
+            //Windows: https://docs.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-recv
+            buf = data + total_read;
+
+            int ret = recv(this->socket_, buf, need_read, flags);
+            if (SOCKET_ERROR == ret)
+            {
+                LOG_ERROR("Recv error, value is %d", GetSysErrorCode());
+                return -1;
+            }
+            else if (0 == ret)
+            {
+                LOG_ERROR("The connection has been gracefully closed, recv return");
+                return -2;
+            }
+            else
+            {
+                total_read += ret;
+                if ((len >= 0) && ((unsigned int)len <= total_read))
+                    return 0;
+                else
+                {
+                    need_read = len - total_read;
+                    continue;
+                }
+            }
+        }
+    }
+
     //////////////////////////////////////////////////////////////////////////////////////////////
     int TcpClient::Close()
     {
@@ -634,9 +672,13 @@ namespace zvision
 #ifdef WIN32
         status = shutdown(this->socket_, SD_BOTH);
         if (status == 0) { status = closesocket(this->socket_); }
+        else
+           status = closesocket(this->socket_);
 #else
         status = shutdown(this->socket_, SHUT_RDWR);
         if (status == 0) { status = close(this->socket_); }
+        else
+            status = closesocket(this->socket_);
 #endif
         this->socket_ = INVALID_SOCKET;
         return status;

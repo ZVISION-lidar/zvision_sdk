@@ -186,6 +186,13 @@ namespace zvision
           */
         int SyncRecv(std::string& data, int len);
 
+        /** \brief Calls the SyncRecv method to reveive data from server.
+        * \param[in] data the buffer to store the data from server
+        * \param[in] len  the length to receive
+        * \return 0 for success, others for failure.
+        */
+        int SyncRecv(char* data, int len);
+
         /** \brief Calls the Close method to close the connection.
           * \return 0 for success, others for failure.
           */

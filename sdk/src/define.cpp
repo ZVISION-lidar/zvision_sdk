@@ -180,9 +180,11 @@ namespace zvision
         pos += snprintf(ptr + pos, buffer_len - pos, "Timestamp syn mode: %s\n", zvision::get_time_sync_type_string(info.time_sync).c_str());
         pos += snprintf(ptr + pos, buffer_len - pos, "Retro enbale: %s\n", zvision::get_retro_mode_string(info.retro_enable).c_str());
         pos += snprintf(ptr + pos, buffer_len - pos, "Sync offset: %u\n", info.phase_offset);
-        pos += snprintf(ptr + pos, buffer_len - pos, "Echo mode: %s\n", zvision::get_echo_mode_string(info.echo_mode));
+        pos += snprintf(ptr + pos, buffer_len - pos, "Echo mode: %s\n", zvision::get_echo_mode_string(info.echo_mode).c_str());
         pos += snprintf(ptr + pos, buffer_len - pos, "Boot   version: %u.%u.%u\n", info.version.boot_version[0], info.version.boot_version[1], info.version.boot_version[2], info.version.boot_version[3]);
         pos += snprintf(ptr + pos, buffer_len - pos, "Kernel version: %u.%u.%u\n", info.version.kernel_version[0], info.version.kernel_version[1], info.version.kernel_version[2], info.version.kernel_version[3]);
+        pos += snprintf(ptr + pos, buffer_len - pos, "Boot   version(backup): %u.%u.%u\n", info.backup_version.boot_version[0], info.backup_version.boot_version[1], info.backup_version.boot_version[2], info.backup_version.boot_version[3]);
+        pos += snprintf(ptr + pos, buffer_len - pos, "Kernel version(backup): %u.%u.%u\n", info.backup_version.kernel_version[0], info.backup_version.kernel_version[1], info.backup_version.kernel_version[2], info.backup_version.kernel_version[3]);
         pos += snprintf(ptr + pos, buffer_len - pos, "Device type: %s\n", zvision::get_device_type_string(info.device).c_str());
         return std::string(ptr);
     }
