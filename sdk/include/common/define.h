@@ -126,6 +126,8 @@ namespace zvision
 
     typedef struct CalibrationDataSinCos
     {
+        float ele;
+        float azi;
         float sin_ele;
         float cos_ele;
         float sin_azi;
