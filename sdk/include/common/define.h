@@ -69,6 +69,13 @@ namespace zvision
         RetroUnknown,
     }RetroMode;
 
+    typedef enum PhaseOffsetMode
+    {
+        PhaseOffsetDisable = 0,
+        PhaseOffsetEnable = 1,
+        PhaseOffsetUnknown,
+    }PhaseOffsetMode;
+
     typedef enum EchoMode
     {
         EchoSingleFirst = 1, //First echo
@@ -106,6 +113,7 @@ namespace zvision
         RetroMode retro_enable;
 
         uint32_t phase_offset; // 5ns
+        PhaseOffsetMode phase_offset_mode;
         EchoMode echo_mode;
 
     } DeviceConfigurationInfo;
@@ -257,6 +265,13 @@ namespace zvision
     * \return string.
     */
     std::string get_cfg_info_string(DeviceConfigurationInfo& info);
+
+    /** \brief phase offset mode to string
+    * \param[in] mode    the PhaseOffsetMode
+    * \return string.
+    */
+    std::string get_phase_offset_mode_string(PhaseOffsetMode mode);
+
 }
 
 #endif //end DEFINE_H_

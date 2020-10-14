@@ -174,6 +174,12 @@ namespace zvision
         */
         int SetDevicePhaseOffset(uint32_t offset);
 
+        /** \brief  Enable/disable device's phase offset.
+        * \param[in] en          true for enable, false for disable
+        * \return 0 for ok, others for failure.
+        */
+        int SetDevicePhaseOffsetEnable(bool en);
+
         /** \brief Set device's PTP configuration.
         * \param[in] ptp_cfg_filename  ptp config filename
         * \return 0 for ok, others for failure.

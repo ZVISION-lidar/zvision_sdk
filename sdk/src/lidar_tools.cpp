@@ -327,6 +327,8 @@ namespace zvision
                 point_cal.sin_ele = std::sin(ele);
                 point_cal.cos_azi = std::cos(azi);
                 point_cal.sin_azi = std::sin(azi);
+                point_cal.azi = azi;
+                point_cal.ele = ele;
             }
         }
         else if (LidarML30SA1 == cal.device_type)
@@ -346,7 +348,8 @@ namespace zvision
                 point_cal.sin_ele = std::sin(ele);
                 point_cal.cos_azi = std::cos(azi);
                 point_cal.sin_azi = std::sin(azi);
-
+                point_cal.azi = azi;
+                point_cal.ele = ele;
             }
         }
         else if (LidarMLX == cal.device_type)
@@ -366,6 +369,8 @@ namespace zvision
                 point_cal.sin_ele = std::sin(ele);
                 point_cal.cos_azi = std::cos(azi);
                 point_cal.sin_azi = std::sin(azi);
+                point_cal.azi = azi;
+                point_cal.ele = ele;
             }
         }
         else
@@ -615,6 +620,15 @@ namespace zvision
             info.echo_mode = EchoDoubleFirstLast;
         else if (0x06 == echo_mode)
             info.echo_mode = EchoDoubleStrongestLast;
+
+        // phase offset enable
+        unsigned char phase_offset_enable = (*(header + 61));
+        if (0x00 == phase_offset_enable)
+            info.phase_offset_mode = PhaseOffsetDisable;
+        else if(0x01 == phase_offset_enable)
+            info.phase_offset_mode = PhaseOffsetEnable;
+        else
+            info.phase_offset_mode = PhaseOffsetUnknown;
 
         // sn code and device type
         std::string sn = "Unknown";
@@ -1373,11 +1387,48 @@ namespace zvision
         if (!CheckConnection())
             return -1;
 
-        /*Get device log info*/
+        /*Phase offset*/
         const int send_len = 6;
         char set_cmd[send_len] = { (char)0xBA, (char)0x0E, (char)0x00, (char)0x00, (char)0x00, (char)0x00 };
 
         HostToNetwork((const unsigned char*)&offset, set_cmd + 2);
+
+        std::string cmd(set_cmd, send_len);
+
+        const int recv_len = 4;
+        std::string recv(recv_len, 'x');
+
+        if (client_->SyncSend(cmd, send_len))//send cmd
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (client_->SyncRecv(recv, recv_len))//recv ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (!CheckDeviceRet(recv))//check ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        return 0;
+    }
+
+    int LidarTools::SetDevicePhaseOffsetEnable(bool en)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        /*Set device phase offset enable*/
+        const int send_len = 4;
+        char set_cmd[send_len] = { (char)0xBA, (char)0x14, (char)0x00, (char)0x00};
+        if (en)
+            set_cmd[2] = 0x01;
 
         std::string cmd(set_cmd, send_len);
 
