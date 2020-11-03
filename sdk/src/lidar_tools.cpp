@@ -200,12 +200,51 @@ namespace zvision
                 }
                 cal.device_type = DeviceType::LidarMLX;
             }
+            else if (4800 == lines.size())
+            {
+                cal.data.resize(4800 * 3 * 2);
+                for (int i = 0; i < 4800; i++)
+                {
+                    const int column = 7;
+
+                    std::vector<std::string>& datas = lines[i];
+                    if (datas.size() != column)
+                    {
+                        ret = InvalidContent;
+                        break;
+                    }
+                    for (int j = 1; j < column; j++)
+                    {
+                        cal.data[i * 6 + j - 1] = static_cast<float>(std::atof(datas[j].c_str()));
+                    }
+                }
+                cal.device_type = DeviceType::LidarMLYB;
+            }
+            else if (38000 == lines.size())
+            {
+                cal.data.resize(38000 * 3 * 2);
+                for (int i = 0; i < 38000; i++)
+                {
+                    const int column = 7;
+
+                    std::vector<std::string>& datas = lines[i];
+                    if (datas.size() != column)
+                    {
+                        ret = InvalidContent;
+                        break;
+                    }
+                    for (int j = 1; j < column; j++)
+                    {
+                        cal.data[i * 6 + j - 1] = static_cast<float>(std::atof(datas[j].c_str()));
+                    }
+                }
+                cal.device_type = DeviceType::LidarMLYA;
+            }
             else
             {
                 cal.device_type = DeviceType::LidarUnknown;
                 ret = NotSupport;
             }
-
             return ret;
         }
         else
@@ -353,6 +392,48 @@ namespace zvision
             }
         }
         else if (LidarMLX == cal.device_type)
+        {
+            const int start = 3;
+            int fov_index[start] = { 2, 1, 0 };
+            for (unsigned int i = 0; i < cal.data.size() / 2; ++i)
+            {
+                int start_number = i % start;
+                int group_number = i / start;
+                int point_numer = group_number * start + fov_index[start_number];
+                float azi = static_cast<float>(cal.data[point_numer * 2] / 180.0 * 3.1416);
+                float ele = static_cast<float>(cal.data[point_numer * 2 + 1] / 180.0 * 3.1416);
+
+                CalibrationDataSinCos& point_cal = cal_cos_sin_lut.data[i];
+                point_cal.cos_ele = std::cos(ele);
+                point_cal.sin_ele = std::sin(ele);
+                point_cal.cos_azi = std::cos(azi);
+                point_cal.sin_azi = std::sin(azi);
+                point_cal.azi = azi;
+                point_cal.ele = ele;
+            }
+        }
+        else if (LidarMLYA == cal.device_type)
+        {
+            const int start = 3;
+            int fov_index[start] = { 2, 1, 0 };
+            for (unsigned int i = 0; i < cal.data.size() / 2; ++i)
+            {
+                int start_number = i % start;
+                int group_number = i / start;
+                int point_numer = group_number * start + fov_index[start_number];
+                float azi = static_cast<float>(cal.data[point_numer * 2] / 180.0 * 3.1416);
+                float ele = static_cast<float>(cal.data[point_numer * 2 + 1] / 180.0 * 3.1416);
+
+                CalibrationDataSinCos& point_cal = cal_cos_sin_lut.data[i];
+                point_cal.cos_ele = std::cos(ele);
+                point_cal.sin_ele = std::sin(ele);
+                point_cal.cos_azi = std::cos(azi);
+                point_cal.sin_azi = std::sin(azi);
+                point_cal.azi = azi;
+                point_cal.ele = ele;
+            }
+        }
+        else if (LidarMLYB == cal.device_type)
         {
             const int start = 3;
             int fov_index[start] = { 2, 1, 0 };

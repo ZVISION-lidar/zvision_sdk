@@ -226,7 +226,7 @@ namespace zvision
         */
 		bool CheckDeviceRet(std::string ret);
 
-	private:
+	//private:
 
         /** \brief Tcp client used for lidar configure.
         */

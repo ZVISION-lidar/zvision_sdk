@@ -92,6 +92,8 @@ namespace zvision
         LidarML30B1,
         LidarML30SA1,
         LidarMLX,
+        LidarMLYA,
+        LidarMLYB,
         LidarUnknown,
     }DeviceType;
 

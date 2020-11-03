@@ -69,6 +69,16 @@ namespace zvision
         */
         static int GetPacketSeq(std::string& packet);
 
+        /** \brief Get the echo count from the pointcloud packet.
+        * \return eho count( 1 for single echo and 2 for dual echo ).
+        */
+        static int GetEchoCount(std::string& packet);
+
+        /** \brief Get the timestamp from the pointcloud packet.
+        * \return timestamp in second.
+        */
+        static double GetTimestamp(std::string& packet);
+
         /** \brief Process a pointcloud udp packet to points.
         * \param[in] packet          udp data packet
         * \param[in] cal_lut         points' cal data in sin-cos format

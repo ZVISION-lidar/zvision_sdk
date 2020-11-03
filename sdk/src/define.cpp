@@ -40,6 +40,12 @@ namespace zvision
         case DeviceType::LidarMLX:
             str = "MLX";
             break;
+        case DeviceType::LidarMLYA:
+            str = "MLYA";
+            break;
+        case DeviceType::LidarMLYB:
+            str = "MLYB";
+            break;
         default:
             break;
         }

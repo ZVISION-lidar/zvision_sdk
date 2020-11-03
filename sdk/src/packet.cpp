@@ -25,7 +25,9 @@
 #include "packet.h"
 #include "point_cloud.h"
 #include <cstring>
-
+#ifdef WIN32
+#define timegm _mkgmtime
+#endif
 
 namespace zvision
 {
@@ -70,6 +72,14 @@ namespace zvision
         {
             return LidarMLX;
         }
+        else if (0x06 == value)
+        {
+            return LidarMLYA;
+        }
+        else if (0x07 == value)
+        {
+            return LidarMLYB;
+        }
         else
         {
             return LidarUnknown;
@@ -79,6 +89,49 @@ namespace zvision
     int PointCloudPacket::GetPacketSeq(std::string& packet)
     {
         return (unsigned char)(packet[3]) + (((unsigned char)packet[2] & 0xF) << 8);
+    }
+
+    int PointCloudPacket::GetEchoCount(std::string& packet)
+    {
+        return packet[2] & 0xC0;
+    }
+
+    double PointCloudPacket::GetTimestamp(std::string& packet)
+    {
+        unsigned char* data = (unsigned char*)(packet.data());
+
+        if (data[2] & 0x20) // ptp mode
+        {
+            uint64_t seconds = 0;
+            seconds += (data[1304 - 20 + 0] << 40);
+            seconds += (data[1304 - 20 + 1] << 32);
+            seconds += (data[1304 - 20 + 2] << 24);
+            seconds += (data[1304 - 20 + 3] << 16);
+            seconds += (data[1304 - 20 + 4] << 8);
+            seconds += (data[1304 - 20 + 5]);
+
+            uint32_t ms = (int)(data[1304 - 20 + 6] << 8) + data[1304 - 20 + 7];
+            uint32_t us = (int)(data[1304 - 20 + 8] << 8) + data[1304 - 20 + 9];
+
+            return (double)seconds + (double)ms / 1000.0 + (double)us / 1000000.0;
+        }
+        else// GPS mode
+        {
+            struct tm tm_;
+            tm_.tm_year = data[1304 - 20 + 0];
+            tm_.tm_mon = data[1304 - 20 + 1] - 1;
+            tm_.tm_mday = data[1304 - 20 + 2];
+            tm_.tm_hour = data[1304 - 20 + 3];
+            tm_.tm_min = data[1304 - 20 + 4];
+            tm_.tm_sec = data[1304 - 20 + 5];
+            tm_.tm_isdst = 0;
+
+            time_t seconds = timegm(&tm_);
+            uint32_t ms = (int)(data[1304 - 20 + 6] << 8) + data[1304 - 20 + 7];
+            uint32_t us = (int)(data[1304 - 20 + 8] << 8) + data[1304 - 20 + 9];
+
+            return (double)seconds + (double)ms / 1000.0 + (double)us / 1000000.0;
+        }
     }
 
     int PointCloudPacket::ProcessPacket(std::string& packet, CalibrationDataSinCosTable& cal_lut, PointCloud& cloud)
