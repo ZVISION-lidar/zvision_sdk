@@ -23,6 +23,7 @@
 
 #include "print.h"
 #include "lidar_tools.h"
+#include "define.h"
 #include <stdio.h>
 #include <fstream>
 #include <iostream>
@@ -178,20 +179,9 @@ int sample_query_lidar_configuration(std::string lidar_ip)
         LOG_ERROR("Query device [%s]'s configuration info failed, ret = %d.\n", lidar_ip.c_str(), ret);
     else
     {
+        std::string info_str = zvision::get_cfg_info_string(info);
         LOG_INFO("Query device [%s]'s configuration info ok.\n", lidar_ip.c_str());
-        LOG_INFO("Serial number: %s\n", info.serial_number.c_str());
-        LOG_INFO("Device ip: %s\n", info.device_ip.c_str());
-        LOG_INFO("Device subnet mask: %s\n", info.subnet_mask.c_str());
-        LOG_INFO("Device mac: %s\n", info.device_mac.c_str());
-        LOG_INFO("Destination ip: %s\n", info.destination_ip.c_str());
-        LOG_INFO("Destination port: %d\n", info.destination_port);
-        LOG_INFO("Timestamp syn mode: %s\n", zvision::get_time_sync_type_string(info.time_sync).c_str());
-        LOG_INFO("Retro enbale: %s\n", zvision::get_retro_mode_string(info.retro_enable).c_str());
-        LOG_INFO("Sync offset: %u\n", info.phase_offset);
-        LOG_INFO("Echo mode: %s\n", zvision::get_echo_mode_string(info.echo_mode));
-        LOG_INFO("Boot   version: %u.%u.%u\n", info.version.boot_version[0], info.version.boot_version[1], info.version.boot_version[2], info.version.boot_version[3]);
-        LOG_INFO("Kernel version: %u.%u.%u\n", info.version.kernel_version[0], info.version.kernel_version[1], info.version.kernel_version[2], info.version.kernel_version[3]);
-        LOG_INFO("Device type: %s\n", zvision::get_device_type_string(info.device).c_str());
+        LOG_INFO("%s\n", info_str.c_str());
     }
     return ret;
 }
