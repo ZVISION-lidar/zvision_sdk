@@ -162,14 +162,16 @@ namespace zvision
 
     typedef struct Point
     {
-        float x = 0;
-        float y = 0;
-        float z = 0;
-        int reflectivity;
-        int fov;
-        int number;
-        int valid = 0;
-        double timestamp;
+        float x = 0.0;
+        float y = 0.0;
+        float z = 0.0;
+        int reflectivity = -1;       // [0-255]
+        int fov = -1;                // [0,3) for ML30B1, [0-8) for ML30S(A/B)
+        int point_number = -1;       // [0, max fires) for single echo, [0, max fires x 2] for dual echo
+        int fire_number = -1;        // [0, max fires)
+        int valid = 0;               // if this points is resolved in udp packet, this points is valid
+        int echo_num = 0;            // 0 for first, 1 for second
+        uint64_t timestamp_ns = 0;   // nano second. UTC time for GPS mode, others for PTP mode
     }Point;
 
     /** \brief Set of return code. */

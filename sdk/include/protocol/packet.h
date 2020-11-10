@@ -79,6 +79,11 @@ namespace zvision
         */
         static double GetTimestamp(std::string& packet);
 
+        /** \brief Get the timestamp from the pointcloud packet.
+        * \return timestamp in nano second.
+        */
+        static uint64_t GetTimestampNS(std::string& packet);
+
         /** \brief Process a pointcloud udp packet to points.
         * \param[in] packet          udp data packet
         * \param[in] cal_lut         points' cal data in sin-cos format
@@ -87,13 +92,23 @@ namespace zvision
         */
         static int ProcessPacket(std::string& packet, CalibrationDataSinCosTable& cal_lut, PointCloud& cloud);
 
-        /** \brief zvision LidarTools constructor.
+        /** \brief Process a pointcloud udp packet to points.
         * \param[in] packet          class PointCloudPacket
         * \param[in] cal_lut         points' cal data in sin-cos format
         * \param[in] cloud           to store the pointcloud
         * \return 0 for ok, others for failure.
         */
         static int ProcessPacket(PointCloudPacket& packet, CalibrationDataSinCosTable& cal_lut, PointCloud& cloud);
+
+        /** \brief Convert a point data(4 bytes) to x y z.
+        * \param[in]  point           pointer to 4 bytes's point data
+        * \param[out] dis             points' distance
+        * \param[out] ref             points' reflectivity
+        * \param[in]  dis_bit         how many bits used for distance
+        * \param[in]  ref_bit         how many bits used for reflectivity
+        * \return None.
+        */
+        static void ResolvePoint(const unsigned char* point, float& dis, int& ref, int dis_bit, int ref_bit);
 
         /** \brief pointcloud upd packet data.
         */
