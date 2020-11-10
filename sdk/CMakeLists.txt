@@ -19,7 +19,7 @@ target_include_directories(${ZVISION_SDK_LIBRARY}
 set_target_properties(${ZVISION_SDK_LIBRARY} PROPERTIES PUBLIC_HEADER "include/lidar_tools.h;include/point_cloud.h;include/common/define.h;include/common/print.h")
 
 target_compile_options(${ZVISION_SDK_LIBRARY}
-        PRIVATE $<$<CXX_COMPILER_ID:GNU>:-Wall -Werror -Wno-c++11-long-long>
+        #PRIVATE $<$<CXX_COMPILER_ID:GNU>:-Wall -Werror -Wno-c++11-long-long>
         PRIVATE $<$<CXX_COMPILER_ID:AppleClang>:-Wno-unknown-pragmas -Wall -Werror -Wno-c++11-long-long>
         PRIVATE $<$<CXX_COMPILER_ID:Clang>:-Wno-unknown-pragmas -Wall -Werror -Wno-c++11-long-long>)
 
