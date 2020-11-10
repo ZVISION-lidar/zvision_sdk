@@ -26,6 +26,7 @@
 #include "lidar_tools.h"
 #include "print.h"
 #include <set>
+#include <cmath>
 #include <math.h>
 #include <cstring>
 #include <iostream>
