@@ -103,12 +103,12 @@ namespace zvision
         if (data[2] & 0x20) // ptp mode
         {
             uint64_t seconds = 0;
-            seconds += (data[1304 - 20 + 0] << 40);
-            seconds += (data[1304 - 20 + 1] << 32);
-            seconds += (data[1304 - 20 + 2] << 24);
-            seconds += (data[1304 - 20 + 3] << 16);
-            seconds += (data[1304 - 20 + 4] << 8);
-            seconds += (data[1304 - 20 + 5]);
+            seconds += ((uint64_t)data[1304 - 20 + 0] << 40);
+            seconds += ((uint64_t)data[1304 - 20 + 1] << 32);
+            seconds += ((uint64_t)data[1304 - 20 + 2] << 24);
+            seconds += ((uint64_t)data[1304 - 20 + 3] << 16);
+            seconds += ((uint64_t)data[1304 - 20 + 4] << 8);
+            seconds += ((uint64_t)data[1304 - 20 + 5]);
 
             uint32_t ms = (int)(data[1304 - 20 + 6] << 8) + data[1304 - 20 + 7];
             uint32_t us = (int)(data[1304 - 20 + 8] << 8) + data[1304 - 20 + 9];
@@ -141,12 +141,12 @@ namespace zvision
         if (data[2] & 0x20) // ptp mode
         {
             uint64_t seconds = 0;
-            seconds += (data[1304 - 20 + 0] << 40);
-            seconds += (data[1304 - 20 + 1] << 32);
-            seconds += (data[1304 - 20 + 2] << 24);
-            seconds += (data[1304 - 20 + 3] << 16);
-            seconds += (data[1304 - 20 + 4] << 8);
-            seconds += (data[1304 - 20 + 5]);
+            seconds += ((uint64_t)data[1304 - 20 + 0] << 40);
+            seconds += ((uint64_t)data[1304 - 20 + 1] << 32);
+            seconds += ((uint64_t)data[1304 - 20 + 2] << 24);
+            seconds += ((uint64_t)data[1304 - 20 + 3] << 16);
+            seconds += ((uint64_t)data[1304 - 20 + 4] << 8);
+            seconds += ((uint64_t)data[1304 - 20 + 5]);
 
             uint32_t ms = (int)(data[1304 - 20 + 6] << 8) + data[1304 - 20 + 7];
             uint32_t us = (int)(data[1304 - 20 + 8] << 8) + data[1304 - 20 + 9];
@@ -417,7 +417,7 @@ namespace zvision
                 }
                 else
                 {
-                    point_data.timestamp_ns = first_fire_timestamp_in_sweep + ((fire_interval_us * fire_number) * 1000);
+                    point_data.timestamp_ns = first_fire_timestamp_in_sweep + (uint64_t)((fire_interval_us * fire_number) * 1000);
                 }
                 //point_data.timestamp = timestamp + fire_interval * (fire_index[pt] + points_in_one_group / echo_cnt * gp);
             }
@@ -436,7 +436,7 @@ namespace zvision
     void PointCloudPacket::ResolvePoint(const unsigned char* point, float& dis, int& ref, int dis_bit, int ref_bit)
     {
         uint32_t data = ntohl(*(uint32_t*)(point));
-        dis = int(data >> (32 - dis_bit)) * 0.0015;
+        dis = float(int(data >> (32 - dis_bit)) * 0.0015);
         ref = (int)data & ((0x1 << ref_bit) - 1);
     }
 
