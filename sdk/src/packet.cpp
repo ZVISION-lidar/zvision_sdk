@@ -209,7 +209,6 @@ namespace zvision
         int fires = 0;
 
         //UDP packet parameters
-        unsigned int fovs = 0;
         unsigned int groups_in_one_udp = 0;
         unsigned int points_in_one_group = 0;
         unsigned int point_position_in_group = 0;
@@ -251,7 +250,6 @@ namespace zvision
 
         if (LidarML30B1 == type)
         {
-            fovs = 3;
             groups_in_one_udp = 80;
             points_in_one_group = 3;
             point_position_in_group = 4;
@@ -270,7 +268,6 @@ namespace zvision
         }
         else if (LidarML30SA1 == type)
         {
-            fovs = 8;
             fires = 51200;
             fire_interval_us = 1.5625 / 2.0; // 0.00000078125
             if (1 == echo_cnt)
@@ -296,7 +293,6 @@ namespace zvision
         }
         else if (LidarMLX == type)
         {
-            fovs = 3;
             groups_in_one_udp = 80;
             points_in_one_group = 3;
             point_position_in_group = 0;
@@ -314,7 +310,6 @@ namespace zvision
         }
         else if (LidarMLYA == type)
         {
-            fovs = 3;
             groups_in_one_udp = 80;
             points_in_one_group = 3;
             point_position_in_group = 4;
@@ -334,7 +329,6 @@ namespace zvision
         }
         else if (LidarMLYB == type)
         {
-            fovs = 3;
             groups_in_one_udp = 80;
             points_in_one_group = 3;
             point_position_in_group = 4;
@@ -360,7 +354,7 @@ namespace zvision
         int points = fires * echo_cnt;
 
         //realloc memory
-        if (points != cloud.points.size())
+        if (points != (int)cloud.points.size())
         {
             cloud.points.resize(points);
         }
@@ -368,16 +362,11 @@ namespace zvision
         for (uint32_t gp = 0; gp < groups_in_one_udp; ++gp)/*every groups*/
         {
             unsigned char* first_point_pos_in_group = data + group_position_in_packet + group_len * gp + point_position_in_group;
-            uint32_t dis_low, dis_high, int_low, int_high;/*dis*/
             float distance = 0.0;
             int reflectivity = 0;
             for (uint32_t pt = 0; pt < points_in_one_group; ++pt)
             {
                 unsigned char* point_pos = first_point_pos_in_group + point_len * pt;
-                dis_high = point_pos[0];
-                dis_low = point_pos[1];
-                int_high = point_pos[2];
-                int_low = point_pos[3];
 
                 int point_number = seq * points_in_one_group * groups_in_one_udp + gp * points_in_one_group + number_index[pt];
                 int fire_number = (seq * points_in_one_group * groups_in_one_udp + gp * points_in_one_group) / echo_cnt + fire_index[pt];
@@ -392,9 +381,9 @@ namespace zvision
                 //orientation index 
                 int orientation_index = fire_number;
 
-                if (orientation_index > (cal_lut.data.size()) - 1)
+                if (orientation_index > ((int)cal_lut.data.size()) - 1)
                     return -1;
-                if (point_number > (cloud.points.size()) - 1)
+                if (point_number > ((int)cloud.points.size()) - 1)
                     return -1;
 
                 CalibrationDataSinCos& point_cal = cal_lut.data[orientation_index];
