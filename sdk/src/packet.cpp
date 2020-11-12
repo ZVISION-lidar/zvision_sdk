@@ -398,6 +398,7 @@ namespace zvision
                 point_data.valid = 1;
                 point_data.echo_num = echo;
 
+#if 0
                 Point& first_point_in_sweep = cloud.points[0];
                 uint64_t first_fire_timestamp_in_sweep = first_point_in_sweep.timestamp_ns;
                 if (0 == fire_number)
@@ -409,6 +410,39 @@ namespace zvision
                     point_data.timestamp_ns = first_fire_timestamp_in_sweep + (uint64_t)((fire_interval_us * fire_number) * 1000);
                 }
                 //point_data.timestamp = timestamp + fire_interval * (fire_index[pt] + points_in_one_group / echo_cnt * gp);
+
+#else // Timestamp debug
+                if (LidarML30SA1 == type)
+                {
+                    if(seq == 0)
+                        point_data.timestamp_ns = udp_timestamp;
+
+                    if (seq == 16)
+                    {
+                        // deviation correction
+                        uint64_t first_fire_timestamp_in_sweep_tmp = 0;
+                        uint64_t T0 = cloud.points[0].timestamp_ns;
+                        uint64_t T16 = udp_timestamp;
+                        if ((T16 - T0) > 10000000) //T16 - T0 > 10ms
+                            first_fire_timestamp_in_sweep_tmp = T16;
+                        else
+                            first_fire_timestamp_in_sweep_tmp = T16 - 4000000;
+
+                        for (int it = 0;it < 40 * 8 * 16; it++) // compensation seq 0-15
+                        {
+                            Point& pt_tmp = cloud.points[it];
+                            pt_tmp.timestamp_ns = first_fire_timestamp_in_sweep_tmp + (uint64_t)((fire_interval_us * point_data.fire_number) * 1000);
+                        }
+                    }
+
+                    if (seq >= 16)
+                    {
+                        Point& first_point_in_sweep = cloud.points[0];
+                        uint64_t first_fire_timestamp_in_sweep = first_point_in_sweep.timestamp_ns;
+                        point_data.timestamp_ns = first_fire_timestamp_in_sweep + (uint64_t)((fire_interval_us * fire_number) * 1000);
+                    }
+                }
+#endif
             }
         }
 
