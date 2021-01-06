@@ -193,7 +193,7 @@ namespace zvision
     {
         uint32_t u_ep = 0;
         int ret = receiver_->SyncRecv(data, len, u_ep);
-        ep = reinterpret_cast<int>(&u_ep);
+        ep = *(int*)(&u_ep);
         return ret;
     }
 
