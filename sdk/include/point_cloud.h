@@ -64,8 +64,10 @@ namespace zvision
         * \param[in] data_port       lidar udp destination port.
         * \param[in] lidar_ip        lidar's ip address
         * \param[in] cal_filename    lidar's calibration file name, if empty string, using online calibration data
+        * \param[in] multicast_en    enbale join multicast group
+        * \param[in] mc_group_ip     multicast group ip address (224.0.0.0 -- 239.255.255.255)
         */
-        PointCloudProducer(int data_port, std::string lidar_ip, std::string cal_filename);
+        PointCloudProducer(int data_port, std::string lidar_ip, std::string cal_filename = "", bool multicast_en = false, std::string mc_group_ip = "");
 
 
         PointCloudProducer() = delete;
@@ -145,6 +147,7 @@ namespace zvision
         std::string device_ip_;
         std::string cal_filename_;
         DeviceType device_type_;
+        ScanMode scan_mode_;
         int last_seq_;
 
         /** \brief end of a full pointcloud's udp seq. It depends on lidar type*/
@@ -152,6 +155,10 @@ namespace zvision
 
         unsigned int filter_ip_;
         int data_port_;
+
+        /** \brief lidar data udp destination ip address */
+        std::string data_dst_ip_;
+        bool join_multicast_;
 
         bool init_ok_;
 

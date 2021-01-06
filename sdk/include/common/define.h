@@ -76,6 +76,15 @@ namespace zvision
         PhaseOffsetUnknown,
     }PhaseOffsetMode;
 
+    typedef enum ReturnType
+    {
+        FirstReturn = 1, //First return
+        LastReturn = 2, //Last return
+        StrongestReturn = 3, //Strongest return
+        SecondStrongestReturn = 4, //Second strongest return
+        UnknownReturn,
+    }ReturnType;
+
     typedef enum EchoMode
     {
         EchoSingleFirst = 1, //First echo
@@ -91,11 +100,24 @@ namespace zvision
     {
         LidarML30B1,
         LidarML30SA1,
+        LidarML30SA1_2,
         LidarMLX,
         LidarMLYA,
         LidarMLYB,
         LidarUnknown,
     }DeviceType;
+
+    typedef enum ScanMode
+    {
+        ScanML30B1_100,
+        ScanML30SA1_160,
+        ScanML30SA1_190,
+        ScanMLX_160,
+        ScanMLX_190,
+        ScanMLYA_190,
+        ScanMLYB_190,
+        ScanUnknown,
+    }ScanMode;
 
     typedef struct DeviceConfigurationInfo
     {
@@ -123,6 +145,8 @@ namespace zvision
     typedef struct CalibrationData
     {
         DeviceType device_type;
+        ScanMode scan_mode;
+        std::string description;
 
 		/** \brief Store every point's calibration data in azimuth elevation point by point.
 		* For the order's example
@@ -148,6 +172,8 @@ namespace zvision
     typedef struct CalibrationDataSinCosTable
     {
         DeviceType device_type;
+        ScanMode scan_mode;
+        std::string description;
 
 		/** \brief Store every point's calibration data in the format of sin-cos point by point.
 		* The data is orderd by points' order in the udp package.
@@ -171,6 +197,7 @@ namespace zvision
         int fire_number = -1;        // [0, max fires)
         int valid = 0;               // if this points is resolved in udp packet, this points is valid
         int echo_num = 0;            // 0 for first, 1 for second
+        ReturnType return_type = ReturnType::UnknownReturn;
         uint64_t timestamp_ns = 0;   // nano second. UTC time for GPS mode, others for PTP mode
     }Point;
 
@@ -195,6 +222,8 @@ namespace zvision
 
         NotMatched,
         BufferOverflow,
+
+        NotEnoughData,
 
         Unknown,
 

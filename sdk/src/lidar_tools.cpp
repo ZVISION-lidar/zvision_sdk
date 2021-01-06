@@ -111,28 +111,99 @@ namespace zvision
 
     int LidarTools::ReadCalibrationData(std::string filename, CalibrationData& cal)
     {
+        const int file_min_lines = 4;
         std::ifstream file;
         file.open(filename, std::ios::in);
         std::string line;
-        if (file.is_open())
+        if(!file.is_open())
+            return OpenFileError;
+
+        // read all lines to vector
+        std::vector<std::vector<std::string>> lines;
+        while (std::getline(file, line))
         {
-            std::vector<std::vector<std::string>> lines;
-            while (std::getline(file, line))
+            if (line.size() > 0)
             {
-                if (line.size() > 0)
+                std::istringstream iss(line);
+                std::vector<std::string> datas;
+                std::string data;
+                while (iss >> data)
                 {
-                    std::istringstream iss(line);
-                    std::vector<std::string> datas;
-                    std::string data;
-                    while (iss >> data)
+                    datas.push_back(data);
+                }
+                lines.push_back(datas);
+            }
+        }
+        file.close();
+
+        if (lines.size() < file_min_lines)
+            InvalidContent;
+
+        // filter #
+        int curr = 0;
+        for (auto& line : lines)
+        {
+            if ('#' != line[0][0])
+                break;
+            curr++;
+        }
+
+        // read version info
+        std::string version_str;
+        if ((lines[curr].size() >= 2) && (lines[curr][0] == "VERSION"))
+        {
+            version_str = lines[curr][lines[curr].size() - 1];
+            curr++;
+        }
+
+        // read scan mode
+        std::string mode_str;
+        if ((lines[curr].size() >= 2) && (lines[curr][0] == "Mode"))
+        {
+            mode_str = lines[curr][lines[curr].size() - 1];
+            curr++;
+        }
+        int ret = 0;
+        if (mode_str.size())
+        {
+            if ("MLX_A1_190" == mode_str)
+            {
+                if ((lines.size() - curr - 1) < 38000)//check the file lines
+                    return InvalidContent;
+
+                cal.data.resize(38000 * 3 * 2);
+                for (int i = 0; i < 38000; i++)
+                {
+                    const int column = 7;
+
+                    std::vector<std::string>& datas = lines[i + curr];
+                    if (datas.size() != column)
                     {
-                        datas.push_back(data);
+                        ret = InvalidContent;
+                        break;
                     }
-                    lines.push_back(datas);
+                    for (int j = 1; j < column; j++)
+                    {
+                        cal.data[i * 6 + j - 1] = static_cast<float>(std::atof(datas[j].c_str()));
+                    }
+                }
+                cal.device_type = DeviceType::LidarMLX;
+                cal.scan_mode = ScanMode::ScanMLX_190;
+                cal.description = "";
+                for (int i = 0; i < curr; i++)
+                {
+                    for (int j = 0; j < lines[i].size(); j++)
+                        cal.description += lines[i][j];
+                    cal.description += "\n";
                 }
             }
-            file.close();
-            int ret = 0;
+            else
+            {
+                return InvalidContent;
+            }
+        }
+        else
+        {
             if (10000 == lines.size())
             {
                 cal.data.resize(60000);
@@ -160,6 +231,7 @@ namespace zvision
                     }
                 }
                 cal.device_type = DeviceType::LidarML30B1;
+                cal.scan_mode = ScanMode::ScanML30B1_100;
             }
             else if (6400 == lines.size())
             {
@@ -180,6 +252,28 @@ namespace zvision
                     }
                 }
                 cal.device_type = DeviceType::LidarML30SA1;
+                cal.scan_mode = ScanMode::ScanML30SA1_160;
+            }
+            else if (7600 == lines.size())
+            {
+                cal.data.resize(7200 * 8 * 2);
+                for (int i = 0; i < 7200; i++)
+                {
+                    const int column = 17;
+
+                    std::vector<std::string>& datas = lines[i];
+                    if (datas.size() != column)
+                    {
+                        ret = InvalidContent;
+                        break;
+                    }
+                    for (int j = 1; j < column; j++)
+                    {
+                        cal.data[i * 16 + j - 1] = static_cast<float>(std::atof(datas[j].c_str()));
+                    }
+                }
+                cal.device_type = DeviceType::LidarML30SA1;
+                cal.scan_mode = ScanMode::ScanML30SA1_190;
             }
             else if (32000 == lines.size())
             {
@@ -200,6 +294,7 @@ namespace zvision
                     }
                 }
                 cal.device_type = DeviceType::LidarMLX;
+                cal.scan_mode = ScanMode::ScanMLX_160;
             }
             else if (4800 == lines.size())
             {
@@ -220,6 +315,7 @@ namespace zvision
                     }
                 }
                 cal.device_type = DeviceType::LidarMLYB;
+                cal.scan_mode = ScanMode::ScanMLYB_190;
             }
             else if (38000 == lines.size())
             {
@@ -240,24 +336,23 @@ namespace zvision
                     }
                 }
                 cal.device_type = DeviceType::LidarMLYA;
+                cal.scan_mode = ScanMode::ScanMLYA_190;
             }
             else
             {
                 cal.device_type = DeviceType::LidarUnknown;
+                cal.scan_mode = ScanMode::ScanUnknown;
                 ret = NotSupport;
             }
-            return ret;
         }
-        else
-        {
-            return OpenFileError;
-        }
+
+        return ret;
     }
 
     int LidarTools::ExportCalibrationData(CalibrationData& cal, std::string filename)
     {
         int data_in_line = 0;
-        if (DeviceType::LidarML30SA1 == cal.device_type)
+        if ((ScanMode::ScanML30SA1_160 == cal.scan_mode) || (ScanMode::ScanML30SA1_190 == cal.scan_mode))
         {
             std::fstream outfile;
             outfile.open(filename, std::ios::out);
@@ -284,7 +379,7 @@ namespace zvision
                 return OpenFileError;
             }
         }
-        else if (DeviceType::LidarML30B1 == cal.device_type)
+        else if (ScanMode::ScanML30B1_100 == cal.scan_mode)
         {
             std::fstream outfile;
             outfile.open(filename, std::ios::out);
@@ -314,7 +409,7 @@ namespace zvision
                 return OpenFileError;
             }
         }
-        else if (DeviceType::LidarMLX == cal.device_type)
+        else if (ScanMode::ScanMLX_160 == cal.scan_mode)
         {
             std::fstream outfile;
             outfile.open(filename, std::ios::out);
@@ -344,6 +439,37 @@ namespace zvision
                 return OpenFileError;
             }
         }
+        else if (ScanMode::ScanMLX_190 == cal.scan_mode)
+        {
+            std::fstream outfile;
+            outfile.open(filename, std::ios::out);
+            data_in_line = 6;
+            if (outfile.is_open())
+            {
+                outfile.setf(std::ios::fixed, std::ios::floatfield);
+                outfile.precision(3);
+                outfile << cal.description;
+                int rows = 38000;
+                for (int i = 0; i < rows; i++)
+                {
+                    outfile << i + 1 << " ";
+                    outfile << cal.data[i * 6 + 0] << " ";
+                    outfile << cal.data[i * 6 + 1] << " ";
+                    outfile << cal.data[i * 6 + 2] << " ";
+                    outfile << cal.data[i * 6 + 3] << " ";
+                    outfile << cal.data[i * 6 + 4] << " ";
+                    outfile << cal.data[i * 6 + 5];
+                    if (i < (rows - 1))
+                        outfile << "\n";
+                }
+                outfile.close();
+                return 0;
+            }
+            else
+            {
+                return OpenFileError;
+            }
+        }
         else
         {
             return NotSupport;
@@ -353,9 +479,11 @@ namespace zvision
     void LidarTools::ComputeCalibrationSinCos(CalibrationData& cal, CalibrationDataSinCosTable& cal_cos_sin_lut)
     {
         cal_cos_sin_lut.device_type = cal.device_type;
+        cal_cos_sin_lut.scan_mode = cal.scan_mode;
+        cal_cos_sin_lut.description = cal.description;
         cal_cos_sin_lut.data.resize(cal.data.size());
 
-        if (LidarML30B1 == cal.device_type)
+        if (ScanMode::ScanML30B1_100 == cal.scan_mode)
         {
             for (unsigned int i = 0; i < cal.data.size() / 2; ++i)
             {
@@ -371,7 +499,7 @@ namespace zvision
                 point_cal.ele = ele;
             }
         }
-        else if (LidarML30SA1 == cal.device_type)
+        else if ((ScanMode::ScanML30SA1_160 == cal.scan_mode) || (ScanMode::ScanML30SA1_190 == cal.scan_mode))
         {
             const int start = 8;
             int fov_index[start] = { 0, 6, 1, 7, 2, 4, 3, 5 };
@@ -392,7 +520,7 @@ namespace zvision
                 point_cal.ele = ele;
             }
         }
-        else if (LidarMLX == cal.device_type)
+        else if ((ScanMode::ScanMLX_160 == cal.scan_mode) || (ScanMode::ScanMLX_190 == cal.scan_mode))
         {
             const int start = 3;
             int fov_index[start] = { 2, 1, 0 };
@@ -413,7 +541,7 @@ namespace zvision
                 point_cal.ele = ele;
             }
         }
-        else if (LidarMLYA == cal.device_type)
+        else if (ScanMode::ScanMLYA_190 == cal.scan_mode)
         {
             const int start = 3;
             int fov_index[start] = { 2, 1, 0 };
@@ -434,7 +562,7 @@ namespace zvision
                 point_cal.ele = ele;
             }
         }
-        else if (LidarMLYB == cal.device_type)
+        else if (ScanMode::ScanMLYB_190 == cal.scan_mode)
         {
             const int start = 3;
             int fov_index[start] = { 2, 1, 0 };
@@ -803,16 +931,21 @@ namespace zvision
 
         int total_packet = 0;
         DeviceType tp = pkt->GetDeviceType();
+        ScanMode sm = pkt->GetScanMode();
 
-        if (DeviceType::LidarML30B1 == tp)
+        if (ScanMode::ScanML30B1_100 == sm)
         {
             total_packet = 235;// 10000 * 3 * 2 * 4 / 1024
         }
-        else if (DeviceType::LidarML30SA1 == tp)
+        else if (ScanMode::ScanML30SA1_160 == sm)
         {
             total_packet = 400;// 6400 * 8 * 2 * 4 / 1024
         }
-        else if (DeviceType::LidarMLX == tp)
+        else if (ScanMode::ScanML30SA1_190 == sm)
+        {
+            total_packet = 450;// 7200 * 8 * 2 * 4 / 1024
+        }
+        else if (ScanMode::ScanMLX_160 == sm)
         {
             total_packet = 750;// 32000 *3 * 2 * 4 / 1024
         }
@@ -872,15 +1005,19 @@ namespace zvision
             return -1;
         }
 
-        if (DeviceType::LidarML30B1 == tp)
+        if (ScanMode::ScanML30B1_100 == sm)
         {
             cal.data.resize(10000 * 3 * 2); //10000 for per sub fov, 3 fovs, 2(azimuth and elevation)
         }
-        else if (DeviceType::LidarML30SA1 == tp)
+        else if (ScanMode::ScanML30SA1_160 == sm)
         {
             cal.data.resize(6400 * 8 * 2);
         }
-        else if (DeviceType::LidarMLX == tp)
+        else if (ScanMode::ScanML30SA1_190 == sm)
+        {
+            cal.data.resize(6400 * 8 * 2);
+        }
+        else if (ScanMode::ScanMLX_160 == sm)
         {
             cal.data.resize(32000 * 3 * 2);
         }
@@ -891,6 +1028,7 @@ namespace zvision
 
         LOG_DEBUG("Get calibration data ok.\n");
         cal.device_type = tp;
+        cal.scan_mode = sm;
         return 0;
     }
 

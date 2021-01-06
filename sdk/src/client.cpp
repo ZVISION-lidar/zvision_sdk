@@ -727,6 +727,13 @@ namespace zvision
     }
 
     //////////////////////////////////////////////////////////////////////////////////////////////
+    int UdpReceiver::JoinMulticastGroup(std::string& mtip)
+    {
+        multicast_ip_ = mtip;
+        return 0;
+    }
+
+    //////////////////////////////////////////////////////////////////////////////////////////////
     int UdpReceiver::Bind()
     {
         if (!Env::Ok())
@@ -809,6 +816,20 @@ namespace zvision
                 LOG_ERROR("Bind error, error code = %d.\n", GetSysErrorCode());
                 Close();
                 return -1;
+            }
+
+            // multicast group
+            if (multicast_ip_.size())
+            {
+                struct ip_mreq mreq;
+                mreq.imr_multiaddr.s_addr = inet_addr(multicast_ip_.c_str());
+                mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+                if (0 != setsockopt(this->socket_, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char*)&mreq, sizeof(mreq)))
+                {
+                    LOG_ERROR("Join multicast group %s error, error code = %d.\n", multicast_ip_.c_str(), GetSysErrorCode());
+                    Close();
+                    return -1;
+                }
             }
 
             init_ok_ = true;

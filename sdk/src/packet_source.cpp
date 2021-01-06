@@ -178,6 +178,34 @@ namespace zvision
         }
     }
 
+    SocketUdpReader::SocketUdpReader(std::string ip, int port, int time_out_ms):
+        server_ip_(ip),
+        local_port_(port),
+        read_timeout_ms_(time_out_ms),
+        receiver_(new UdpReceiver(port, time_out_ms))
+    {
+
+    }
+
+    SocketUdpReader::~SocketUdpReader() {}
+
+    int SocketUdpReader::Read(std::string& data, int& len, int& ep)
+    {
+        uint32_t u_ep = 0;
+        int ret = receiver_->SyncRecv(data, len, u_ep);
+        ep = reinterpret_cast<int>(&u_ep);
+        return ret;
+    }
+
+    int SocketUdpReader::Close()
+    {
+        return receiver_->Close();
+    }
+
+    int SocketUdpReader::Open()
+    {
+        return 0;
+    }
 
     PcapUdpSource::PcapUdpSource(std::string ip, int port, std::string filename):
         init_ok_(false),
@@ -380,5 +408,155 @@ namespace zvision
         return ret;
 
     }
+
+    CalibrationDataSource::CalibrationDataSource(std::string ip, int port, std::string filename):
+        init_ok_(false),
+        sender_ip_(ip),
+        destination_port_(port),
+        filename_(filename)
+    {
+
+    }
+
+    CalibrationDataSource::~CalibrationDataSource()
+    {
+
+    }
+
+    int CalibrationDataSource::Open()
+    {
+        int ret = 0;
+        if (!init_ok_)
+        {
+            if (!StringToIp(this->sender_ip_, filter_ip_))
+            {
+                return InvalidParameter;
+            }
+
+            reader_.reset(new PcapReader(filename_));
+            if (0 != (ret = reader_->Open()))
+                return ret;
+            else
+                init_ok_ = true;
+        }
+
+        return ret;
+    }
+
+    int CalibrationDataSource::Close()
+    {
+        if (reader_)
+        {
+            reader_.reset();
+        }
+        init_ok_ = false;
+
+        return 0;
+    }
+
+    int CalibrationDataSource::ReadOne(std::string& data, int& len)
+    {
+        int ret = 0;
+        if(this)
+        if (!init_ok_)
+        {
+            if (0 != (ret = this->Open()))
+                return ret;
+        }
+
+        while (1)
+        {
+            int ret = reader_->Read(data, len);
+            if (ret)
+                return ret;
+
+            if (1071 != len)// 1029 + 42 = 1071
+                continue;
+
+            const unsigned char* pc = (unsigned char*)data.c_str();
+            const char* flag = data.c_str();
+
+            /* CAL we identify the lidar calibration udp pkt by frame flag*/
+            if ((flag[0] != 'C') || (flag[1] != 'A') || (flag[2] != 'L'))
+            {
+                continue;
+            }
+
+            unsigned int ip_host_order = 0;
+            u_short port = 0;
+
+            NetworkToHost(pc + 14 + 12, (char*)&ip_host_order);
+            NetworkToHostShort(pc + 36 + 0, (char*)&port);
+
+            //std::cout << "read: " << std::hex << ip << std::dec << " port :" << port << std::endl;
+            //std::cout << "wanted: " << std::hex << this->filter_ip_ << std::dec << " port :" << this->destination_port_ << std::endl;
+            if ((ip_host_order == this->filter_ip_) && (port == this->destination_port_))
+                return 0;
+            else
+                continue;
+        }
+    }
+
+    int CalibrationDataSource::GetCalibrationPackets(std::vector<CalibrationPacket>& packets)
+    {
+        int ret = 0;
+        if (!init_ok_)
+        {
+            if (0 != (ret = this->Open()))
+                return ret;
+        }
+
+        // https://stackoverflow.com/questions/1394132/macro-and-member-function-conflict
+        int last_seq = (std::numeric_limits<int>::max)();
+        bool need_find_type = true;
+
+        const int cal_pkt_cnt = 400;
+        std::vector<bool> bit_map(cal_pkt_cnt, false);
+        packets.resize(cal_pkt_cnt);
+        int cal_pkt_valid = 0;
+        DeviceType tp = LidarUnknown;
+        std::string data;
+        int len = 0;
+        while (cal_pkt_valid < cal_pkt_cnt)
+        {
+            if (0 != (ret = ReadOne(data, len)))
+            {
+                break;
+            }
+
+            //std::string packet = data.substr(42, len - 42);
+            CalibrationPacket pkt;
+            memcpy((void *)pkt.cal_data_, (void *)data.c_str(), len);
+            int seq = pkt.GetPacketSeq();
+
+            if (!bit_map[seq])
+            {
+                packets[seq] = pkt;
+                bit_map[seq] = true;
+                cal_pkt_valid++;
+            }
+        }
+        this->reader_->Close();
+        init_ok_ = false;
+
+        if (cal_pkt_valid != cal_pkt_cnt)
+            if (EndOfFile == ret)
+                return NotEnoughData;
+            else
+                return ret;
+
+        for (auto& p : packets)
+        {
+            if (DeviceType::LidarUnknown == tp)
+                tp = p.GetDeviceType();
+            else if (tp != p.GetDeviceType())
+                return NotMatched;
+            else
+                ;
+        }
+
+        return ret;
+    }
+
 
 }

@@ -31,6 +31,46 @@
 #include <stdio.h>
 #include <fstream>
 #include <iostream>
+#include <map>
+
+class ParamResolver
+{
+public:
+
+    static int GetParameters(int argc, char* argv[], std::map<std::string, std::string>& paras, std::string& appname)
+    {
+        paras.clear();
+        if (argc >= 1)
+            appname = std::string(argv[0]);
+
+        std::string key;
+        std::string value;
+        for (int i = 1; i < argc; i++)
+        {
+            std::string str(argv[i]);
+            if ((str.size() > 1) && ('-' == str[0]))
+            {
+                key = str;
+                if (i == (argc - 1))
+                    value = "";
+                else
+                {
+                    value = std::string(argv[i + 1]);
+                    if ('-' == value[0])
+                    {
+                        value = "";
+                    }
+                    else
+                    {
+                        i++;
+                    }
+                }
+                paras[key] = value;
+            }
+        }
+    }
+
+};
 
 #ifdef USING_PCL_VISUALIZATION
 /*to pcl pointcloud*/
@@ -66,12 +106,14 @@ void sample_pointcloud_callback(zvision::PointCloud& pc, int& status)
 //parameter lidar_ip              lidar ipaddress
 //parameter port                  lidar pointcloud udp destination port
 //parameter calfilename(optional) calibration filename, if pcapfilename is empty, online cal will be used.
-void sample_online_pointcloud(std::string lidar_ip = "192.168.10.108", int port = 2368, std::string calfilename = "")
+//parameter mc_en                 enable to join multicast group, if enable, mc_ip will be used.
+//parameter mc_ip                 multicast group ip address. If you dont't known the mc_ip, set to "" , we get the mc_ip by tcp connection.
+void sample_online_pointcloud(std::string lidar_ip = "192.168.10.108", int port = 2368, std::string calfilename = "", bool mc_en = false, std::string mc_ip = "")
 {
     //Step 1 : Init a online player.
     //If you want to specify the calibration file for the pointcloud, cal_filename is used to load the calibtation data.
     //Otherwise, the PointCloudProducer will connect to lidar and get the calibtation data by tcp connection.
-    zvision::PointCloudProducer player(port, lidar_ip, calfilename);
+    zvision::PointCloudProducer player(port, lidar_ip, calfilename, mc_en, mc_ip);
 
     //Step 2 (Optioncal): Regist a callback function.
     //If a callback function registered, the callback function will be called when a new pointcloud is ready.
@@ -200,52 +242,112 @@ static void export_point_cloud(zvision::PointCloud& points, std::string filename
 
 int main(int argc, char** argv)
 {
-    if (argc < 4)
+    using Param = std::map<std::string, std::string>;
+    std::map<std::string, std::string> paras;
+    std::string appname = "";
+    ParamResolver::GetParameters(argc, argv, paras, appname);
+
+    Param::iterator online = paras.find("-online");
+    Param::iterator offline = paras.find("-offline");
+
+    if (online != paras.end())// play online sensor
     {
-        std::cout << "############################# USER GUIDE ################################\n\n"
-            << "Sample 0 : play online pointcloud\n"
-            << "Format: -online lidar_ip lidar_port calfilename(if use online cal, ignore this parameter)\n"
-            << "Demo:   -online 192.168.10.108 2368\n\n"
-
-            << "Sample 1 : play offline pointcloud\n"
-            << "Format: -offline lidar_ip lidar_port pcapfilename calfilename\n"
-            << "Demo:   -offline 192.168.10.108 2368 xxxx.pcap xxxx.cal\n\n"
-
-            << "############################# END  GUIDE ################################\n\n"
-            ;
-        getchar();
-        return 0;
-    }
-    std::string lidar_ip = std::string(argv[2]);
-    int port = std::atoi(argv[3]);
-    std::string cal = "";
-    std::string pcapfilename = "";
-
-    if (0 == std::string(argv[1]).compare("-online"))
-    {
-        if (argc == 4)
-            ;
-        else if (argc == 5)
-            cal = std::string(argv[4]);
+        Param::iterator find = paras.find("-ip");// device ip
+        if (find != paras.end())
+        {
+            std::string ip = find->second;
+            std::string calibration = "";
+            bool mc_enable = false;
+            std::string mcg_ip = "";
+            int port = -1;
+            if (paras.end() != (find = paras.find("-p")))// pointcloud udp port
+            {
+                port = std::atoi(find->second.c_str());
+            }
+            if (paras.end() != (find = paras.find("-c")))// calibration file
+            {
+                calibration = find->second;
+            }
+            if (paras.end() != (find = paras.find("-j")))// join multicast group
+            {
+                mc_enable = true;
+            }
+            if (paras.end() != (find = paras.find("-g")))// multicast group ip address
+            {
+                mcg_ip = find->second;
+            }
+            sample_online_pointcloud(ip, port, calibration, mc_enable, mcg_ip);
+            return 0;
+        }
         else
         {
-            LOG_ERROR("Invalid parameter.\n");
-            return -1;
+            LOG_ERROR("Invalid parameters, no device ip address found.\n");
         }
-        sample_online_pointcloud(lidar_ip, port, cal);
-    }
-    else if (0 == std::string(argv[1]).compare("-offline") && argc == 6)
+    }   
+    else if (offline != paras.end())// play online sensor
     {
-        cal = std::string(argv[5]);
-        pcapfilename = std::string(argv[4]);
-        sample_offline_pointcloud(lidar_ip, port, cal, pcapfilename);
+        Param::iterator ip_find = paras.find("-ip");// device ip
+        Param::iterator port_find = paras.find("-p");// pointcloud udp port
+        Param::iterator pcap_find = paras.find("-f");// pointcloud udp port
+        Param::iterator calibration_find = paras.find("-c");// pointcloud udp port
+
+        if ((ip_find != paras.end()) && (port_find != paras.end()) && (pcap_find != paras.end()) && (calibration_find != paras.end()))
+        {
+            std::string ip = ip_find->second;
+            int port = std::atoi(port_find->second.c_str());
+            std::string calibration = calibration_find->second;
+            std::string filename = pcap_find->second;
+            sample_offline_pointcloud(ip, port, calibration, filename);
+            return 0;
+        }
+        else
+        {
+            if(ip_find == paras.end())
+                LOG_ERROR("Invalid parameters, device ip address not found.\n");
+            if (port_find == paras.end())
+                LOG_ERROR("Invalid parameters, port not found.\n");
+            if (pcap_find == paras.end())
+                LOG_ERROR("Invalid parameters, filename not found.\n");
+            if (calibration_find == paras.end())
+                LOG_ERROR("Invalid parameters, calibration file name not found.\n");
+        }
     }
     else
     {
-        LOG_ERROR("Invalid parameters\n.");
-        return zvision::InvalidParameter;
+
     }
-    return 0;
+
+    std::cout << "############################# USER GUIDE ################################\n\n"
+        << "Online sample param:\n"
+        << "        -online (required)\n"
+        << "        -ip lidar_ip_address(required)\n"
+        << "        -p  pointcloud_udp_port(optional)\n"
+        << "        -c  calibration_file_name(optional)\n"
+        << "        -j  (optional for online)\n"
+        << "        -g  multicast_group_ip_address(optional, valid when -j is set)\n"
+        << "\n"
+        << "Online sample 1 : -online -ip 192.168.10.108\n"
+        << "Online sample 2 : -online -ip 192.168.10.108 -p 2368\n"
+        << "Online sample 3 : -online -ip 192.168.10.108 -c xxxx.cal\n"
+        << "Online sample 4 : -online -ip 192.168.10.108 -p 2368 -c xxxx.cal\n"
+        << "Online sample 5 : -online -ip 192.168.10.108 -j\n"
+        << "Online sample 6 : -online -ip 192.168.10.108 -j 239.0.0.1\n"
+        << "\n"
+
+        << "Offline sample param:\n"
+        << "        -offline (required)\n"
+        << "        -ip lidar_ip_address(required)\n"
+        << "        -p  pointcloud_udp_port(required)\n"
+        << "        -f  pcap_file_name(required)\n"
+        << "        -c  calibration_file_name(required)\n"
+        << "\n"
+        << "Offline sample 1 : -offline -ip 192.168.10.108 -p 2368 -f xxxx.pcap -c xxxx.cal\n"
+
+        << "############################# END  GUIDE ################################\n\n"
+        ;
+    getchar();
+
+    return zvision::InvalidParameter; 
 }
 
 #if 0// test code

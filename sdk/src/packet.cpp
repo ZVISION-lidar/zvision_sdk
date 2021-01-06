@@ -52,6 +52,32 @@ namespace zvision
         }
     }
 
+    ScanMode CalibrationPacket::GetScanMode()
+    {
+        std::string dev_code(cal_data_ + 3, 6);
+        if (0 == dev_code.compare("30_B1 "))
+        {
+            return ScanMode::ScanML30B1_100;
+        }
+        else if (0 == dev_code.compare("30S_A1"))
+        {
+            return ScanMode::ScanML30SA1_160;
+        }
+        else if (0 == dev_code.compare("MLX   "))
+        {
+            return ScanMode::ScanMLX_160;
+        }
+        else
+        {
+            return ScanMode::ScanUnknown;
+        }
+    }
+
+    int CalibrationPacket::GetPacketSeq()
+    {
+        return (unsigned char)(this->cal_data_[9]) + (((unsigned char)cal_data_[10] & 0xF) << 8);
+    }
+
     DeviceType PointCloudPacket::GetDeviceType(std::string& packet)
     {
         if (packet.size() != POINT_CLOUD_UDP_LEN)
@@ -83,6 +109,45 @@ namespace zvision
         else
         {
             return LidarUnknown;
+        }
+    }
+
+    ScanMode PointCloudPacket::GetScanMode(std::string& packet)
+    {
+        if (packet.size() != POINT_CLOUD_UDP_LEN)
+        {
+            return ScanMode::ScanUnknown;
+        }
+
+        unsigned char type_field = packet[POINT_CLOUD_UDP_LEN - 1];
+
+        if (0xFF == type_field)
+        {
+            return ScanMode::ScanML30B1_100;
+        }
+        else if ((0x04 == type_field) || (0x08 == type_field))
+        {
+            return ScanMode::ScanML30SA1_160;
+        }
+        else if ((0x09 == type_field) || (0x0a == type_field))
+        {
+            return ScanMode::ScanML30SA1_190;
+        }
+        else if (0x05 == type_field)
+        {
+            return ScanMode::ScanMLX_190;
+        }
+        else if (0x06 == type_field)
+        {
+            return ScanMode::ScanMLYA_190;
+        }
+        else if (0x07 == type_field)
+        {
+            return ScanMode::ScanMLYB_190;
+        }
+        else
+        {
+            return ScanMode::ScanUnknown;
         }
     }
 
@@ -184,16 +249,17 @@ namespace zvision
         }
 
         //find lidar type
-        DeviceType type = PointCloudPacket::GetDeviceType(packet);
+        ScanMode scan_mode = PointCloudPacket::GetScanMode(packet);
         //type = DeviceType::LidarMLYB;
 
-        if (type != cal_lut.device_type)
+        if (scan_mode != cal_lut.scan_mode)
         {
+            //std::cout << "Scan mode is " << scan_mode << " calibration mode is " << cal_lut.scan_mode << std::endl;
             return NotMatched;
         }
 
         //device is unknown or device type and calibration data are not matched
-        if (type == LidarUnknown)
+        if (scan_mode == ScanUnknown)
             return NotSupport;
 
         //udp seq
@@ -248,7 +314,7 @@ namespace zvision
         //fire interval
         double fire_interval_us = 0.0;
 
-        if (LidarML30B1 == type)
+        if (ScanML30B1_100 == scan_mode)
         {
             groups_in_one_udp = 80;
             points_in_one_group = 3;
@@ -266,10 +332,19 @@ namespace zvision
                 number_index = number_index_ml30b1_dual_echo;
             }
         }
-        else if (LidarML30SA1 == type)
+        else if ((ScanML30SA1_160 == scan_mode) || (ScanML30SA1_190 == scan_mode))
         {
-            fires = 51200;
-            fire_interval_us = 1.5625 / 2.0; // 0.00000078125
+            if (ScanML30SA1_160 == scan_mode)
+            {
+                fires = 51200;
+                fire_interval_us = 1.5625 / 2.0; // 0.00000078125
+            }
+            else // 190 lines
+            {
+                fires = 60800;
+                fire_interval_us = 1.5625 / 2.0; // 0.00000078125
+            }
+
             if (1 == echo_cnt)
             {
                 groups_in_one_udp = 40;
@@ -291,7 +366,7 @@ namespace zvision
                 number_index = number_index_ml30sa1_dual_echo;
             }
         }
-        else if (LidarMLX == type)
+        else if (ScanMLX_190 == scan_mode)
         {
             groups_in_one_udp = 80;
             points_in_one_group = 3;
@@ -308,7 +383,7 @@ namespace zvision
                 number_index = number_index_mlx_dual_echo;
             }
         }
-        else if (LidarMLYA == type)
+        else if (ScanMLYA_190 == scan_mode)
         {
             groups_in_one_udp = 80;
             points_in_one_group = 3;
@@ -327,7 +402,7 @@ namespace zvision
                 number_index = number_index_ml30b1_dual_echo;
             }
         }
-        else if (LidarMLYB == type)
+        else if (ScanMLYB_190 == scan_mode)
         {
             groups_in_one_udp = 80;
             points_in_one_group = 3;
@@ -362,6 +437,7 @@ namespace zvision
         for (uint32_t gp = 0; gp < groups_in_one_udp; ++gp)/*every groups*/
         {
             unsigned char* first_point_pos_in_group = data + group_position_in_packet + group_len * gp + point_position_in_group;
+            ReturnType return_type = ReturnType::UnknownReturn;
             float distance = 0.0;
             int reflectivity = 0;
             for (uint32_t pt = 0; pt < points_in_one_group; ++pt)
@@ -372,7 +448,7 @@ namespace zvision
                 int fire_number = (seq * points_in_one_group * groups_in_one_udp + gp * points_in_one_group) / echo_cnt + fire_index[pt];
                 int fov_number = fov_index[pt];
 
-                PointCloudPacket::ResolvePoint(point_pos, distance, reflectivity, distance_bit, reflectivity_bit);
+                PointCloudPacket::ResolvePoint(point_pos, return_type, distance, reflectivity, distance_bit, reflectivity_bit);
 
                 int echo = 0;//first echo
                 if ((2 == echo_cnt) && (number_index[pt] % 2))
@@ -397,7 +473,7 @@ namespace zvision
                 point_data.fov = fov_number;
                 point_data.valid = 1;
                 point_data.echo_num = echo;
-
+                point_data.return_type = return_type;
                 int fire_number_in_udp = ((gp * points_in_one_group) / echo_cnt) + fire_index[pt];
                 point_data.timestamp_ns = udp_timestamp + (uint64_t)((fire_interval_us * fire_number_in_udp) * 1000);
             }
@@ -413,11 +489,24 @@ namespace zvision
         return PointCloudPacket::ProcessPacket(pkt, cal_lut, cloud);
     }
 
-    void PointCloudPacket::ResolvePoint(const unsigned char* point, float& dis, int& ref, int dis_bit, int ref_bit)
+    void PointCloudPacket::ResolvePoint(const unsigned char* point, ReturnType& return_type, float& dis, int& ref, int dis_bit, int ref_bit)
     {
         uint32_t data = ntohl(*(uint32_t*)(point));
         dis = float(int(data >> (32 - dis_bit)) * 0.0015);
         ref = (int)data & ((0x1 << ref_bit) - 1);
+
+        uint32_t tp_field = (data & 0x300) >> 8;
+        if (0x00 == tp_field)
+            return_type = ReturnType::FirstReturn;
+        else if (0x01 == tp_field)
+            return_type = ReturnType::StrongestReturn;
+        else if (0x02 == tp_field)
+            return_type = ReturnType::LastReturn;
+        else if (0x03 == tp_field)
+            return_type = ReturnType::SecondStrongestReturn;
+        else
+            return_type = ReturnType::UnknownReturn;
+
     }
 
     void CalibrationPacket::ExtractData(std::vector<float>& cal)

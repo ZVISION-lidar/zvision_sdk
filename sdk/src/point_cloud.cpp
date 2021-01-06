@@ -124,14 +124,17 @@ namespace zvision
         bool enqueue_data_;
     };
 
-    PointCloudProducer::PointCloudProducer(int data_port, std::string lidar_ip, std::string cal_filename = ""):
+    PointCloudProducer::PointCloudProducer(int data_port, std::string lidar_ip, std::string cal_filename, bool multicast_en, std::string mc_group_ip) :
         cal_(new CalibrationData()),
         points_(new PointCloud()),
         device_ip_(lidar_ip),
         cal_filename_(cal_filename),
         device_type_(LidarUnknown),
+        scan_mode_(ScanUnknown),
         last_seq_(-1),
         data_port_(data_port),
+        data_dst_ip_(mc_group_ip),
+        join_multicast_(multicast_en),
         init_ok_(false),
         need_stop_(false),
         pointcloud_cb_(nullptr),
@@ -158,15 +161,38 @@ namespace zvision
             LidarTools tool(this->device_ip_, 5000, 5000, 5000);
             DeviceConfigurationInfo cfg;
 
-            // if port is negative, we need to get the port from lidar by tcp connection
-            if (data_port_ < 0)
+            if (!StringToIp(device_ip_, filter_ip_))
             {
-                // get the port from lidar by tcp
-                if (tool.QueryDeviceConfigurationInfo(cfg))
-                    return false;
-                else
-                    data_port_ = cfg.destination_port;
+                return false;
+            }
 
+            // if port is negative or auto join multicast, we need to get the cfg from lidar by tcp connection
+            if ((data_port_ < 0) || (join_multicast_ && (!data_dst_ip_.size())))
+            {
+                // get the cfg from lidar by tcp
+                if (tool.QueryDeviceConfigurationInfo(cfg))
+                {
+                    LOG_ERROR("Query device configuration info failed.\n");
+                    if (data_port_ < 0)
+                        LOG_ERROR("Please specify the data port and retry.\n");
+                    if (join_multicast_)
+                        LOG_ERROR("No multicast group is joined.\n");
+
+                    return false;
+                }
+                else
+                {
+                    if (data_port_ < 0)
+                    {
+                        data_port_ = cfg.destination_port;
+                        LOG_INFO("Query device destination port ok, port is %d.\n", data_port_);
+                    }
+                    if (join_multicast_ && (!data_dst_ip_.size()))
+                    {
+                        data_dst_ip_ = cfg.destination_ip;
+                        LOG_INFO("Query device multicast address ok, group is %s.\n", data_dst_ip_);
+                    }
+                }
             }
 
             if (cal_filename_.size())
@@ -202,9 +228,10 @@ namespace zvision
         }
 
         //find lidar type
-        if (this->device_type_ == LidarUnknown)
+        if (this->scan_mode_ == ScanUnknown)
         {
             this->device_type_ = PointCloudPacket::GetDeviceType(packet);
+            this->scan_mode_ = PointCloudPacket::GetScanMode(packet);
             if (LidarML30B1 == this->device_type_)
             {
                 //this->last_seq_ = 124;
@@ -223,8 +250,8 @@ namespace zvision
             }
         }
 
-        //device is unknown or device type and calibration data are not matched
-        if ((this->device_type_ == LidarUnknown) || (this->device_type_ != this->cal_->device_type))
+        //scan mode is unknown or scan mode and calibration data are not matched
+        if ((this->scan_mode_ == ScanUnknown) || (this->scan_mode_ != this->cal_->scan_mode))
             return;
 
         int seq = PointCloudPacket::GetPacketSeq(packet);
@@ -239,7 +266,9 @@ namespace zvision
             this->ProcessOneSweep();
         }
 
-        PointCloudPacket::ProcessPacket(packet, *(this->cal_lut_), *points_);
+        int ret = PointCloudPacket::ProcessPacket(packet, *(this->cal_lut_), *points_);
+        if(0 != ret)
+            LOG_WARN("ProcessPacket error, %d.\n", ret);
 
         this->last_seq_ = seq;
     }
@@ -355,6 +384,27 @@ namespace zvision
         if (!this->receiver_)
         {
             this->receiver_.reset(new UdpReceiver(this->data_port_, 1000));
+
+            if (join_multicast_ && data_dst_ip_.size())
+            {
+                unsigned int dst_ip_int = 0;
+                if (StringToIp(data_dst_ip_, dst_ip_int))
+                {
+                    if ((dst_ip_int & 0xF0000000) == 0xE0000000)
+                    {
+                        this->receiver_->JoinMulticastGroup(data_dst_ip_);
+                        LOG_INFO("Join multicast group %s.\n", data_dst_ip_.c_str());
+                    }
+                    else
+                    {
+                        //LOG_WARN("Invalid multicast group ip %s.\n", data_dst_ip_.c_str());
+                    }
+                }
+                else
+                {
+                    LOG_ERROR("Resolve destination ip address error, %s\n", data_dst_ip_.c_str());
+                }
+            }
         }
 
         if (!this->consumer_)

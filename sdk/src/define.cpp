@@ -37,6 +37,9 @@ namespace zvision
         case DeviceType::LidarML30SA1:
             str = "ML30SA1";
             break;
+        case DeviceType::LidarML30SA1_2:
+            str = "ML30SA1_2";
+            break;
         case DeviceType::LidarMLX:
             str = "MLX";
             break;

@@ -33,6 +33,8 @@
 
 namespace zvision
 {
+    class UdpReceiver;
+
     //////////////////////////////////////////////////////////////////////////////////////////////
     class Reader
     {
@@ -130,19 +132,19 @@ namespace zvision
     };
 
     //////////////////////////////////////////////////////////////////////////////////////////////
-    class SocketReader : public Reader
+    class SocketUdpReader : public Reader
     {
     public:
 
-        /** \brief zvision SocketReader constructor.
+        /** \brief zvision SocketUdpReader constructor.
         * \param[in] ip              lidar's ip address
         * \param[in] port            local port to receive data
         * \param[in] time_out_ms     timeout in ms for SyncRecv function
         */
-        SocketReader(std::string ip, int port, int time_out_ms);
+        SocketUdpReader(std::string ip, int port, int time_out_ms);
 
         /** \brief Empty destructor */
-        virtual ~SocketReader();
+        virtual ~SocketUdpReader();
 
         /** \brief Calls the Read method to reveive data from local udp port.
         * \param[in] data the buffer to store the data received.
@@ -169,7 +171,7 @@ namespace zvision
         *  false init error
         *  true  init ok
         */
-        bool is_open_;
+        //bool is_open_;
 
         /** \brief Server ip address. */
         std::string server_ip_;
@@ -177,16 +179,11 @@ namespace zvision
         /** \brief Server listening port. */
         int local_port_;
 
-        /** \brief timeout(ms) for read.
-        int read_timeout_ms_;*/
-
         /** \brief timeout(ms) for read. */
         int read_timeout_ms_;
 
-    private:
-
-        /** \brief socket which represents the socket resource. */
-        int socket_;
+        /** \brief udp receiver. */
+        std::shared_ptr<UdpReceiver> receiver_;
 
     };
 
@@ -330,6 +327,72 @@ namespace zvision
 
     };
 
+    //////////////////////////////////////////////////////////////////////////////////////////////
+    class CalibrationDataSource
+    {
+    public:
+
+        /** \brief zvision CalibrationDataSource constructor. Get calibration info from pcap file.
+        * \param[in] port            local port to receive data
+        * \param[in] filename        pcap filename
+        */
+        explicit CalibrationDataSource(std::string ip, int port, std::string filename = "");
+
+        CalibrationDataSource() = delete;
+
+        /** \brief Empty destructor */
+        virtual ~CalibrationDataSource();
+
+        /** \brief Calls the GetCalibrationPackets method to get the calibration packets.
+        * \param[out] packets  the packets which is the full calibration data.
+        * \return 0 for success, others for failure.
+        */
+        int GetCalibrationPackets(std::vector<CalibrationPacket>& packets);
+
+    protected:
+
+        /** \brief Calls the Close method to close the resource.
+        * \return 0 for success, others for failure.
+        */
+        int Close();
+
+        /** \brief Calls the Open method to Open the source.
+        * \return 0 for success, others for failure.
+        */
+        int Open();
+
+        /** \brief Calls the Read method to reveive data from pcap file.
+        * \param[in] data the buffer to store the data received.
+        * \param[in] len  the length received.
+        * \return 0 for success, others for failure.
+        */
+        int ReadOne(std::string& data, int& len);
+
+        /** \brief socket is initialised ok.
+        *  false init error
+        *  true  init ok
+        */
+        bool init_ok_;
+
+        /** \brief Server ip address. */
+        std::string sender_ip_;
+
+        /** \brief filter ip address. */
+        unsigned int filter_ip_;
+
+        /** \brief Server listening port. */
+        int destination_port_;
+
+
+        /** \brief Pcap filename. */
+        std::string filename_;
+
+    private:
+
+        /** \brief socket which represents the udp resource. */
+        std::shared_ptr<PcapReader> reader_;
+
+    };
 
 }
 

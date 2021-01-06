@@ -252,6 +252,12 @@ namespace zvision
         /** \brief Empty destructor */
         virtual ~UdpReceiver();
 
+        /** \brief Calls the JoinMulticastGroup method to join the multicast group.
+        * \param[in] mtip the multicast ip address to join.
+        * \return 0 for success, others for failure.
+        */
+        int JoinMulticastGroup(std::string& mtip);
+
         /** \brief Calls the SyncRecv method to reveive data from local udp port.
           * \param[in] data the buffer to store the data received.
           * \param[in] len  the length received.
@@ -276,6 +282,9 @@ namespace zvision
 
         /** \brief Server ip address. */
         std::string server_ip_;
+
+        /** \brief Multical ip address. */
+        std::string multicast_ip_;
 
         /** \brief Server listening port. */
         int local_port_;

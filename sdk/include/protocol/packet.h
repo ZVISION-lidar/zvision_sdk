@@ -44,6 +44,16 @@ namespace zvision
         */
         DeviceType GetDeviceType();
 
+        /** \brief Get scan mode from the cal packet.
+        * \return ScanMode.
+        */
+        ScanMode GetScanMode();
+
+        /** \brief Get the udp sequence number from the calibration packet.
+        * \return udp sequence number.
+        */
+        int GetPacketSeq();
+
         /** \brief Process the raw cal udp packet to float(azimuth and elevation in degree format).
         * \param[out] cal             calibration data
         */
@@ -59,10 +69,15 @@ namespace zvision
     {
     public:
 
-        /** \brief Get device type from the cal packet.
+        /** \brief Get device type from the pointcloud packet.
         * \return DeviceType.
         */
         static DeviceType GetDeviceType(std::string& packet);
+
+        /** \brief Get scan mode from the pointcloud packet.
+        * \return DeviceType.
+        */
+        static ScanMode GetScanMode(std::string& packet);
 
         /** \brief Get the udp sequence number from the pointcloud packet.
         * \return udp sequence number.
@@ -108,7 +123,7 @@ namespace zvision
         * \param[in]  ref_bit         how many bits used for reflectivity
         * \return None.
         */
-        static void ResolvePoint(const unsigned char* point, float& dis, int& ref, int dis_bit, int ref_bit);
+        static void ResolvePoint(const unsigned char* point, ReturnType& return_type, float& dis, int& ref, int dis_bit, int ref_bit);
 
         /** \brief pointcloud upd packet data.
         */
