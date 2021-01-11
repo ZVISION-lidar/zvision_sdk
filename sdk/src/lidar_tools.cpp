@@ -168,7 +168,7 @@ namespace zvision
         {
             if ("MLX_A1_190" == mode_str)
             {
-                if ((lines.size() - curr - 1) < 38000)//check the file lines
+                if ((lines.size() - curr) < 38000)//check the file lines
                     return InvalidContent;
 
                 cal.data.resize(38000 * 3 * 2);
