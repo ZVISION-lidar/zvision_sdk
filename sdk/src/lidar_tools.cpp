@@ -523,7 +523,7 @@ namespace zvision
         else if ((ScanMode::ScanMLX_160 == cal.scan_mode) || (ScanMode::ScanMLX_190 == cal.scan_mode))
         {
             const int start = 3;
-            int fov_index[start] = { 2, 1, 0 };
+            int fov_index[start] = { 0, 1, 2 };
             for (unsigned int i = 0; i < cal.data.size() / 2; ++i)
             {
                 int start_number = i % start;
