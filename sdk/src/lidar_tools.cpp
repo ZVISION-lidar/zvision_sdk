@@ -1363,12 +1363,14 @@ namespace zvision
         }
 
         // transfer, erase flash, write
+        const int pkt_len = 256;
         int start_percent = 10;
-        int block_total = static_cast<int>(ceil(size / 256.0));
+        int block_total = size / pkt_len;
+        if (0 != (size % pkt_len))
+            block_total += 1;
         int step_per_percent = block_total / 30;//old is 90
 
         std::ifstream idata(filename, std::ios::in | std::ios::binary);
-        const int pkt_len = 256;
         char fw_data[pkt_len] = { 0x00 };
         int readed = 0;
 
@@ -1377,9 +1379,12 @@ namespace zvision
         {
             for (readed = 0; readed < block_total; readed++)
             {
-                idata.read(fw_data, pkt_len);
-                std::string fw(fw_data, pkt_len);
-                if (client_->SyncSend(fw, pkt_len))
+                int read_len = pkt_len;
+                if (readed == (block_total - 1))
+                    read_len = size % pkt_len;
+                idata.read(fw_data, read_len);
+                std::string fw(fw_data, read_len);
+                if (client_->SyncSend(fw, read_len))
                 {
                     break;
                 }
@@ -1855,11 +1860,14 @@ namespace zvision
 
         // transfer, erase flash, write
         int start_percent = 10;
-        int block_total = static_cast<int>(ceil(size / 256.0));
+        const int pkt_len = 256;
+        int block_total = size / pkt_len;
+        if (0 != (size % pkt_len))
+            block_total += 1;
+
         int step_per_percent = block_total / 30;//old is 90
 
         std::ifstream idata(filename, std::ios::in | std::ios::binary);
-        const int pkt_len = 256;
         char fw_data[pkt_len] = { 0x00 };
         int readed = 0;
 
@@ -1868,9 +1876,12 @@ namespace zvision
         {
             for (readed = 0; readed < block_total; readed++)
             {
-                idata.read(fw_data, pkt_len);
-                std::string fw(fw_data, pkt_len);
-                if (client_->SyncSend(fw, pkt_len))
+                int read_len = pkt_len;
+                if (readed == (block_total - 1))
+                    read_len = size % pkt_len;
+                idata.read(fw_data, read_len);
+                std::string fw(fw_data, read_len);
+                if (client_->SyncSend(fw, read_len))
                 {
                     break;
                 }

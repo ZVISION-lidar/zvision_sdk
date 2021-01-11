@@ -826,6 +826,7 @@ namespace zvision
                 mreq.imr_interface.s_addr = htonl(INADDR_ANY);
                 if (0 != setsockopt(this->socket_, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char*)&mreq, sizeof(mreq)))
                 {
+                    // "error 19: No such device.", https://stackoverflow.com/questions/3187919/error-no-such-device-in-call-setsockopt-when-joining-multicast-group
                     LOG_ERROR("Join multicast group %s error, error code = %d.\n", multicast_ip_.c_str(), GetSysErrorCode());
                     Close();
                     return -1;

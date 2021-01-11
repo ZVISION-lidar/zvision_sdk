@@ -190,7 +190,7 @@ namespace zvision
                     if (join_multicast_ && (!data_dst_ip_.size()))
                     {
                         data_dst_ip_ = cfg.destination_ip;
-                        LOG_INFO("Query device multicast address ok, group is %s.\n", data_dst_ip_);
+                        LOG_INFO("Query device multicast address ok, group is %s.\n", data_dst_ip_.c_str());
                     }
                 }
             }
