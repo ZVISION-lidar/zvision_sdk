@@ -169,7 +169,7 @@ namespace zvision
         int GetDeviceLog(std::string& log);
 
         /** \brief Set device's phase offset.
-        * \param[in] offset          offset, unit is 2ns 
+        * \param[in] offset          offset, unit is 5ns 
         * \return 0 for ok, others for failure.
         */
         int SetDevicePhaseOffset(uint32_t offset);

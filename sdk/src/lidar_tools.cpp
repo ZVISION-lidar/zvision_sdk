@@ -804,7 +804,7 @@ namespace zvision
         {
             info.retro_enable = RetroMode::RetroDisable;
         }
-        else if (0x01 == time_sync)
+        else if (0x01 == retro)
         {
             info.retro_enable = RetroMode::RetroEnable;
         }
