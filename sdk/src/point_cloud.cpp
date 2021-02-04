@@ -232,20 +232,21 @@ namespace zvision
         {
             this->device_type_ = PointCloudPacket::GetDeviceType(packet);
             this->scan_mode_ = PointCloudPacket::GetScanMode(packet);
-            if (LidarML30B1 == this->device_type_)
+            if (ScanML30B1_100 == this->scan_mode_)
             {
                 //this->last_seq_ = 124;
             }
-            else if (LidarML30SA1 == this->device_type_)
+            else if (ScanMode::ScanML30SA1_160 == this->device_type_)
             {
                 //this->last_seq_ = 159;
             }
-            else if (LidarMLX == this->device_type_)
+            else if (ScanMode::ScanMLX_190 == this->device_type_)
             {
                 //this->last_seq_ = 399;
             }
             else
             {
+                LOG_ERROR("Unknown scan mode %d.", this->scan_mode_);
                 return;
             }
         }
@@ -513,7 +514,9 @@ namespace zvision
         for (unsigned int i = 0; i < packets.size(); ++i)
         {
             if (0 != (ret = PointCloudPacket::ProcessPacket(packets[i], *(this->cal_lut_.get()), points)))
+            {
                 return ret;
+            }
         }
 
         return 0;

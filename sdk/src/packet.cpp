@@ -366,13 +366,31 @@ namespace zvision
                 number_index = number_index_ml30sa1_dual_echo;
             }
         }
-        else if (ScanMLX_190 == scan_mode)
+        else if (ScanMLX_160 == scan_mode)
         {
             groups_in_one_udp = 80;
             points_in_one_group = 3;
             point_position_in_group = 0;
             group_len = 16;
             fires = 96000;
+            fire_interval_us = 2.5 / 3.0; // 0.00000083333
+            fov_index = fov_index_mlx_single_echo;
+            fire_index = fire_index_mlx_single_echo;
+            number_index = number_index_mlx_single_echo;
+            if (2 == echo_cnt)
+            {
+                fov_index = fov_index_mlx_dual_echo;
+                fire_index = fire_index_mlx_dual_echo;
+                number_index = number_index_mlx_dual_echo;
+            }
+        }
+        else if (ScanMLX_190 == scan_mode)
+        {
+            groups_in_one_udp = 80;
+            points_in_one_group = 3;
+            point_position_in_group = 4;
+            group_len = 16;
+            fires = 114000;
             fire_interval_us = 2.5 / 3.0; // 0.00000083333
             fov_index = fov_index_mlx_single_echo;
             fire_index = fire_index_mlx_single_echo;
