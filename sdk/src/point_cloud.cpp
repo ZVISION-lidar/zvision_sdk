@@ -240,9 +240,13 @@ namespace zvision
             {
                 //this->last_seq_ = 159;
             }
-            else if (ScanMode::ScanMLX_190 == this->device_type_)
+            else if (ScanMode::ScanMLX_160 == this->device_type_)
             {
                 //this->last_seq_ = 399;
+            }
+            else if (ScanMode::ScanMLX_190 == this->device_type_)
+            {
+                //this->last_seq_ = 474;
             }
             else
             {
