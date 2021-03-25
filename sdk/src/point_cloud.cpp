@@ -236,7 +236,7 @@ namespace zvision
             {
                 //this->last_seq_ = 124;
             }
-            else if (ScanMode::ScanML30SA1_160 == this->device_type_)
+            else if ((ScanMode::ScanML30SA1_160 == this->device_type_) || (ScanMode::ScanML30SA1_160_1_2 == this->device_type_) || (ScanMode::ScanML30SA1_160_1_4 == this->device_type_))
             {
                 //this->last_seq_ = 159;
             }
@@ -289,14 +289,16 @@ namespace zvision
 
         //If a new pointcloud processed done, push back the deque.
         std::unique_lock<std::mutex> lock(this->mutex_);
-        if (this->max_pointcloud_count_ > 0)
         {
-            while (this->pointclouds_.size() >= this->max_pointcloud_count_)
+            if (this->max_pointcloud_count_ > 0)
             {
-                this->pointclouds_.pop_front();
+                while (this->pointclouds_.size() >= this->max_pointcloud_count_)
+                {
+                    this->pointclouds_.pop_front();
+                }
             }
+            this->pointclouds_.push_back(this->points_);
         }
-        this->pointclouds_.push_back(this->points_);
 
         //Allocate a new pointcloud for next one.
         this->points_.reset(new PointCloud());
@@ -353,26 +355,31 @@ namespace zvision
 
     int PointCloudProducer::GetPointCloud(PointCloud& points, int timeout_ms)
     {
-        std::unique_lock<std::mutex> lock(mutex_);
-
-        if (this->pointclouds_.empty())
         {
-            //wait_for bug on vs2015&vs2017: https://developercommunity.visualstudio.com/content/problem/438027/unexpected-behaviour-with-stdcondition-variablewai.html
-            if (std::cv_status::timeout == cond_.wait_for(lock, std::chrono::milliseconds(timeout_ms)))
+            std::unique_lock<std::mutex> lock(mutex_);
+
+            if (this->pointclouds_.empty())
             {
-                LOG_WARN("Wait for pointcloud timeout.\n");
-                return Timeout;
-            }
-            else
-            {
-                if (this->pointclouds_.empty())
+                //wait_for bug on vs2015&vs2017: https://developercommunity.visualstudio.com/content/problem/438027/unexpected-behaviour-with-stdcondition-variablewai.html
+                if (std::cv_status::timeout == cond_.wait_for(lock, std::chrono::milliseconds(timeout_ms)))
                 {
-                    return Unknown;
+                    LOG_WARN("Wait for pointcloud timeout.\n");
+                    return Timeout;
+                }
+                else
+                {
+                    if (this->pointclouds_.empty())
+                    {
+                        return Unknown;
+                    }
                 }
             }
         }
-        points = *(this->pointclouds_.front());
-        this->pointclouds_.pop_front();
+        std::unique_lock<std::mutex> lock(mutex_);
+        {
+            points = *(this->pointclouds_.front());
+            this->pointclouds_.pop_front();
+        }
         return 0;
     }
 

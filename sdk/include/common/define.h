@@ -111,6 +111,8 @@ namespace zvision
     {
         ScanML30B1_100,
         ScanML30SA1_160,
+        ScanML30SA1_160_1_2,
+        ScanML30SA1_160_1_4,
         ScanML30SA1_190,
         ScanMLX_160,
         ScanMLX_190,

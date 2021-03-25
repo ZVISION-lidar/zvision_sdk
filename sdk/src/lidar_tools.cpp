@@ -499,7 +499,7 @@ namespace zvision
                 point_cal.ele = ele;
             }
         }
-        else if ((ScanMode::ScanML30SA1_160 == cal.scan_mode) || (ScanMode::ScanML30SA1_190 == cal.scan_mode))
+        else if ((ScanMode::ScanML30SA1_160 == cal.scan_mode) || (ScanMode::ScanML30SA1_190 == cal.scan_mode) || (ScanMode::ScanML30SA1_160_1_2 == cal.scan_mode) || (ScanMode::ScanML30SA1_160_1_4 == cal.scan_mode))
         {
             const int start = 8;
             int fov_index[start] = { 0, 6, 1, 7, 2, 4, 3, 5 };
@@ -920,7 +920,6 @@ namespace zvision
 
         const int cal_pkt_len = 1040;
         std::string cal_recv(cal_pkt_len, 'x');
-        CalibrationPacket* pkt = reinterpret_cast<CalibrationPacket*>((char *)cal_recv.c_str());
 
         //receive first packet to identify the device type
         if (client_->SyncRecv(cal_recv, cal_pkt_len))
@@ -930,26 +929,10 @@ namespace zvision
         }
 
         int total_packet = 0;
-        DeviceType tp = pkt->GetDeviceType();
-        ScanMode sm = pkt->GetScanMode();
+        ScanMode sm = CalibrationPacket::GetScanMode(cal_recv);
+        total_packet = CalibrationPacket::GetMaxSeq(sm) + 1;
 
-        if (ScanMode::ScanML30B1_100 == sm)
-        {
-            total_packet = 235;// 10000 * 3 * 2 * 4 / 1024
-        }
-        else if (ScanMode::ScanML30SA1_160 == sm)
-        {
-            total_packet = 400;// 6400 * 8 * 2 * 4 / 1024
-        }
-        else if (ScanMode::ScanML30SA1_190 == sm)
-        {
-            total_packet = 450;// 7200 * 8 * 2 * 4 / 1024
-        }
-        else if (ScanMode::ScanMLX_160 == sm)
-        {
-            total_packet = 750;// 32000 *3 * 2 * 4 / 1024
-        }
-        else
+        if(total_packet <= 0)
         {
             DisConnect();
             return -1;// not support
@@ -977,7 +960,7 @@ namespace zvision
             return -1;
         }
 
-        pkt->ExtractData(cal.data);
+        CalibrationPacket::ExtractData(cal_recv, cal.data);
 
         for (int i = 0; i < total_packet - 1; i++)
         {
@@ -990,7 +973,7 @@ namespace zvision
                 DisConnect();
                 return -1;
             }
-            pkt->ExtractData(cal.data);
+            CalibrationPacket::ExtractData(cal_recv, cal.data);
         }
 
         if (client_->SyncRecv(recv, recv_len))
@@ -1013,6 +996,14 @@ namespace zvision
         {
             cal.data.resize(6400 * 8 * 2);
         }
+        else if (ScanMode::ScanML30SA1_160_1_2 == sm)
+        {
+            cal.data.resize(6400 * 8 * 2 / 2);
+        }
+        else if (ScanMode::ScanML30SA1_160_1_4 == sm)
+        {
+            cal.data.resize(6400 * 8 * 2 / 4);
+        }
         else if (ScanMode::ScanML30SA1_190 == sm)
         {
             cal.data.resize(6400 * 8 * 2);
@@ -1027,7 +1018,6 @@ namespace zvision
         }
 
         LOG_DEBUG("Get calibration data ok.\n");
-        cal.device_type = tp;
         cal.scan_mode = sm;
         return 0;
     }
@@ -1812,6 +1802,122 @@ namespace zvision
         ptp_cfg = ptp_cfg_buffer;
 
         return 0;
+
+    }
+
+    int LidarTools::SetDevicePointFireEnConfiguration(std::string fire_en_filename)
+    {
+        // --- read point fire enbale configuration file content
+        std::ifstream infile(fire_en_filename);
+        if (!infile.is_open())
+        {
+            return ReturnCode::OpenFileError;
+        }
+
+        std::vector<std::vector<std::string>> lines;
+        std::string line;
+        std::vector<int> ids;
+        const int column = 1;
+        while (std::getline(infile, line))
+        {
+            int value = 0xFFFFFFFF;
+            if (line.size() > 0)
+            {
+                int match = sscanf_s(line.c_str(), "%x", &value);
+
+                //printf("%08X\n", value);
+                if (column != match)
+                    break;
+                ids.push_back(value);
+            }
+        }
+        infile.close();
+
+        if (ids.size() != 1600)
+            return InvalidContent;
+
+        if (!CheckConnection())
+            return -1;
+
+        // --- send data to device
+        const int send_len = 6;
+        char set_cmd[send_len] = { (char)0xAB, (char)0x01, (char)0x00, (char)0x00, (char)0x00, (char)0x00 };
+
+        uint32_t size_len = 2;
+        uint32_t data_len = 1600 * 4 + size_len;
+        HostToNetwork((const unsigned char*)&data_len, set_cmd + 2);
+        std::string cmd(set_cmd, send_len);
+
+        std::string content;
+        content.resize(data_len);
+        content[0] = 0x02;
+        content[1] = 0x00;
+        int pos = 2;
+        std::unique_ptr<int> point_fire_en_data(new int[ids.size()]);
+        int* point_fire_en_data_ptr = point_fire_en_data.get();
+
+        for (int i = 0; i < ids.size(); i++)
+        {
+            point_fire_en_data_ptr[i] = ids[i];
+        }
+        char *send = (char*)content.c_str() + 2;
+        HostToNetwork((const unsigned char*)point_fire_en_data_ptr, send, 1600 * 4);
+
+        const int recv_len = 4;
+        std::string recv(recv_len, 'x');
+
+        // test
+        if(0)
+        {
+            std::ofstream out("test.hex", std::ios::binary);
+            if (out.is_open())
+            {
+                out.write(content.c_str(), content.size());
+                out.close();
+            }
+            std::cout << "data size is " << content.size() << std::endl;
+        }
+        //return 0;
+
+        if (client_->SyncSend(cmd, send_len))//send cmd
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (client_->SyncRecv(recv, recv_len))//recv ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (!CheckDeviceRet(recv))//check ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        // send file to device
+        if (client_->SyncSend(content, data_len))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        // final ack
+        if (client_->SyncRecv(recv, recv_len))//recv ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (!CheckDeviceRet(recv))//check ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        return ReturnCode::Success;
 
     }
 

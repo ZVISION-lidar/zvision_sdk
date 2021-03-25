@@ -39,15 +39,32 @@ namespace zvision
     {
     public:
 
-        /** \brief Get device type from the cal packet.
-        * \return DeviceType.
+        static const int PACKET_LEN = 1029;
+
+        /** \brief Packet is valid calibration udp packet or not.
+        * \return true for yes, false for no.
         */
-        DeviceType GetDeviceType();
+        static bool IsValidPacket(std::string& packet);
 
         /** \brief Get scan mode from the cal packet.
         * \return ScanMode.
         */
-        ScanMode GetScanMode();
+        static ScanMode GetScanMode(std::string& packet);
+
+        /** \brief Get the udp sequence number from the calibration packet.
+        * \return udp sequence number.
+        */
+        static int GetPacketSeq(std::string& packet);
+
+        /** \brief Get the max udp sequence number by scan mode.
+        * \return udp sequence number.
+        */
+        static int GetMaxSeq(zvision::ScanMode& mode);
+
+        /** \brief Get device type from the cal packet.
+        * \return DeviceType.
+        */
+        DeviceType GetDeviceType();
 
         /** \brief Get the udp sequence number from the calibration packet.
         * \return udp sequence number.
@@ -59,6 +76,11 @@ namespace zvision
         */
         void ExtractData(std::vector<float>& cal);
 
+        /** \brief Process the raw cal udp packet to float(azimuth and elevation in degree format).
+        * \param[out] cal             calibration data
+        */
+        static void ExtractData(std::string& packet, std::vector<float>& cal);
+
         /** \brief cal upd packet data.
         */
         char cal_data_[1040];
@@ -68,6 +90,13 @@ namespace zvision
     class PointCloudPacket
     {
     public:
+
+        static const int PACKET_LEN = 1304;
+
+        /** \brief Packet is valid pointcloud udp packet or not.
+        * \return true for yes, false for no.
+        */
+        static bool IsValidPacket(std::string& packet);
 
         /** \brief Get device type from the pointcloud packet.
         * \return DeviceType.

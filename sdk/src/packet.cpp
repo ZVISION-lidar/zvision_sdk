@@ -31,6 +31,82 @@
 
 namespace zvision
 {
+    bool CalibrationPacket::IsValidPacket(std::string& packet)
+    {
+        if (PACKET_LEN != packet.size())
+            return false;
+        return ((packet[0] == 'C') && (packet[1] == 'A') && (packet[2] == 'L'));
+    }
+
+    ScanMode CalibrationPacket::GetScanMode(std::string& packet)
+    {
+        std::string dev_code(packet.c_str() + 3, 6);
+        if (0 == dev_code.compare("30_B1 "))
+        {
+            return ScanMode::ScanML30B1_100;
+        }
+        else if (0 == dev_code.compare("30S_A1"))
+        {
+            unsigned char downsample_flag = packet[13];
+            if(0x00 == downsample_flag)
+                return ScanMode::ScanML30SA1_160;
+            else if(0x01 == downsample_flag)
+                return ScanMode::ScanML30SA1_160_1_2;
+            else if(0x02 == downsample_flag)
+                return ScanMode::ScanML30SA1_160_1_4;
+            else
+                return ScanMode::ScanML30SA1_160;
+        }
+        else if (0 == dev_code.compare("30S_B1"))
+        {
+            return ScanMode::ScanML30SA1_160;
+        }
+        else if (0 == dev_code.compare("MLX   "))
+        {
+            return ScanMode::ScanMLX_160;
+        }
+        else
+        {
+            return ScanMode::ScanUnknown;
+        }
+    }
+
+    int CalibrationPacket::GetPacketSeq(std::string& packet)
+    {
+        unsigned char* cal_data_ = (unsigned char*)packet.c_str();
+        //return (unsigned char)(cal_data_[9]) + (((unsigned char)cal_data_[10] & 0xF) << 8);
+        return (cal_data_[3] << 8) + cal_data_[4];
+    }
+
+    int CalibrationPacket::GetMaxSeq(zvision::ScanMode& mode)
+    {
+        int packets = 0;
+        switch (mode)
+        {
+        case ScanMode::ScanML30B1_100:
+            packets = 235;// 10000 * 3 * 2 * 4 / 1024
+            break;
+        case ScanMode::ScanML30SA1_160:
+            packets = 400;// 6400 * 8 * 2 * 4 / 1024
+            break;
+        case ScanMode::ScanML30SA1_160_1_2:
+            packets = 200;// 3200 * 8 * 2 * 4 / 1024
+            break;
+        case ScanMode::ScanML30SA1_160_1_4:
+            packets = 100;// 1600 * 8 * 2 * 4 / 1024
+            break;
+        case ScanMode::ScanML30SA1_190:
+            packets = 450;// 7200 * 8 * 2 * 4 / 1024
+            break;
+        case ScanMode::ScanMLX_160:
+            packets = 750;// 32000 *3 * 2 * 4 / 1024
+            break;
+        default:
+            break;
+        }
+        return packets - 1;
+    }
+
     DeviceType CalibrationPacket::GetDeviceType()
     {
         std::string dev_code(cal_data_ + 3, 6);
@@ -52,30 +128,17 @@ namespace zvision
         }
     }
 
-    ScanMode CalibrationPacket::GetScanMode()
-    {
-        std::string dev_code(cal_data_ + 3, 6);
-        if (0 == dev_code.compare("30_B1 "))
-        {
-            return ScanMode::ScanML30B1_100;
-        }
-        else if (0 == dev_code.compare("30S_A1"))
-        {
-            return ScanMode::ScanML30SA1_160;
-        }
-        else if (0 == dev_code.compare("MLX   "))
-        {
-            return ScanMode::ScanMLX_160;
-        }
-        else
-        {
-            return ScanMode::ScanUnknown;
-        }
-    }
-
     int CalibrationPacket::GetPacketSeq()
     {
         return (unsigned char)(this->cal_data_[9]) + (((unsigned char)cal_data_[10] & 0xF) << 8);
+    }
+
+    bool PointCloudPacket::IsValidPacket(std::string& packet)
+    {
+        if (PACKET_LEN != packet.size())
+            return false;
+        uint16_t flag = *(uint16_t*)packet.c_str();
+        return ((flag == 0xAAAA) || (flag == 0xBBBB) || (flag == 0xCCCC));
     }
 
     DeviceType PointCloudPacket::GetDeviceType(std::string& packet)
@@ -127,7 +190,15 @@ namespace zvision
         }
         else if ((0x04 == type_field) || (0x08 == type_field))
         {
-            return ScanMode::ScanML30SA1_160;
+            unsigned char downsample_flag = packet[POINT_CLOUD_UDP_LEN - 2];
+            if(0x00 == downsample_flag)
+                return ScanMode::ScanML30SA1_160;
+            else if(0x01 == downsample_flag)
+                return ScanMode::ScanML30SA1_160_1_2;
+            else if(0x02 == downsample_flag)
+                return ScanMode::ScanML30SA1_160_1_4;
+            else
+                return ScanMode::ScanML30SA1_160;
         }
         else if ((0x09 == type_field) || (0x0a == type_field))
         {
@@ -332,12 +403,22 @@ namespace zvision
                 number_index = number_index_ml30b1_dual_echo;
             }
         }
-        else if ((ScanML30SA1_160 == scan_mode) || (ScanML30SA1_190 == scan_mode))
+        else if ((ScanML30SA1_160 == scan_mode) || (ScanML30SA1_190 == scan_mode) || (ScanML30SA1_160_1_2 == scan_mode) || (ScanML30SA1_160_1_4 == scan_mode))
         {
             if (ScanML30SA1_160 == scan_mode)
             {
                 fires = 51200;
                 fire_interval_us = 1.5625 / 2.0; // 0.00000078125
+            }
+            else if (ScanML30SA1_160_1_2 == scan_mode)
+            {
+                fires = 51200 / 2;
+                fire_interval_us = 1.5625 / 2.0 / 2.0; // 0.000000390625
+            }
+            else if (ScanML30SA1_160_1_4 == scan_mode)
+            {
+                fires = 51200 / 4;
+                fire_interval_us = 1.5625 / 2.0; // not smooth
             }
             else // 190 lines
             {
@@ -366,31 +447,13 @@ namespace zvision
                 number_index = number_index_ml30sa1_dual_echo;
             }
         }
-        else if (ScanMLX_160 == scan_mode)
+        else if (ScanMLX_190 == scan_mode)
         {
             groups_in_one_udp = 80;
             points_in_one_group = 3;
             point_position_in_group = 0;
             group_len = 16;
             fires = 96000;
-            fire_interval_us = 2.5 / 3.0; // 0.00000083333
-            fov_index = fov_index_mlx_single_echo;
-            fire_index = fire_index_mlx_single_echo;
-            number_index = number_index_mlx_single_echo;
-            if (2 == echo_cnt)
-            {
-                fov_index = fov_index_mlx_dual_echo;
-                fire_index = fire_index_mlx_dual_echo;
-                number_index = number_index_mlx_dual_echo;
-            }
-        }
-        else if (ScanMLX_190 == scan_mode)
-        {
-            groups_in_one_udp = 80;
-            points_in_one_group = 3;
-            point_position_in_group = 4;
-            group_len = 16;
-            fires = 114000;
             fire_interval_us = 2.5 / 3.0; // 0.00000083333
             fov_index = fov_index_mlx_single_echo;
             fire_index = fire_index_mlx_single_echo;
@@ -540,4 +603,19 @@ namespace zvision
             cal.push_back(*pfloat_data);
         }
     }
+
+    void CalibrationPacket::ExtractData(std::string& packet, std::vector<float>& cal)
+    {
+        int network_data = 0;
+        int host_data = 0;
+        float* pfloat_data = reinterpret_cast<float *>(&host_data);
+        char* pkt = const_cast<char *>(packet.c_str());
+        for (int i = 0; i < 128 * 2; i++)
+        {
+            memcpy(&network_data, pkt + i * 4 + 16, 4); // 4 bytes per data, azimuth, elevation, 16 bytes header
+            host_data = ntohl(network_data);
+            cal.push_back(*pfloat_data);
+        }
+    }
+
 }

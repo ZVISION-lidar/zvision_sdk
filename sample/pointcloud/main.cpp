@@ -68,6 +68,7 @@ public:
                 paras[key] = value;
             }
         }
+        return 0;
     }
 
 };

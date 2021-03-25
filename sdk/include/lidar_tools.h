@@ -192,6 +192,12 @@ namespace zvision
         */
         int GetDevicePtpConfiguration(std::string& ptp_cfg);
 
+        /** \brief Set device's point fire enable configuration.
+        * \param[in] fire_en_filename  point fire enable config filename
+        * \return 0 for ok, others for failure.
+        */
+        int SetDevicePointFireEnConfiguration(std::string fire_en_filename);
+
         /** \brief Backup firmware update.
         * \param[in] filename        backup firmware filename
         */
