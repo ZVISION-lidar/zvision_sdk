@@ -557,7 +557,7 @@ namespace zvision
         cal_cos_sin_lut.device_type = cal.device_type;
         cal_cos_sin_lut.scan_mode = cal.scan_mode;
         cal_cos_sin_lut.description = cal.description;
-        cal_cos_sin_lut.data.resize(cal.data.size());
+        cal_cos_sin_lut.data.resize(cal.data.size() / 2);
 
         if (ScanMode::ScanML30B1_100 == cal.scan_mode)
         {
@@ -987,6 +987,20 @@ namespace zvision
     int LidarTools::GetDeviceCalibrationData(CalibrationData& cal)
     {
         std::string ec;
+        int ret = 0;
+        CalibrationPackets pkts;
+        if (ret = LidarTools::GetDeviceCalibrationPackets(pkts))
+            return ret;
+        
+        if (ret = LidarTools::GetDeviceCalibrationData(pkts, cal))
+            return ret;
+        
+        return 0;
+    }
+
+    int LidarTools::GetDeviceCalibrationPackets(CalibrationPackets& pkts)
+    {
+        std::string ec;
         const int ppf = 256000; // points per frame, 256000 reserved
         const int ppk = 128; // points per cal udp packet
         std::unique_ptr<float> angle_data(new float[ppf * 2]); // points( azimuh, elevation);
@@ -995,99 +1009,130 @@ namespace zvision
         const int send_len = 4;
         char cal_cmd[send_len] = { (char)0xBA, (char)0x07, (char)0x00, (char)0x00 };
         std::string cmd(cal_cmd, send_len);
+        pkts.clear();
 
         const int recv_len = 4;
         std::string recv(recv_len, 'x');
 
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         if (client_->SyncSend(cmd, send_len))
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, recv_len))
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         const int cal_pkt_len = 1040;
         std::string cal_recv(cal_pkt_len, 'x');
+        CalibrationPacket* pkt = reinterpret_cast<CalibrationPacket*>((char *)cal_recv.c_str());
 
         //receive first packet to identify the device type
         if (client_->SyncRecv(cal_recv, cal_pkt_len))
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         int total_packet = 0;
+        DeviceType tp = pkt->GetDeviceType();
         ScanMode sm = CalibrationPacket::GetScanMode(cal_recv);
-        total_packet = CalibrationPacket::GetMaxSeq(sm) + 1;
 
-        if(total_packet <= 0)
+        if (ScanMode::ScanML30B1_100 == sm)
+        {
+            total_packet = 235;// 10000 * 3 * 2 * 4 / 1024
+        }
+        else if (ScanMode::ScanML30SA1_160 == sm)
+        {
+            total_packet = 400;// 6400 * 8 * 2 * 4 / 1024
+        }
+        else if (ScanMode::ScanML30SA1_190 == sm)
+        {
+            total_packet = 450;// 7200 * 8 * 2 * 4 / 1024
+        }
+        else if (ScanMode::ScanMLX_160 == sm)
+        {
+            total_packet = 750;// 32000 *3 * 2 * 4 / 1024
+        }
+        else
         {
             DisConnect();
             return -1;// not support
         }
 
-        //check the data
-        unsigned char* check_data = (unsigned char *)cal_recv.c_str();
-        unsigned char check_all_00 = 0x00;
-        unsigned char check_all_ff = 0xFF;
-        for (int i = 0; i < 1040 - 16; i++)
-        {
-            check_all_00 |= check_data[i];
-            check_all_ff &= check_data[i];
-        }
-        if (0x00 == check_all_00)
-        {
-            LOG_ERROR("Check calibration data error, data is all 0x00.\n");
-            DisConnect();
-            return -1;
-        }
-        if (0xFF == check_all_ff)
-        {
-            LOG_ERROR("Check calibration data error, data is all 0xFF.\n");
-            DisConnect();
-            return -1;
-        }
-
-        CalibrationPacket::ExtractData(cal_recv, cal.data);
-
+        pkts.push_back(cal_recv);
         for (int i = 0; i < total_packet - 1; i++)
         {
-            //LOG_DEBUG("Get calibration data %d.\n", i);
             std::this_thread::sleep_for(std::chrono::microseconds(110));
             int ret = client_->SyncRecv(cal_recv, cal_pkt_len);
             if (ret)
             {
                 LOG_ERROR("Receive calibration data error, ret = %d.\n", ret);
                 DisConnect();
-                return -1;
+                return TcpRecvTimeout;
             }
-            CalibrationPacket::ExtractData(cal_recv, cal.data);
+            pkts.push_back(cal_recv);
         }
 
         if (client_->SyncRecv(recv, recv_len))
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))
         {
             DisConnect();
-            return -1;
+            return DevAckError;
+        }
+
+        if (total_packet != pkts.size())
+            return NotEnoughData;
+
+        return 0;
+    }
+
+    int LidarTools::GetDeviceCalibrationData(const CalibrationPackets& pkts, CalibrationData& cal)
+    {
+        int total_packet = 0;
+        if (!pkts.size())
+            return InvalidContent;
+
+        CalibrationPackets& packets = const_cast<CalibrationPackets&>(pkts);
+        ScanMode sm = CalibrationPacket::GetScanMode(packets[0]);
+
+        // v0.0.7 compatible
+        int data_offset = 16;
+        if (ScanMode::ScanUnknown == sm)
+        {
+            data_offset = 5;
+            sm = ScanMode::ScanML30SA1_160;
+        }
+
+        for (int i = 0; i < pkts.size(); i++)
+        {
+            char* cal_data_ = (char*)packets[i].c_str();
+            int network_data = 0;
+            int host_data = 0;
+            float* pfloat_data = reinterpret_cast<float *>(&host_data);
+            for (int i = 0; i < 128 * 2; i++)
+            {
+                memcpy(&network_data, cal_data_ + i * 4 + data_offset, 4); // 4 bytes per data, azimuth, elevation, 16 bytes header
+                host_data = ntohl(network_data);
+                cal.data.push_back(*pfloat_data);
+            }
         }
 
         if (ScanMode::ScanML30B1_100 == sm)
@@ -1119,7 +1164,6 @@ namespace zvision
 
         }
 
-        LOG_DEBUG("Get calibration data ok.\n");
         cal.scan_mode = sm;
         return 0;
     }

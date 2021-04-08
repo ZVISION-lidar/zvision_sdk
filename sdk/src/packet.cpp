@@ -114,7 +114,7 @@ namespace zvision
         {
             return DeviceType::LidarML30B1;
         }
-        else if (0 == dev_code.compare("30S_A1"))
+        else if ((0 == dev_code.compare("30S_A1")) || (0 == dev_code.compare("30S_B1")))
         {
             return DeviceType::LidarML30SA1;
         }

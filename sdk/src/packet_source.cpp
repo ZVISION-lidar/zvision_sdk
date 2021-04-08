@@ -178,6 +178,196 @@ namespace zvision
         }
     }
 
+    int PcapReader::ClearEofBit()
+    {
+        if (init_ok_)
+        {
+            if (file_.eof())
+                file_.clear();
+            return 0;
+        }
+        else
+        {
+            return NotInit;
+        }
+    }
+
+    PcapAnalyzer::PcapAnalyzer(std::string filename):
+        filename_(filename)
+    {
+
+    }
+
+    PcapAnalyzer::~PcapAnalyzer()
+    {
+
+    }
+
+    int PcapAnalyzer::Analyze()
+    {
+        std::shared_ptr<PcapReader> reader(new PcapReader(filename_));
+        int ret = 0;
+        if (0 != (ret = reader->Open()))
+            return ret;
+
+        std::string data;
+        int len = 0;
+
+        // iterate all packet
+        while (1)
+        {
+            std::streampos pos;
+            if (0 != (ret = reader->GetFilePosition(pos)))
+                break;
+
+            //int ret = reader->Read(data, len);
+            if (0 != (ret = reader->Read(data, len)))
+            {
+                if (EndOfFile == ret)
+                {
+                    ret = 0;
+                    break;
+                }
+                else
+                    return ret;
+            }
+
+
+            std::string packet = data.substr(42, len - 42);
+            unsigned int ip_host_order = 0;
+            u_short port = 0;
+
+            const unsigned char* pc = (unsigned char*)data.c_str();
+            NetworkToHost(pc + 14 + 12, (char*)&ip_host_order);
+            NetworkToHostShort(pc + 36 + 0, (char*)&port);
+            std::string ip = IpToString(*(int*)&ip_host_order);
+
+            if (PointCloudPacket::IsValidPacket(packet))
+            {
+                if (0 == PointCloudPacket::GetPacketSeq(packet))
+                {
+                    this->info_map_[ip].sweep_headers_.push_back(pos);
+                    this->info_map_[ip].dev_cfg_.destination_port = port;
+                }
+            }
+            else if (CalibrationPacket::IsValidPacket(packet))
+            {
+                if (0 == CalibrationPacket::GetPacketSeq(packet))
+                {
+                    this->info_map_[ip].cal_headers_.push_back(pos);
+                }
+            }
+            else
+            {
+                continue;
+            }
+        }
+
+        // seek error https://stackoverflow.com/questions/16364301/whats-wrong-with-the-ifstream-seekg
+        reader->ClearEofBit();
+        // get calibration data packet
+        for (auto& info : this->info_map_)
+        {
+            const std::string& name = info.first;
+            DeviceDataInfo& inf = info.second;
+            ScanMode tp_in_pointcloud_packet = ScanMode::ScanUnknown;
+            ScanMode tp_in_calibration_packet = ScanMode::ScanUnknown;
+            int packets = 0;
+            unsigned int uint_ip = 0;
+            if (!StringToIp(name, uint_ip))
+                continue;
+
+            // identify the pointcloud packet scan mode
+            if (inf.sweep_headers_.size())
+            {
+                if (0 != (ret = reader->SetFilePosition(inf.sweep_headers_[0])))
+                    continue;
+                if (0 != (ret = reader->Read(data, len)))
+                    continue;
+                std::string packet = data.substr(42, len - 42);
+                tp_in_pointcloud_packet = PointCloudPacket::GetScanMode(packet);
+            }
+            // identify the calibration packet scan mode
+            if (inf.cal_headers_.size())
+            {
+                if (0 != (ret = reader->SetFilePosition(inf.cal_headers_[0])))
+                    continue;
+                if (0 != (ret = reader->Read(data, len)))
+                    continue;
+                std::string packet = data.substr(42, len - 42);
+                //tp_in_calibration_packet = CalibrationPacket::GetScanMode(packet);
+                //packets = CalibrationPacket::GetMaxSeq(tp_in_calibration_packet);
+                //----------------------need a new version protocal
+                tp_in_calibration_packet = tp_in_pointcloud_packet;
+                packets = CalibrationPacket::GetMaxSeq(tp_in_calibration_packet) + 1;
+            }
+            // scan mode matched
+            if ((ScanMode::ScanUnknown != tp_in_pointcloud_packet) && (tp_in_pointcloud_packet == tp_in_calibration_packet))
+            {
+                if (0 != (ret = reader->SetFilePosition(inf.cal_headers_[0])))
+                    continue;
+
+                std::unique_ptr<bool> s_bitmap(new bool[packets]);
+                bool* bitmap = s_bitmap.get();
+                std::fill(bitmap, bitmap + packets, false);
+                int packet_found = 0;
+                CalibrationPacketPos& cal_pos = inf.cal_;
+                CalibrationPackets& cal_pkts = inf.cal_pkts_;
+                cal_pos.resize(packets);
+                cal_pkts.resize(packets);
+
+                while (1)
+                {
+                    std::streampos pos;
+                    if (0 != (ret = reader->GetFilePosition(pos)))
+                        break;
+
+                    if (0 != (ret = reader->Read(data, len)))
+                        break;
+
+                    if (packet_found == packets)
+                        break;
+
+                    std::string packet = data.substr(42, len - 42);
+                    unsigned int ip_host_order = 0;
+                    const unsigned char* pc = (unsigned char*)data.c_str();
+                    NetworkToHost(pc + 14 + 12, (char*)&ip_host_order);
+
+                    if ((uint_ip == ip_host_order) && CalibrationPacket::IsValidPacket(packet))
+                    {
+                        int seq = CalibrationPacket::GetPacketSeq(packet);
+                        if (0 <= seq)
+                        {
+                            if (!bitmap[seq])
+                            {
+                                cal_pkts[seq] = packet;
+                                cal_pos[seq] = pos;
+                                bitmap[seq] = true;
+                                packet_found++;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        continue;
+                    }
+                }
+
+                if (packet_found != packets)
+                {
+                    cal_pos.clear();
+                    cal_pkts.clear();
+                }
+            }
+        }
+        return 0;
+    }
+
+    const PcapAnalyzer::DeviceDataInfoMap& PcapAnalyzer::GetDetailInfo()
+    {
+        return this->info_map_;
+    }
+
     SocketUdpReader::SocketUdpReader(std::string ip, int port, int time_out_ms):
         server_ip_(ip),
         local_port_(port),

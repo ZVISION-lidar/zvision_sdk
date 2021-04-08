@@ -151,22 +151,22 @@ namespace zvision
         switch (mode)
         {
         case EchoMode::EchoSingleFirst:
-            str = "Single first echo";
+            str = "Single first return";
             break;
         case EchoMode::EchoSingleStrongest:
-            str = "Singe strongest echo";
+            str = "Singe strongest return";
             break;
         case EchoMode::EchoSingleLast:
-            str = "Singe last echo";
+            str = "Singe last return";
             break;
         case EchoMode::EchoDoubleFirstStrongest:
-            str = "Double(first and strongest echo)";
+            str = "Double(first and strongest return)";
             break;
         case EchoMode::EchoDoubleFirstLast:
-            str = "Double(first and last echo)";
+            str = "Double(first and last return)";
             break;
         case EchoMode::EchoDoubleStrongestLast:
-            str = "Double(strongest and last echo)";
+            str = "Double(strongest and last return)";
             break;
         default:
             break;

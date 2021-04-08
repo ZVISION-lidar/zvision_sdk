@@ -112,6 +112,18 @@ namespace zvision
           */
 		int GetDeviceCalibrationData(CalibrationData& cal);
 
+        /** \brief Get calibration data from lidar.
+        * \param[out] pkts          return device's calibration packets
+        */
+        int GetDeviceCalibrationPackets(CalibrationPackets& pkts);
+
+        /** \brief Get calibration data from calibration packet.
+        * \param[in]  pkts          the whole calibration packets.
+        * \param[out] cal           return device's calibration data.
+        * \return 0 for ok, others for failure.
+        */
+        static int GetDeviceCalibrationData(const CalibrationPackets& pkts, CalibrationData& cal);
+
         /** \brief Get calibration data from lidar and save to file.
           * \param[in] filename       the file to store the calibration data
           */

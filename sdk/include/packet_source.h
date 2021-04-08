@@ -24,6 +24,7 @@
 #ifndef PACKET_SOURCE_H_
 #define PACKET_SROUCE_H_
 #include <vector>
+#include <map>
 #include <string>
 #include <memory>
 #include <fstream>
@@ -109,6 +110,10 @@ namespace zvision
         */
         int GetFilePosition(std::streampos& pos);
 
+        /** \brief Calls the ClearEofBit method to clear eof bit status.
+        * \return 0 for success, others for failure.
+        */
+        int ClearEofBit();
 
     protected:
 
@@ -123,6 +128,71 @@ namespace zvision
 
         /** \brief pcap filename. */
         std::string filename_;
+
+    private:
+
+        /** \brief socket which represents the socket resource. */
+        int socket_;
+
+    };
+
+    //////////////////////////////////////////////////////////////////////////////////////////////
+    class PcapAnalyzer
+    {
+    public:
+
+        using SweepHeaderPos = std::vector<std::streampos>;
+        using CalibrationHeaderPos = std::vector<std::streampos>;
+        using CalibrationPacketPos = std::vector<std::streampos>;
+
+        class DeviceDataInfo
+        {
+        public:
+            SweepHeaderPos sweep_headers_;
+            CalibrationHeaderPos cal_headers_;
+            CalibrationPacketPos cal_;
+            CalibrationPackets cal_pkts_;
+            DeviceConfigurationInfo dev_cfg_;
+        };
+
+        using DeviceDataInfoMap = std::map<std::string, DeviceDataInfo>;
+
+        /** \brief zvision PcapAnalyzer constructor.
+        * \param[in] filename        pcap filename
+        */
+        PcapAnalyzer(std::string filename);
+
+        /** \brief Empty destructor */
+        virtual ~PcapAnalyzer();
+
+        /** \brief Calls the Analyze method to resolve the file.
+        * \return 0 for success, others for failure.
+        */
+        int Analyze();
+
+        /** \brief Calls the GetDetailInfo method to get first packet position array in a total frame.
+        * \param[in] pos  file position to set.
+        * \return file position array.
+        */
+        const DeviceDataInfoMap& GetDetailInfo();
+
+
+    protected:
+
+        /** \brief socket is initialised ok.
+        *  false init error
+        *  true  init ok
+        */
+        bool init_ok_;
+
+        /** \brief Server ip address. */
+        std::ifstream file_;
+
+        /** \brief pcap filename. */
+        std::string filename_;
+
+        /** \brief data detail map. */
+        DeviceDataInfoMap info_map_;
 
     private:
 

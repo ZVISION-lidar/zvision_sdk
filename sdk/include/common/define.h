@@ -165,6 +165,8 @@ namespace zvision
 
     } DeviceConfigurationInfo;
 
+    using CalibrationPackets = std::vector<std::string>;
+
     typedef struct CalibrationData
     {
         DeviceType device_type;
@@ -247,6 +249,14 @@ namespace zvision
         BufferOverflow,
 
         NotEnoughData,
+
+        ItemNotFound,
+
+        TcpConnTimeout,
+        TcpSendTimeout,
+        TcpRecvTimeout,
+
+        DevAckError,
 
         Unknown,
 
