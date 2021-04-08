@@ -153,7 +153,7 @@ namespace zvision
         {
             return LidarML30B1;
         }
-        else if (0x04 == value)
+        else if ((0x04 == value) || (0x80 == value))
         {
             return LidarML30SA1;
         }
@@ -190,12 +190,16 @@ namespace zvision
         }
         else if ((0x04 == type_field) || (0x08 == type_field))
         {
+            return ScanMode::ScanML30SA1_160;
+        }
+        else if (0x80 == type_field)
+        {
             unsigned char downsample_flag = packet[POINT_CLOUD_UDP_LEN - 2];
-            if(0x00 == downsample_flag)
+            if (0x00 == downsample_flag)
                 return ScanMode::ScanML30SA1_160;
-            else if(0x01 == downsample_flag)
+            else if (0x01 == downsample_flag)
                 return ScanMode::ScanML30SA1_160_1_2;
-            else if(0x02 == downsample_flag)
+            else if (0x02 == downsample_flag)
                 return ScanMode::ScanML30SA1_160_1_4;
             else
                 return ScanMode::ScanML30SA1_160;

@@ -188,9 +188,12 @@ namespace zvision
         pos += snprintf(ptr + pos, buffer_len - pos, "Destination port: %d\n", info.destination_port);
         pos += snprintf(ptr + pos, buffer_len - pos, "Timestamp syn mode: %s\n", zvision::get_time_sync_type_string(info.time_sync).c_str());
         pos += snprintf(ptr + pos, buffer_len - pos, "Retro enbale: %s\n", zvision::get_retro_mode_string(info.retro_enable).c_str());
+        pos += snprintf(ptr + pos, buffer_len - pos, "Retro param: [%d] [%d]\n", info.retro_param_1_ref_min, info.retro_param_2_point_percent);
         pos += snprintf(ptr + pos, buffer_len - pos, "Phase offset: %u(x 5ns)\n", info.phase_offset);
         pos += snprintf(ptr + pos, buffer_len - pos, "Phase offset enable: %s\n", zvision::get_phase_offset_mode_string(info.phase_offset_mode).c_str());
         pos += snprintf(ptr + pos, buffer_len - pos, "Echo mode: %s\n", zvision::get_echo_mode_string(info.echo_mode).c_str());
+        pos += snprintf(ptr + pos, buffer_len - pos, "Cal send mode: %s\n", zvision::get_cal_send_mode_string(info.cal_send_mode).c_str());
+        pos += snprintf(ptr + pos, buffer_len - pos, "Downsample mode: %s\n", zvision::get_downsample_mode_string(info.downsample_mode).c_str());
         pos += snprintf(ptr + pos, buffer_len - pos, "Boot   version: %u.%u.%u.%u\n", info.version.boot_version[0], info.version.boot_version[1], info.version.boot_version[2], info.version.boot_version[3]);
         pos += snprintf(ptr + pos, buffer_len - pos, "Kernel version: %u.%u.%u.%u\n", info.version.kernel_version[0], info.version.kernel_version[1], info.version.kernel_version[2], info.version.kernel_version[3]);
         pos += snprintf(ptr + pos, buffer_len - pos, "Boot   version(backup): %u.%u.%u.%u\n", info.backup_version.boot_version[0], info.backup_version.boot_version[1], info.backup_version.boot_version[2], info.backup_version.boot_version[3]);
@@ -209,6 +212,43 @@ namespace zvision
             break;
         case PhaseOffsetMode::PhaseOffsetEnable:
             str = "Enable";
+            break;
+        default:
+            break;
+        }
+        return str;
+    }
+
+    std::string get_cal_send_mode_string(CalSendMode mode)
+    {
+        std::string str = "Unknown";
+        switch (mode)
+        {
+        case CalSendMode::CalSendDisable:
+            str = "Disable";
+            break;
+        case CalSendMode::CalSendEnable:
+            str = "Enable";
+            break;
+        default:
+            break;
+        }
+        return str;
+    }
+
+    std::string get_downsample_mode_string(DownsampleMode mode)
+    {
+        std::string str = "Unknown";
+        switch (mode)
+        {
+        case DownsampleMode::DownsampleNone:
+            str = "Downsample none";
+            break;
+        case DownsampleMode::Downsample_1_2:
+            str = "Downsample 1/2";
+            break;
+        case DownsampleMode::Downsample_1_4:
+            str = "Downsample 1/4";
             break;
         default:
             break;

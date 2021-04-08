@@ -50,7 +50,7 @@ namespace zvision
           * \param[in] send_timeout    timeout in ms for SyncSend function
           * \param[in] recv_timeout    timeout in ms for SyncRecv function
           */
-        LidarTools(std::string lidar_ip, int con_timeout = 100, int send_timeout = 100, int recv_timeout = 100);
+        LidarTools(std::string lidar_ip, int con_timeout = 100, int send_timeout = 100, int recv_timeout = 10000);
 
         LidarTools() = delete;
 
@@ -152,6 +152,16 @@ namespace zvision
           */
         int SetDeviceRetroEnable(bool en);
 
+        /** \brief Set lidar retro param 1 [0,250].
+        * \param[in] ref_min           retro parameter 1 (min reflectivity)
+        */
+        int SetDeviceRetroParam1MinRef(int ref_min);
+
+        /** \brief Set lidar retro param 2 [0,100].
+        * \param[in] en                point percentage
+        */
+        int SetDeviceRetroParam2PointPercentage(int percentage);
+
         /** \brief Firmware update.
           * \param[in] filename        firmware filename
           */
@@ -214,6 +224,17 @@ namespace zvision
         */
         int SetDeviceEchoMode(EchoMode mode);
         
+        /** \brief Set device's cal send mode.
+        * \param[in] mode            CalSendMode
+        * \return 0 for ok, others for failure.
+        */
+        int SetDeviceCalSendMode(CalSendMode mode);
+
+        /** \brief Set device's downsample mode.
+        * \param[in] mode            downsample mode
+        * \return 0 for ok, others for failure.
+        */
+        int SetDeviceDownsampleMode(DownsampleMode mode);
 
 	protected:
         

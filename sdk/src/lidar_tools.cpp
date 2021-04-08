@@ -197,6 +197,48 @@ namespace zvision
                     cal.description += "\n";
                 }
             }
+            else if (("ML30S_160_1_2" == mode_str) || ("ML30S_160_1_4" == mode_str))
+            {
+                int group = 3200;
+                if ("ML30S_160_1_2" == mode_str)
+                {
+                    group = 3200;
+                    cal.scan_mode = ScanMode::ScanML30SA1_160_1_2;
+                }
+                else
+                {
+                    group = 1600;
+                    cal.scan_mode = ScanMode::ScanML30SA1_160_1_4;
+                }
+
+                if ((lines.size() - curr) < group)//check the file lines
+                    return InvalidContent;
+
+                cal.data.resize(group * 8 * 2);
+                for (int i = 0; i < group; i++)
+                {
+                    const int column = 17;
+
+                    std::vector<std::string>& datas = lines[i + curr];
+                    if (datas.size() != column)
+                    {
+                        ret = InvalidContent;
+                        break;
+                    }
+                    for (int j = 1; j < column; j++)
+                    {
+                        cal.data[i * 16 + j - 1] = static_cast<float>(std::atof(datas[j].c_str()));
+                    }
+                }
+                cal.device_type = DeviceType::LidarML30SA1;
+                cal.description = "";
+                for (int i = 0; i < curr; i++)
+                {
+                    for (int j = 0; j < lines[i].size(); j++)
+                        cal.description += lines[i][j];
+                    cal.description += "\n";
+                }
+            }
             else
             {
                 return InvalidContent;
@@ -359,6 +401,40 @@ namespace zvision
             data_in_line = 16;
             if (outfile.is_open())
             {
+                outfile.setf(std::ios::fixed, std::ios::floatfield);
+                outfile.precision(3);
+                for (unsigned int i = 0; i < cal.data.size(); i++)
+                {
+                    if (0 == (i % data_in_line))
+                    {
+                        if (i > 0)
+                            outfile << "\n";
+                        outfile << i / data_in_line + 1 << " ";
+                    }
+                    outfile << " " << cal.data[i];
+                }
+                outfile.close();
+                return 0;
+            }
+            else
+            {
+                return OpenFileError;
+            }
+        }
+        else if ((ScanMode::ScanML30SA1_160_1_2 == cal.scan_mode) || (ScanMode::ScanML30SA1_160_1_4 == cal.scan_mode))
+        {
+            std::fstream outfile;
+            outfile.open(filename, std::ios::out);
+            data_in_line = 16;
+            if (outfile.is_open())
+            {
+                outfile << "# file version : ML30S.cal_v0.4\n";
+                outfile << "VERSION 0.1\n";
+                if (ScanMode::ScanML30SA1_160_1_2 == cal.scan_mode)
+                    outfile << "Mode ML30S_160_1_2\n";
+                else
+                    outfile << "Mode ML30S_160_1_4\n";
+
                 outfile.setf(std::ios::fixed, std::ios::floatfield);
                 outfile.precision(3);
                 for (unsigned int i = 0; i < cal.data.size(); i++)
@@ -840,6 +916,32 @@ namespace zvision
         else
             info.phase_offset_mode = PhaseOffsetUnknown;
 
+        // retro param
+        unsigned char retro_param_1 = (*(header + 62));
+        unsigned char retro_param_2 = (*(header + 63));
+        info.retro_param_1_ref_min = retro_param_1;
+        info.retro_param_2_point_percent = retro_param_2;
+
+        // calibration data send status, 0 disable, 1 enable
+        unsigned char cal_send_enable = (*(header + 64));
+        if (0x00 == cal_send_enable)
+            info.cal_send_mode = CalSendDisable;
+        else if (0x01 == cal_send_enable)
+            info.cal_send_mode = CalSendEnable;
+        else
+            info.cal_send_mode = CalSendUnknown;
+
+        // downsample mode
+        unsigned char downsample_flag = (*(header + 65));
+        if (0x00 == downsample_flag)
+            info.downsample_mode = DownsampleNone;
+        else if (0x01 == downsample_flag)
+            info.downsample_mode = Downsample_1_2;
+        else if(0x02 == downsample_flag)
+            info.downsample_mode = Downsample_1_4;
+        else
+            info.downsample_mode = DownsampleUnknown;
+
         // sn code and device type
         std::string sn = "Unknown";
         info.serial_number = "Unknown";
@@ -1309,6 +1411,86 @@ namespace zvision
 
     }
 
+    int LidarTools::SetDeviceRetroParam1MinRef(int ref_min)
+    {
+        if ((ref_min < 0) || (ref_min > 250))
+            return InvalidParameter;
+
+        if (!CheckConnection())
+            return -1;
+
+        /*Set device retro param 1*/
+        const int send_len = 4;
+        char set_cmd[send_len] = { (char)0xBA, (char)0x15, (char)0x01, (char)0x00 };
+
+        set_cmd[3] = ref_min & 0xFF;
+
+        std::string cmd(set_cmd, send_len);
+
+        const int recv_len = 4;
+        std::string recv(recv_len, 'x');
+
+        if (client_->SyncSend(cmd, send_len))//send cmd
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (client_->SyncRecv(recv, recv_len))//recv ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (!CheckDeviceRet(recv))//check ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        return 0;
+    }
+
+    int LidarTools::SetDeviceRetroParam2PointPercentage(int percentage)
+    {
+        if ((percentage < 0) || (percentage > 100))
+            return InvalidParameter;
+
+        if (!CheckConnection())
+            return -1;
+
+        /*Set device retro param 2*/
+        const int send_len = 4;
+        char set_cmd[send_len] = { (char)0xBA, (char)0x15, (char)0x02, (char)0x00 };
+
+        set_cmd[3] = percentage & 0xFF;
+
+        std::string cmd(set_cmd, send_len);
+
+        const int recv_len = 4;
+        std::string recv(recv_len, 'x');
+
+        if (client_->SyncSend(cmd, send_len))//send cmd
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (client_->SyncRecv(recv, recv_len))//recv ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (!CheckDeviceRet(recv))//check ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        return 0;
+    }
+
     int LidarTools::FirmwareUpdate(std::string& filename, ProgressCallback cb)
     {
         if (!CheckConnection())
@@ -1370,7 +1552,7 @@ namespace zvision
             for (readed = 0; readed < block_total; readed++)
             {
                 int read_len = pkt_len;
-                if (readed == (block_total - 1))
+                if ((readed == (block_total - 1)) && (0 != (size % pkt_len)))
                     read_len = size % pkt_len;
                 idata.read(fw_data, read_len);
                 std::string fw(fw_data, read_len);
@@ -1983,7 +2165,7 @@ namespace zvision
             for (readed = 0; readed < block_total; readed++)
             {
                 int read_len = pkt_len;
-                if (readed == (block_total - 1))
+                if ((readed == (block_total - 1)) && (0 != (size % pkt_len)))
                     read_len = size % pkt_len;
                 idata.read(fw_data, read_len);
                 std::string fw(fw_data, read_len);
@@ -2161,7 +2343,7 @@ namespace zvision
         if (!CheckConnection())
             return -1;
 
-        /*Get device log info*/
+        /*Set device echo mode*/
         const int send_len = 4;
         char set_cmd[send_len] = { (char)0xBA, (char)0x13, (char)0x00, (char)0x00 };
 
@@ -2180,6 +2362,92 @@ namespace zvision
         else
             return ReturnCode::InvalidParameter;
 
+
+        std::string cmd(set_cmd, send_len);
+
+        const int recv_len = 4;
+        std::string recv(recv_len, 'x');
+
+        if (client_->SyncSend(cmd, send_len))//send cmd
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (client_->SyncRecv(recv, recv_len))//recv ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (!CheckDeviceRet(recv))//check ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        return 0;
+    }
+
+    int LidarTools::SetDeviceCalSendMode(CalSendMode mode)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        /*Set device cal send mode*/
+        const int send_len = 4;
+        char set_cmd[send_len] = { (char)0xBA, (char)0x16, (char)0x00, (char)0x00 };
+
+        if (CalSendDisable == mode)
+            set_cmd[2] = 0x00;
+        else if (CalSendEnable == mode)
+            set_cmd[2] = 0x01;
+        else
+            return ReturnCode::InvalidParameter;
+
+        std::string cmd(set_cmd, send_len);
+
+        const int recv_len = 4;
+        std::string recv(recv_len, 'x');
+
+        if (client_->SyncSend(cmd, send_len))//send cmd
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (client_->SyncRecv(recv, recv_len))//recv ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (!CheckDeviceRet(recv))//check ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        return 0;
+    }
+
+    int LidarTools::SetDeviceDownsampleMode(DownsampleMode mode)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        /*Set device downsample*/
+        const int send_len = 4;
+        char set_cmd[send_len] = { (char)0xBA, (char)0x17, (char)0x00, (char)0x00 };
+
+        if (DownsampleNone == mode)
+            set_cmd[2] = 0x00;
+        else if (Downsample_1_2 == mode)
+            set_cmd[2] = 0x01;
+        else if (Downsample_1_4 == mode)
+            set_cmd[2] = 0x02;
+        else
+            return ReturnCode::InvalidParameter;
 
         std::string cmd(set_cmd, send_len);
 

@@ -96,6 +96,21 @@ namespace zvision
         EchoUnknown,
     }EchoMode;
 
+    typedef enum CalSendMode
+    {
+        CalSendDisable = 0,
+        CalSendEnable = 1,
+        CalSendUnknown,
+    }CalSendMode;
+
+    typedef enum DownsampleMode
+    {
+        DownsampleNone = 0, // No downsample
+        Downsample_1_2 = 1, // 1/2 downsample
+        Downsample_1_4 = 2, // 1/4 downsample
+        DownsampleUnknown,
+    }DownSampleMode;
+
     typedef enum DeviceType
     {
         LidarML30B1,
@@ -141,6 +156,12 @@ namespace zvision
         uint32_t phase_offset; // 5ns
         PhaseOffsetMode phase_offset_mode;
         EchoMode echo_mode;
+
+        CalSendMode cal_send_mode;
+        DownsampleMode downsample_mode;
+
+        int retro_param_1_ref_min; // 0-255
+        int retro_param_2_point_percent; // 0-100
 
     } DeviceConfigurationInfo;
 
@@ -307,6 +328,17 @@ namespace zvision
     */
     std::string get_phase_offset_mode_string(PhaseOffsetMode mode);
 
+    /** \brief calibration send mode to string
+    * \param[in] mode    the CalSendMode
+    * \return string.
+    */
+    std::string get_cal_send_mode_string(CalSendMode mode);
+
+    /** \brief downsample mode to string
+    * \param[in] mode    the DownsampleMode
+    * \return string.
+    */
+    std::string get_downsample_mode_string(DownsampleMode mode);
 }
 
 #endif //end DEFINE_H_
