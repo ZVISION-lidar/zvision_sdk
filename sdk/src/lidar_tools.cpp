@@ -59,10 +59,12 @@ namespace zvision
         UdpReceiver recv(heart_beat_port, 100);
         std::string data;
         const int heart_beat_len = 48;
+        const int heart_beat_len_v1 = 137;
+
         int len = 0;
         uint32_t ip = 0;
         int ret = 0;
-        std::string packet_header = "ZVS";
+        std::string packet_header = "ZVSHEARTBEAT";
         std::vector<std::string> lidars;
         device_list.clear();
 
@@ -75,7 +77,7 @@ namespace zvision
                 break;
             }
 
-            if ((heart_beat_len == len) && (0 == packet_header.compare(0, packet_header.size(), data.substr(0, packet_header.size())))) // heart beat packet
+            if (((heart_beat_len == len) || (heart_beat_len_v1 == len)) && (0 == packet_header.compare(0, packet_header.size(), data.substr(0, packet_header.size())))) // heart beat packet
             {
                 std::string ip_string = IpToString(ip);
                 lidars.push_back(ip_string);
@@ -2017,8 +2019,7 @@ namespace zvision
         NetworkToHost((const unsigned char*)recv.c_str(), (char *)&ptp_buffer_len);
 
         // get ptp configuration buffer
-        std::string ptp_cfg_buffer;
-        ptp_cfg_buffer.resize(ptp_buffer_len);
+        std::string ptp_cfg_buffer(ptp_buffer_len, 'x');
         if (client_->SyncRecv(ptp_cfg_buffer, ptp_buffer_len))
         {
             DisConnect();
@@ -2029,6 +2030,27 @@ namespace zvision
 
         return 0;
 
+    }
+
+    int LidarTools::GetDevicePtpConfigurationToFile(std::string& save_file_name)
+    {
+        std::string content = "";
+        
+        int ret = GetDevicePtpConfiguration(content);
+        if (ret)
+            return ret;
+        else
+        {
+            std::ofstream out(save_file_name, std::ios::out | std::ios::binary);
+            if (out.is_open())
+            {
+                out.write(content.c_str(), content.size());
+                out.close();
+                return 0;
+            }
+            else
+                return OpenFileError;
+        }
     }
 
     int LidarTools::SetDevicePointFireEnConfiguration(std::string fire_en_filename)

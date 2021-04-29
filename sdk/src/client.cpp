@@ -610,8 +610,6 @@ namespace zvision
             }
             else
             {
-                //if(ret >= 4)
-                //    printf("%x %x %x %x, ret = %d.\n", buf[0], buf[1], buf[2], buf[3], ret);
                 total_read += ret;
                 if ((len >= 0) && ((unsigned int)len <= total_read))
                     return 0;

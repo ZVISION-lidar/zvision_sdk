@@ -27,6 +27,47 @@
 #include <stdio.h>
 #include <fstream>
 #include <iostream>
+#include <map>
+
+class ParamResolver
+{
+public:
+
+    static int GetParameters(int argc, char* argv[], std::map<std::string, std::string>& paras, std::string& appname)
+    {
+        paras.clear();
+        if (argc >= 1)
+            appname = std::string(argv[0]);
+
+        std::string key;
+        std::string value;
+        for (int i = 1; i < argc; i++)
+        {
+            std::string str(argv[i]);
+            if ((str.size() > 1) && ('-' == str[0]))
+            {
+                key = str;
+                if (i == (argc - 1))
+                    value = "";
+                else
+                {
+                    value = std::string(argv[i + 1]);
+                    if ('-' == value[0])
+                    {
+                        value = "";
+                    }
+                    else
+                    {
+                        i++;
+                    }
+                }
+                paras[key] = value;
+            }
+        }
+        return 0;
+    }
+
+};
 
 //Callback function for progress notify
 void print_current_progress(int percent)
@@ -246,21 +287,84 @@ int sample_scan_lidar_on_heat_beat_port(int seconds)
         for (int i = 0; i < devices.size(); ++i)
         {
             zvision::DeviceConfigurationInfo& info = devices[i];
+            std::string cfg_desp = zvision::get_cfg_info_string(info);
             LOG_INFO("####################### Device number %3d #######################\n", i);
-            LOG_INFO("Serial number: %s\n", info.serial_number.c_str());
-            LOG_INFO("Device ip: %s\n", info.device_ip.c_str());
-            LOG_INFO("Device subnet mask: %s\n", info.subnet_mask.c_str());
-            LOG_INFO("Device mac: %s\n", info.device_mac.c_str());
-            LOG_INFO("Destination ip: %s\n", info.destination_ip.c_str());
-            LOG_INFO("Destination port: %d\n", info.destination_port);
-            LOG_INFO("Timestamp syn mode: %d\n", info.time_sync);
-            LOG_INFO("Retro enbale: %d\n", info.retro_enable);
-            LOG_INFO("Boot   version: %u.%u.%u\n", info.version.boot_version[0], info.version.boot_version[1], info.version.boot_version[2], info.version.boot_version[3]);
-            LOG_INFO("Kernel version: %u.%u.%u\n", info.version.kernel_version[0], info.version.kernel_version[1], info.version.kernel_version[2], info.version.kernel_version[3]);
-            LOG_INFO("Device type: %d\n", info.device);
+            LOG_INFO("%s\n", cfg_desp.c_str());
             LOG_INFO("#################################################################\n\n");
         }
     }
+    return ret;
+}
+
+//Sample code 15 : Config lidar retro parameter 1(min ref, [0,100])
+int sample_config_lidar_retro_param_min_ref(std::string lidar_ip, int ref)
+{
+    int ret = 0;
+    zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
+    if (ret = config.SetDeviceRetroParam1MinRef(ref))
+        LOG_ERROR("Set device [%s]'s retro param 1 to [%d] failed, ret = %d.\n", lidar_ip.c_str(), ref, ret);
+    else
+        LOG_INFO("Set device [%s]'s retro param 1 to [%d] ok.\n", lidar_ip.c_str(), ref);
+    return ret;
+}
+
+//Sample code 16 : Config lidar retro parameter 2(point percentage, [0,100])
+int sample_config_lidar_retro_param_point_percentage(std::string lidar_ip, int percent)
+{
+    int ret = 0;
+    zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
+    if (ret = config.SetDeviceRetroParam2PointPercentage(percent))
+        LOG_ERROR("Set device [%s]'s retro param 2 to [%d] failed, ret = %d.\n", lidar_ip.c_str(), percent, ret);
+    else
+        LOG_INFO("Set device [%s]'s retro param 2 to [%d] ok.\n", lidar_ip.c_str(), percent);
+    return ret;
+}
+
+//Sample code 17 : Config lidar phaseoffset enable
+int sample_config_lidar_phase_offset_enable(std::string lidar_ip, bool en)
+{
+    int ret = 0;
+    zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
+    if (ret = config.SetDevicePhaseOffsetEnable(en))
+        LOG_ERROR("Set device [%s]'s phase offset enable to [%d] failed, ret = %d.\n", lidar_ip.c_str(), en, ret);
+    else
+        LOG_INFO("Set device [%s]'s phase offset enable to [%d] ok.\n", lidar_ip.c_str(), en);
+    return ret;
+}
+
+//Sample code 18 : Config lidar phaseoffset value
+int sample_config_lidar_phase_offset_value(std::string lidar_ip, int value_5ns)
+{
+    int ret = 0;
+    zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
+    if (ret = config.SetDevicePhaseOffset(value_5ns))
+        LOG_ERROR("Set device [%s]'s phase offset value to [%d]x5ns failed, ret = %d.\n", lidar_ip.c_str(), value_5ns, ret);
+    else
+        LOG_INFO("Set device [%s]'s phase offset value to [%d]x5ns ok.\n", lidar_ip.c_str(), value_5ns);
+    return ret;
+}
+
+//Sample code 19 : Config lidar ptp configuration file
+int sample_config_lidar_ptp_configuration_file(std::string lidar_ip, std::string filename)
+{
+    int ret = 0;
+    zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
+    if (ret = config.SetDevicePtpConfiguration(filename))
+        LOG_ERROR("Set device [%s]'s ptp configuration file to [%s] failed, ret = %d.\n", lidar_ip.c_str(), filename.c_str(), ret);
+    else
+        LOG_INFO("Set device [%s]'s ptp configuration file to [%s] ok.\n", lidar_ip.c_str(), filename.c_str());
+    return ret;
+}
+
+//Sample code 20 : Get lidar ptp configuration file
+int sample_get_lidar_ptp_configuration_to_file(std::string lidar_ip, std::string filename)
+{
+    int ret = 0;
+    zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
+    if (ret = config.GetDevicePtpConfigurationToFile(filename))
+        LOG_ERROR("Get device [%s]'s ptp configuration file to [%s] failed, ret = %d.\n", lidar_ip.c_str(), filename.c_str(), ret);
+    else
+        LOG_INFO("Get device [%s]'s ptp configuration file to [%s] ok.\n", lidar_ip.c_str(), filename.c_str());
     return ret;
 }
 
@@ -272,7 +376,7 @@ int main(int argc, char** argv)
             << "Sample 0 : config mac address\n"
             << "Format: -config_mac lidar_ip mac_address\n"
             << "Demo:   -config_mac 192.168.10.108 66-66-66-66-66-66\n\n"
-            
+
             << "Sample 1 : config static ip address\n"
             << "Format: -config_static_ip old_ip new_ip\n"
             << "Demo:   -config_static_ip 192.168.10.108 192.168.10.107\n\n"
@@ -328,6 +432,30 @@ int main(int argc, char** argv)
             << "Sample 14 : scan device\n"
             << "Format: -scan_device scan_time(s)\n"
             << "Demo:   -scan_device 5\n\n"
+
+            << "Sample 15 : retro param 1(min ref[0,100])\n"
+            << "Format: -retro_p1 value\n"
+            << "Demo:   -retro_p1 5\n\n"
+
+            << "Sample 16 : retro param 2(point percentage[0,100])\n"
+            << "Format: -retro_p2 value\n"
+            << "Demo:   -retro_p2 5\n\n"
+
+            << "Sample 17 : phase offset enable(0 for disable, 1 for enable)\n"
+            << "Format: -phase_offset_enable \n"
+            << "Demo:   -phase_offset_enable 0\n\n"
+
+            << "Sample 18 : phase offset value\n"
+            << "Format: -phase_offset_value value(x5ns)\n"
+            << "Demo:   -phase_offset_value 0\n\n"
+
+            << "Sample 19 : config ptp configuration\n"
+            << "Format: -set_ptp_cfg filename\n"
+            << "Demo:   -set_ptp_cfg test.txt\n\n"
+
+            << "Sample 20 : get ptp configuration to file\n"
+            << "Format: -get_ptp_cfg filename\n"
+            << "Demo:   -get_ptp_cfg test.txt\n\n"
 
             << "############################# END  GUIDE ################################\n\n"
             ;
@@ -396,6 +524,31 @@ int main(int argc, char** argv)
         //Sample code 14 : Scan lidar on the heart beat port
         //Notice, this function is supported by the lidar's new firmware kernel version, at least 0.1.20
         sample_scan_lidar_on_heat_beat_port(std::atoi(argv[2]));
+
+    else if (0 == std::string(argv[1]).compare("-retro_p1") && argc == 4)
+        //Sample code 15 : Config lidar retro parameter 1(min ref, [0,100])
+        sample_config_lidar_retro_param_min_ref(lidar_ip, std::atoi(argv[3]));
+
+    else if (0 == std::string(argv[1]).compare("-retro_p2") && argc == 4)
+        //Sample code 16 : Config lidar retro parameter 2(point percentage, [0,100])
+        sample_config_lidar_retro_param_point_percentage(lidar_ip, std::atoi(argv[3]));
+
+    else if (0 == std::string(argv[1]).compare("-phase_offset_enable") && argc == 4)
+        //Sample code 17 : Config lidar phaseoffset enable
+        sample_config_lidar_phase_offset_enable(lidar_ip, std::atoi(argv[3]));
+
+    else if (0 == std::string(argv[1]).compare("-phase_offset_value") && argc == 4)
+        //Sample code 18 : Config lidar phaseoffset value
+        sample_config_lidar_phase_offset_value(lidar_ip, std::atoi(argv[3]));
+
+    else if (0 == std::string(argv[1]).compare("-set_ptp_cfg") && argc == 4)
+        //Sample code 19 : Config lidar ptp configuration file
+        sample_config_lidar_ptp_configuration_file(lidar_ip, std::string(argv[3]));
+
+    else if (0 == std::string(argv[1]).compare("-get_ptp_cfg") && argc == 4)
+        //Sample code 20 : Get lidar ptp configuration file
+        sample_get_lidar_ptp_configuration_to_file(lidar_ip, std::string(argv[3]));
+
     else
     {
         LOG_ERROR("Invalid parameters\n.");
@@ -404,7 +557,6 @@ int main(int argc, char** argv)
 
     return 0;
 }
-
 
 #if 0// test code
 int main(int argc, char** argv)
