@@ -116,6 +116,8 @@ namespace zvision
         LidarML30B1,
         LidarML30SA1,
         LidarML30SA1_2,
+        LidarML30SB1,
+        LidarML30SB2,
         LidarMLX,
         LidarMLYA,
         LidarMLYB,
@@ -247,6 +249,7 @@ namespace zvision
 
         NotMatched,
         BufferOverflow,
+        NoEnoughResource,
 
         NotEnoughData,
 
@@ -301,6 +304,18 @@ namespace zvision
     * \return string.
     */
     std::string get_device_type_string(DeviceType tp);
+
+    /** \brief ScanMode to type string
+    * \param[in] sm      the ScanMode
+    * \return string.
+    */
+    std::string get_device_type_string_by_mode(ScanMode sm);
+
+    /** \brief DeviceType to string
+    * \param[in] sm      the ScanMode
+    * \return string.
+    */
+    std::string get_scan_mode_string(ScanMode sm);
 
     /** \brief TimestampType to string
     * \param[in] tp      the TimestampType

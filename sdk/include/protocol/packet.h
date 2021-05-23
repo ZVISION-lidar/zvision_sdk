@@ -39,7 +39,7 @@ namespace zvision
     {
     public:
 
-        static const int PACKET_LEN = 1029;
+        static const int PACKET_LEN = 1040;
 
         /** \brief Packet is valid calibration udp packet or not.
         * \return true for yes, false for no.

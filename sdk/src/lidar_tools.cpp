@@ -393,6 +393,21 @@ namespace zvision
         return ret;
     }
 
+    int LidarTools::ReadCalibrationData(std::string filename, CalibrationDataSinCosTable& cal_cos_sin_lut)
+    {
+        CalibrationData cal;
+        int ret = 0;
+        if (0 != (ret = LidarTools::ReadCalibrationData(filename, cal)))
+        {
+            return ret;
+        }
+        else
+        {
+            LidarTools::ComputeCalibrationSinCos(cal, cal_cos_sin_lut);
+            return 0;
+        }
+    }
+
     int LidarTools::ExportCalibrationData(CalibrationData& cal, std::string filename)
     {
         int data_in_line = 0;
@@ -958,6 +973,8 @@ namespace zvision
             std::string ml30b1_sn_prefix = "1000";
             std::string ml30sa1_sn_prefix = "1001";
             std::string mlx_sn_prefix = "1002";
+            const int hrd_version_pos = 5;
+            const int hrd_version_len = 1;
 
             if (0 == sn.compare(0, ml30b1_sn_prefix.size(), ml30b1_sn_prefix)) // ML30B1
             {
@@ -965,7 +982,14 @@ namespace zvision
             }
             else if (0 == sn.compare(0, ml30sa1_sn_prefix.size(), ml30sa1_sn_prefix)) // ML30SA1
             {
-                info.device = DeviceType::LidarML30SA1;
+                if (0 == sn.compare(hrd_version_pos, hrd_version_len, "1"))
+                    info.device = DeviceType::LidarML30SA1;
+                else if (0 == sn.compare(hrd_version_pos, hrd_version_len, "2"))
+                    info.device = DeviceType::LidarML30SB1;
+                else if (0 == sn.compare(hrd_version_pos, hrd_version_len, "3"))
+                    info.device = DeviceType::LidarML30SB2;
+                else
+                    info.device = DeviceType::LidarUnknown;
             }
             else if (0 == sn.compare(0, mlx_sn_prefix.size(), mlx_sn_prefix)) // MLX
             {

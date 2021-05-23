@@ -74,8 +74,8 @@ namespace zvision
     int CalibrationPacket::GetPacketSeq(std::string& packet)
     {
         unsigned char* cal_data_ = (unsigned char*)packet.c_str();
-        //return (unsigned char)(cal_data_[9]) + (((unsigned char)cal_data_[10] & 0xF) << 8);
-        return (cal_data_[3] << 8) + cal_data_[4];
+        uint16_t* seq = (uint16_t*)(cal_data_ + 9);
+        return ntohs(*seq);;
     }
 
     int CalibrationPacket::GetMaxSeq(zvision::ScanMode& mode)

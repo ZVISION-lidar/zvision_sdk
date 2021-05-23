@@ -40,6 +40,12 @@ namespace zvision
         case DeviceType::LidarML30SA1_2:
             str = "ML30SA1_2";
             break;
+        case DeviceType::LidarML30SB1:
+            str = "ML30SB1";
+            break;
+        case DeviceType::LidarML30SB2:
+            str = "ML30SB2";
+            break;
         case DeviceType::LidarMLX:
             str = "MLX";
             break;
@@ -48,6 +54,63 @@ namespace zvision
             break;
         case DeviceType::LidarMLYB:
             str = "MLYB";
+            break;
+        default:
+            break;
+        }
+        return str;
+    }
+
+    std::string get_device_type_string_by_mode(ScanMode sm)
+    {
+        std::string str = "Unknown";
+        DeviceType tp = DeviceType::LidarUnknown;
+        switch (sm)
+        {
+        case ScanMode::ScanML30B1_100:
+            tp = DeviceType::LidarML30B1;
+            break;
+        case ScanMode::ScanML30SA1_160:
+        case ScanMode::ScanML30SA1_160_1_2:
+        case ScanMode::ScanML30SA1_160_1_4:
+        case ScanMode::ScanML30SA1_190:
+            tp = DeviceType::LidarML30SA1;
+            break;
+        case ScanMode::ScanMLX_160:
+        case ScanMode::ScanMLX_190:
+            tp = DeviceType::LidarMLX;
+            break;
+        default:
+            break;
+        }
+        return get_device_type_string(tp);
+    }
+
+    std::string get_scan_mode_string(ScanMode sm)
+    {
+        std::string str = "Unknown";
+        switch (sm)
+        {
+        case ScanMode::ScanML30B1_100:
+            str = "ML30 100";
+            break;
+        case ScanMode::ScanML30SA1_160:
+            str = "ML30S 160";
+            break;
+        case ScanMode::ScanML30SA1_160_1_2:
+            str = "ML30S 160(1/2)";
+            break;
+        case ScanMode::ScanML30SA1_160_1_4:
+            str = "ML30S 160(1/4)";
+            break;
+        case ScanMode::ScanML30SA1_190:
+            str = "ML30S 190";
+            break;
+        case ScanMode::ScanMLX_160:
+            str = "MLX 160";
+            break;
+        case ScanMode::ScanMLX_190:
+            str = "MLX 190";
             break;
         default:
             break;

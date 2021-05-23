@@ -247,6 +247,7 @@ namespace zvision
                 if (0 == PointCloudPacket::GetPacketSeq(packet))
                 {
                     this->info_map_[ip].sweep_headers_.push_back(pos);
+                    this->info_map_[ip].dev_cfg_.device_ip = ip;
                     this->info_map_[ip].dev_cfg_.destination_port = port;
                 }
             }

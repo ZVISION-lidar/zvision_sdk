@@ -74,6 +74,12 @@ namespace zvision
           */
         static int ReadCalibrationData(std::string filename, CalibrationData& cal);
 
+        /** \brief Get calibration data from calibration file.
+        * \param[in]  filename         the file to get the calibration data
+        * \param[out] cal_cos_sin_lut  the calibration sin cos table
+        */
+        static int ReadCalibrationData(std::string filename, CalibrationDataSinCosTable& cal_cos_sin_lut);
+
         /** \brief Export calibration data to file.
           * \param[in]  filename      the file to save the calibration data
           * \param[out] cal           the calibration data
