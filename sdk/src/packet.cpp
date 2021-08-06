@@ -515,6 +515,25 @@ namespace zvision
                 number_index = number_index_ml30b1_dual_echo;
             }
         }
+        else if (ScanMLXS_180 == scan_mode)
+        {
+            groups_in_one_udp = 80;
+            points_in_one_group = 3;
+            point_position_in_group = 4;
+            group_len = 16;
+            fires = 108000;
+            fov_index = fov_index_ml30b1_single_echo;
+            fire_index = fire_index_ml30b1_single_echo;
+            number_index = number_index_ml30b1_single_echo;
+            distance_bit = 22;
+            reflectivity_bit = 10;
+            if (2 == echo_cnt)
+            {
+                fov_index = fov_index_ml30b1_dual_echo;
+                fire_index = fire_index_ml30b1_dual_echo;
+                number_index = number_index_ml30b1_dual_echo;
+            }
+        }
         else
         {
             return NotSupport;
