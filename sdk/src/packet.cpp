@@ -65,6 +65,10 @@ namespace zvision
         {
             return ScanMode::ScanMLX_160;
         }
+        else if (0 == dev_code.compare("XS    "))
+        {
+            return ScanMode::ScanMLXS_180;
+        }
         else
         {
             return ScanMode::ScanUnknown;
@@ -100,6 +104,9 @@ namespace zvision
             break;
         case ScanMode::ScanMLX_160:
             packets = 750;// 32000 *3 * 2 * 4 / 1024
+            break;
+        case ScanMode::ScanMLXS_180:
+            packets = 844;// 36000 *3 * 2 * 4 / 1024
             break;
         default:
             break;
@@ -210,7 +217,8 @@ namespace zvision
         }
         else if (0x05 == type_field)
         {
-            return ScanMode::ScanMLX_190;
+            //return ScanMode::ScanMLX_190;
+            return ScanMode::ScanMLXS_180;
         }
         else if (0x06 == type_field)
         {

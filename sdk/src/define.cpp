@@ -78,6 +78,7 @@ namespace zvision
             break;
         case ScanMode::ScanMLX_160:
         case ScanMode::ScanMLX_190:
+        case ScanMode::ScanMLXS_180:
             tp = DeviceType::LidarMLX;
             break;
         default:
@@ -111,6 +112,9 @@ namespace zvision
             break;
         case ScanMode::ScanMLX_190:
             str = "MLX 190";
+            break;
+        case ScanMode::ScanMLXS_180:
+            str = "MLXS 180";
             break;
         default:
             break;

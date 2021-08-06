@@ -133,6 +133,7 @@ namespace zvision
         ScanML30SA1_190,
         ScanMLX_160,
         ScanMLX_190,
+        ScanMLXS_180,
         ScanMLYA_190,
         ScanMLYB_190,
         ScanUnknown,

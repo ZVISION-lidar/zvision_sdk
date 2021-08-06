@@ -808,6 +808,18 @@ namespace zvision
                 LOG_DEBUG("Set receive timeout ok, %d ms.\n", this->recv_timeout_ms_);
             }
 
+            int recv_buffer_size = 1024 * 1000;
+            if (0 != setsockopt(this->socket_, SOL_SOCKET, SO_RCVBUF, (const char *)&recv_buffer_size, sizeof(recv_buffer_size)))
+            {
+                LOG_ERROR("Set receive buffer size %d byte(s) error, error code = %d.\n", recv_buffer_size, GetSysErrorCode());
+                Close();
+                return -1;
+            }
+            else
+            {
+                LOG_DEBUG("Set receive buffer size ok, %d byte(s).\n", recv_buffer_size);
+            }
+
             // return value reference: https://docs.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-bind
             if (bind(this->socket_, (struct sockaddr*)&addr, sizeof(addr)))
             {
@@ -904,6 +916,20 @@ namespace zvision
         int status = 0;
         if (!init_ok_)
             return 0;
+
+        // drop multicast group
+        if (multicast_ip_.size())
+        {
+            struct ip_mreq mreq;
+            mreq.imr_multiaddr.s_addr = inet_addr(multicast_ip_.c_str());
+            mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+            if (0 != setsockopt(this->socket_, IPPROTO_IP, IP_DROP_MEMBERSHIP, (char*)&mreq, sizeof(mreq)))
+            {
+                // "error 19: No such device.", https://stackoverflow.com/questions/3187919/error-no-such-device-in-call-setsockopt-when-joining-multicast-group
+                LOG_ERROR("Drop multicast group %s error, error code = %d.\n", multicast_ip_.c_str(), GetSysErrorCode());
+                //Close();
+            }
+        }
 
 #ifdef WIN32
         status = shutdown(this->socket_, SD_BOTH);

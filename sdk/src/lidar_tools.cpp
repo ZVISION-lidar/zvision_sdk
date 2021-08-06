@@ -241,6 +241,37 @@ namespace zvision
                     cal.description += "\n";
                 }
             }
+            else if ("MLXs_180" == mode_str)
+            {
+                if ((lines.size() - curr) < 36000)//check the file lines
+                    return InvalidContent;
+
+                cal.data.resize(36000 * 3 * 2);
+                for (int i = 0; i < 36000; i++)
+                {
+                    const int column = 7;
+
+                    std::vector<std::string>& datas = lines[i + curr];
+                    if (datas.size() != column)
+                    {
+                        ret = InvalidContent;
+                        break;
+                    }
+                    for (int j = 1; j < column; j++)
+                    {
+                        cal.data[i * 6 + j - 1] = static_cast<float>(std::atof(datas[j].c_str()));
+                    }
+                }
+                cal.device_type = DeviceType::LidarMLX;
+                cal.scan_mode = ScanMode::ScanMLXS_180;
+                cal.description = "";
+                for (int i = 0; i < curr; i++)
+                {
+                    for (int j = 0; j < lines[i].size(); j++)
+                        cal.description += lines[i][j];
+                    cal.description += "\n";
+                }
+            }
             else
             {
                 return InvalidContent;
@@ -563,6 +594,41 @@ namespace zvision
                 return OpenFileError;
             }
         }
+        else if (ScanMode::ScanMLXS_180 == cal.scan_mode)
+        {
+            std::fstream outfile;
+            outfile.open(filename, std::ios::out);
+            data_in_line = 6;
+            if (outfile.is_open())
+            {
+                outfile << "# file version:MLXs.cal_v0.0\n";
+                outfile << "VERSION 0.1\n";
+                outfile << "Mode MLXs_180\n";
+
+                outfile.setf(std::ios::fixed, std::ios::floatfield);
+                outfile.precision(3);
+                outfile << cal.description;
+                int rows = 36000;
+                for (int i = 0; i < rows; i++)
+                {
+                    outfile << i + 1 << " ";
+                    outfile << cal.data[i * 6 + 0] << " ";
+                    outfile << cal.data[i * 6 + 1] << " ";
+                    outfile << cal.data[i * 6 + 2] << " ";
+                    outfile << cal.data[i * 6 + 3] << " ";
+                    outfile << cal.data[i * 6 + 4] << " ";
+                    outfile << cal.data[i * 6 + 5];
+                    if (i < (rows - 1))
+                        outfile << "\n";
+                }
+                outfile.close();
+                return 0;
+            }
+            else
+            {
+                return OpenFileError;
+            }
+        }
         else
         {
             return NotSupport;
@@ -613,7 +679,7 @@ namespace zvision
                 point_cal.ele = ele;
             }
         }
-        else if ((ScanMode::ScanMLX_160 == cal.scan_mode) || (ScanMode::ScanMLX_190 == cal.scan_mode))
+        else if ((ScanMode::ScanMLX_160 == cal.scan_mode) || (ScanMode::ScanMLX_190 == cal.scan_mode) || (ScanMode::ScanMLXS_180 == cal.scan_mode))
         {
             const int start = 3;
             int fov_index[start] = { 0, 1, 2 };
@@ -1084,6 +1150,14 @@ namespace zvision
         {
             total_packet = 400;// 6400 * 8 * 2 * 4 / 1024
         }
+        else if (ScanMode::ScanML30SA1_160_1_2 == sm)
+        {
+            total_packet = 200;// 6400 * 8 * 2 * 4 / 1024 / 2
+        }
+        else if (ScanMode::ScanML30SA1_160_1_4 == sm)
+        {
+            total_packet = 100;// 6400 * 8 * 2 * 4 / 1024 / 4
+        }
         else if (ScanMode::ScanML30SA1_190 == sm)
         {
             total_packet = 450;// 7200 * 8 * 2 * 4 / 1024
@@ -1091,6 +1165,10 @@ namespace zvision
         else if (ScanMode::ScanMLX_160 == sm)
         {
             total_packet = 750;// 32000 *3 * 2 * 4 / 1024
+        }
+        else if (ScanMode::ScanMLXS_180 == sm)
+        {
+            total_packet = 844;// 36000 *3 * 2 * 4 / 1024
         }
         else
         {
@@ -1184,6 +1262,10 @@ namespace zvision
         else if (ScanMode::ScanMLX_160 == sm)
         {
             cal.data.resize(32000 * 3 * 2);
+        }
+        else if (ScanMode::ScanMLXS_180 == sm)
+        {
+            cal.data.resize(36000 * 3 * 2);
         }
         else
         {
