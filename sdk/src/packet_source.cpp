@@ -580,7 +580,7 @@ namespace zvision
             {
                 if (need_find_type)
                 {
-                    type = PointCloudPacket::GetDeviceType(data);
+                    type = PointCloudPacket::GetDeviceType(packet);
                     need_find_type = false;
                 }
                 this->position_.push_back(pos);

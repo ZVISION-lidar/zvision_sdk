@@ -465,7 +465,7 @@ namespace zvision
             points_in_one_group = 3;
             point_position_in_group = 0;
             group_len = 16;
-            fires = 96000;
+            fires = 114000;
             fire_interval_us = 2.5 / 3.0; // 0.00000083333
             fov_index = fov_index_mlx_single_echo;
             fire_index = fire_index_mlx_single_echo;
