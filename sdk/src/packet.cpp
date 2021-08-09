@@ -525,7 +525,7 @@ namespace zvision
             fov_index = fov_index_ml30b1_single_echo;
             fire_index = fire_index_ml30b1_single_echo;
             number_index = number_index_ml30b1_single_echo;
-            distance_bit = 22;
+            distance_bit = 19;
             reflectivity_bit = 10;
             if (2 == echo_cnt)
             {
