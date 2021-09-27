@@ -143,9 +143,9 @@ namespace zvision
 
         // filter #
         int curr = 0;
-        for (auto& line : lines)
+        for (auto& au : lines)
         {
-            if ('#' != line[0][0])
+            if ('#' != au[0][0])
                 break;
             curr++;
         }
@@ -441,12 +441,11 @@ namespace zvision
 
     int LidarTools::ExportCalibrationData(CalibrationData& cal, std::string filename)
     {
-        int data_in_line = 0;
         if ((ScanMode::ScanML30SA1_160 == cal.scan_mode) || (ScanMode::ScanML30SA1_190 == cal.scan_mode))
         {
             std::fstream outfile;
             outfile.open(filename, std::ios::out);
-            data_in_line = 16;
+            const int data_in_line = 16;
             if (outfile.is_open())
             {
                 outfile.setf(std::ios::fixed, std::ios::floatfield);
@@ -473,7 +472,7 @@ namespace zvision
         {
             std::fstream outfile;
             outfile.open(filename, std::ios::out);
-            data_in_line = 16;
+            const int data_in_line = 16;
             if (outfile.is_open())
             {
                 outfile << "# file version : ML30S.cal_v0.4\n";
@@ -507,7 +506,6 @@ namespace zvision
         {
             std::fstream outfile;
             outfile.open(filename, std::ios::out);
-            data_in_line = 6;
             if (outfile.is_open())
             {
                 outfile.setf(std::ios::fixed, std::ios::floatfield);
@@ -537,7 +535,6 @@ namespace zvision
         {
             std::fstream outfile;
             outfile.open(filename, std::ios::out);
-            data_in_line = 6;
             if (outfile.is_open())
             {
                 outfile.setf(std::ios::fixed, std::ios::floatfield);
@@ -567,7 +564,6 @@ namespace zvision
         {
             std::fstream outfile;
             outfile.open(filename, std::ios::out);
-            data_in_line = 6;
             if (outfile.is_open())
             {
                 outfile.setf(std::ios::fixed, std::ios::floatfield);
@@ -598,7 +594,6 @@ namespace zvision
         {
             std::fstream outfile;
             outfile.open(filename, std::ios::out);
-            data_in_line = 6;
             if (outfile.is_open())
             {
                 outfile << "# file version:MLXs.cal_v0.0\n";
@@ -1078,7 +1073,6 @@ namespace zvision
 
     int LidarTools::GetDeviceCalibrationData(CalibrationData& cal)
     {
-        std::string ec;
         int ret = 0;
         CalibrationPackets pkts;
         if (ret = LidarTools::GetDeviceCalibrationPackets(pkts))
@@ -1092,7 +1086,6 @@ namespace zvision
 
     int LidarTools::GetDeviceCalibrationPackets(CalibrationPackets& pkts)
     {
-        std::string ec;
         const int ppf = 256000; // points per frame, 256000 reserved
         const int ppk = 128; // points per cal udp packet
         std::unique_ptr<float> angle_data(new float[ppf * 2]); // points( azimuh, elevation);
@@ -1129,7 +1122,7 @@ namespace zvision
 
         const int cal_pkt_len = 1040;
         std::string cal_recv(cal_pkt_len, 'x');
-        CalibrationPacket* pkt = reinterpret_cast<CalibrationPacket*>((char *)cal_recv.c_str());
+        //CalibrationPacket* pkt = reinterpret_cast<CalibrationPacket*>((char *)cal_recv.c_str());
 
         //receive first packet to identify the device type
         if (client_->SyncRecv(cal_recv, cal_pkt_len))
@@ -1139,7 +1132,6 @@ namespace zvision
         }
 
         int total_packet = 0;
-        DeviceType tp = pkt->GetDeviceType();
         ScanMode sm = CalibrationPacket::GetScanMode(cal_recv);
 
         if (ScanMode::ScanML30B1_100 == sm)
@@ -1210,7 +1202,6 @@ namespace zvision
 
     int LidarTools::GetDeviceCalibrationData(const CalibrationPackets& pkts, CalibrationData& cal)
     {
-        int total_packet = 0;
         if (!pkts.size())
             return InvalidContent;
 
@@ -1231,9 +1222,9 @@ namespace zvision
             int network_data = 0;
             int host_data = 0;
             float* pfloat_data = reinterpret_cast<float *>(&host_data);
-            for (int i = 0; i < 128 * 2; i++)
+            for (int j = 0; j < 128 * 2; j++)
             {
-                memcpy(&network_data, cal_data_ + i * 4 + data_offset, 4); // 4 bytes per data, azimuth, elevation, 16 bytes header
+                memcpy(&network_data, cal_data_ + j * 4 + data_offset, 4); // 4 bytes per data, azimuth, elevation, 16 bytes header
                 host_data = ntohl(network_data);
                 cal.data.push_back(*pfloat_data);
             }
@@ -2168,7 +2159,6 @@ namespace zvision
             return ReturnCode::OpenFileError;
         }
 
-        std::vector<std::vector<std::string>> lines;
         std::string line;
         std::vector<int> ids;
         const int column = 1;
@@ -2177,7 +2167,7 @@ namespace zvision
             int value = 0xFFFFFFFF;
             if (line.size() > 0)
             {
-                int match = sscanf_s(line.c_str(), "%x", &value);
+                int match = sscanf_s(line.c_str(), "%x", (unsigned int*)&value);
 
                 //printf("%08X\n", value);
                 if (column != match)
@@ -2206,7 +2196,6 @@ namespace zvision
         content.resize(data_len);
         content[0] = 0x02;
         content[1] = 0x00;
-        int pos = 2;
         std::unique_ptr<int> point_fire_en_data(new int[ids.size()]);
         int* point_fire_en_data_ptr = point_fire_en_data.get();
 

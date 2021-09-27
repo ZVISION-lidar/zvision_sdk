@@ -90,7 +90,7 @@ namespace zvision
             int value = inet_addr(ip.c_str());
             memcpy(addr, &value, sizeof(value));
         }
-        catch (std::exception e)
+        catch (const std::exception& e)
         {
             return false;
         }
@@ -105,7 +105,7 @@ namespace zvision
 
     bool AssembleMacAddress(std::string mac, char* addr)
     {
-        return (6 == sscanf_s(mac.c_str(), "%hhx-%hhx-%hhx-%hhx-%hhx-%hhx", &addr[0], &addr[1], &addr[2], &addr[3], &addr[4], &addr[5]));
+        return (6 == sscanf_s(mac.c_str(), "%hhx-%hhx-%hhx-%hhx-%hhx-%hhx", (unsigned char*)&addr[0], (unsigned char*)&addr[1], (unsigned char*)&addr[2], (unsigned char*)&addr[3], (unsigned char*)&addr[4], (unsigned char*)&addr[5]));
     }
 
     void ResolveIpString(const unsigned char* addr, std::string& ip)
@@ -135,7 +135,7 @@ namespace zvision
             unsigned int net_byte_order = inet_addr(ip.c_str());
             NetworkToHost((const unsigned char*)&net_byte_order, (char*)&iip);
         }
-        catch (std::exception e)
+        catch (const std::exception& e)
         {
             return false;
         }
@@ -222,10 +222,12 @@ namespace zvision
         }
 
     private:
+#if 0
         void Error(const std::string& format, va_list args)
         {
             printf(format.c_str(), args);
         }
+#endif
     };
 
     #if 0
@@ -558,7 +560,7 @@ namespace zvision
     //////////////////////////////////////////////////////////////////////////////////////////////
     int TcpClient::SyncSend(std::string& data, int len)
     {
-        int ret;
+        int ret = 0;
         int count = 0;
         int flags = 0;
 

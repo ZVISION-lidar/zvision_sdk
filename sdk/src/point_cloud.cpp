@@ -341,9 +341,11 @@ namespace zvision
         std::string* packet = 0;
         while (this->packets_->dequeue(packet))
         {
-            this->ProcessLidarPacket(*packet);
-			if (packet)
-				delete packet;
+            if (packet)
+            {
+                this->ProcessLidarPacket(*packet);
+                delete packet;
+            }
         }
     }
 

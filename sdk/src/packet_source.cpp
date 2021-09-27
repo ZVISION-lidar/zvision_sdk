@@ -506,7 +506,7 @@ namespace zvision
 
         while (1)
         {
-            int ret = reader_->Read(data, len);
+            ret = reader_->Read(data, len);
             if (ret)
                 return ret;
 
@@ -657,7 +657,7 @@ namespace zvision
 
         while (1)
         {
-            int ret = reader_->Read(data, len);
+            ret = reader_->Read(data, len);
             if (ret)
                 return ret;
 
@@ -698,8 +698,8 @@ namespace zvision
         }
 
         // https://stackoverflow.com/questions/1394132/macro-and-member-function-conflict
-        int last_seq = (std::numeric_limits<int>::max)();
-        bool need_find_type = true;
+        // int last_seq = (std::numeric_limits<int>::max)();
+        // bool need_find_type = true;
 
         const int cal_pkt_cnt = 400;
         std::vector<bool> bit_map(cal_pkt_cnt, false);
