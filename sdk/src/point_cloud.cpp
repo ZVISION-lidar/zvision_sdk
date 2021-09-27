@@ -266,7 +266,7 @@ namespace zvision
         }
 
         // we get last packet by seq, but 10Hz has a 50ms delay issues
-        if (((seq < this->last_seq_) && (159 != this->last_seq_)) || (159 == seq))/*we have get one total frame*/
+        if (seq < this->last_seq_)/*we have get one total frame*/
         {
             this->ProcessOneSweep();
         }
