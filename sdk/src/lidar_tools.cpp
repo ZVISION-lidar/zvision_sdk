@@ -60,6 +60,7 @@ namespace zvision
         std::string data;
         const int heart_beat_len = 48;
         const int heart_beat_len_v1 = 137;
+		const int heart_beat_len_v2 = 138;
 
         int len = 0;
         uint32_t ip = 0;
@@ -77,7 +78,8 @@ namespace zvision
                 break;
             }
 
-            if (((heart_beat_len == len) || (heart_beat_len_v1 == len)) && (0 == packet_header.compare(0, packet_header.size(), data.substr(0, packet_header.size())))) // heart beat packet
+            if (((heart_beat_len == len) || (heart_beat_len_v1 == len) || (heart_beat_len_v2 == len)) \
+				&& (0 == packet_header.compare(0, packet_header.size(), data.substr(0, packet_header.size())))) // heart beat packet
             {
                 std::string ip_string = IpToString(ip);
                 lidars.push_back(ip_string);
@@ -1316,6 +1318,40 @@ namespace zvision
 
         return 0;
     }
+
+	int LidarTools::ResetDeviceMacAddress() {
+		if (!CheckConnection())
+			return -1;
+
+		/*Reset device mac address */
+		const int send_len = 9;
+		char set_cmd[send_len] = { (char)0xBA, (char)0x0A, (char)0xFF, (char)0xFF , (char)0xFF, (char)0xFF , (char)0xFF, (char)0xFF };
+
+		std::string bv_cmd(set_cmd, send_len);
+
+		const int recv_len = 4;
+		std::string recv(recv_len, 'x');
+
+		if (client_->SyncSend(bv_cmd, send_len))//send cmd
+		{
+			DisConnect();
+			return -1;
+		}
+
+		if (client_->SyncRecv(recv, recv_len))//recv ret
+		{
+			DisConnect();
+			return -1;
+		}
+
+		if (!CheckDeviceRet(recv))//check ret
+		{
+			DisConnect();
+			return -1;
+		}
+
+		return 0;
+	}
 
     int LidarTools::SetDeviceSubnetMask(std::string mask)
     {

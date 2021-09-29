@@ -150,6 +150,10 @@ namespace zvision
           */
         int SetDeviceMacAddress(std::string mac);
 
+		/** \brief Reset lidar mac address.
+		*/
+		int ResetDeviceMacAddress();
+
         /** \brief Set lidar udp destination ip address.
           * \param[in] ip             ip to configure
           */
