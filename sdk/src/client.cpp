@@ -330,7 +330,7 @@ namespace zvision
         recv_timeout_ms_(recv_timeout),
         socket_(INVALID_SOCKET),
         conn_ok_(false),
-        error_code_(0),
+        ///error_code_(0),
         error_str_("")
     {
         

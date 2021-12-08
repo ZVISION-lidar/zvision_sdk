@@ -236,15 +236,15 @@ namespace zvision
             {
                 //this->last_seq_ = 124;
             }
-            else if ((ScanMode::ScanML30SA1_160 == this->device_type_) || (ScanMode::ScanML30SA1_160_1_2 == this->device_type_) || (ScanMode::ScanML30SA1_160_1_4 == this->device_type_))
+            else if ((ScanMode::ScanML30SA1_160 == this->scan_mode_) || (ScanMode::ScanML30SA1_160_1_2 == this->scan_mode_) || (ScanMode::ScanML30SA1_160_1_4 == this->scan_mode_))
             {
                 //this->last_seq_ = 159;
             }
-            else if (ScanMode::ScanMLX_160 == this->device_type_)
+            else if (ScanMode::ScanMLX_160 == this->scan_mode_)
             {
                 //this->last_seq_ = 399;
             }
-            else if (ScanMode::ScanMLX_190 == this->device_type_)
+            else if (ScanMode::ScanMLX_190 == this->scan_mode_)
             {
                 //this->last_seq_ = 474;
             }
@@ -470,7 +470,7 @@ namespace zvision
         device_type_(LidarUnknown),
         count_(0),
         device_ip_(lidar_ip),
-        last_seq_(-1),
+        ///last_seq_(-1),
         data_port_(data_port),
         init_ok_(false),
         pointcloud_cb_(nullptr)

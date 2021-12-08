@@ -151,7 +151,7 @@ namespace zvision
         int last_seq_;
 
         /** \brief end of a full pointcloud's udp seq. It depends on lidar type*/
-        int end_seq_;
+        ///int end_seq_;
 
         unsigned int filter_ip_;
         int data_port_;
@@ -235,9 +235,9 @@ namespace zvision
         int count_;
 
         std::string device_ip_;
-        int last_seq_;
+        ///int last_seq_;
 
-        int filter_ip_;
+        ///int filter_ip_;
         int data_port_;
 
         bool init_ok_;

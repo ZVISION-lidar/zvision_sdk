@@ -648,12 +648,14 @@ namespace zvision
     int CalibrationDataSource::ReadOne(std::string& data, int& len)
     {
         int ret = 0;
-        if(this)
-        if (!init_ok_)
-        {
-            if (0 != (ret = this->Open()))
+        ///if(this){
+ 	    if (!init_ok_)
+            {
+                if (0 != (ret = this->Open()))
                 return ret;
-        }
+            }
+	///}
+       
 
         while (1)
         {
@@ -730,11 +732,13 @@ namespace zvision
         this->reader_->Close();
         init_ok_ = false;
 
-        if (cal_pkt_valid != cal_pkt_cnt)
-            if (EndOfFile == ret)
+        if (cal_pkt_valid != cal_pkt_cnt){
+ 	    if (EndOfFile == ret)
                 return NotEnoughData;
             else
                 return ret;
+	}
+           
 
         for (auto& p : packets)
         {

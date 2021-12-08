@@ -22,7 +22,7 @@
 
 
 #ifndef PACKET_SOURCE_H_
-#define PACKET_SROUCE_H_
+#define PACKET_SOURCE_H_
 #include <vector>
 #include <map>
 #include <string>
@@ -132,7 +132,7 @@ namespace zvision
     private:
 
         /** \brief socket which represents the socket resource. */
-        int socket_;
+        ///int socket_;
 
     };
 
@@ -197,7 +197,7 @@ namespace zvision
     private:
 
         /** \brief socket which represents the socket resource. */
-        int socket_;
+        ///int socket_;
 
     };
 
@@ -216,6 +216,7 @@ namespace zvision
         /** \brief Empty destructor */
         virtual ~SocketUdpReader();
 
+	using Reader::Read;
         /** \brief Calls the Read method to reveive data from local udp port.
         * \param[in] data the buffer to store the data received.
         * \param[in] len  the length received.
