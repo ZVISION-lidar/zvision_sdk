@@ -333,10 +333,11 @@ namespace zvision
         /** \brief Pcap filename. */
         std::string filename_;
 
-    private:
-
         /** \brief socket which represents the udp resource. */
         std::shared_ptr<PcapReader> reader_;
+
+    private:
+
 
     };
 
