@@ -88,6 +88,14 @@ namespace zvision
         */
         virtual int Read(std::string& data, int& len);
 
+        /** \brief Calls the Read method to reveive data from local udp port.
+        * \param[in] data    the buffer to store the data received.
+        * \param[in] len     the length received.
+        * \param[in] header  the pcap header, 16 bytes.
+        * \return 0 for success, others for failure.
+        */
+        virtual int Read(std::string& data, int& len, std::string& header);
+
         /** \brief Calls the Close method to close the resource.
         * \return 0 for success, others for failure.
         */

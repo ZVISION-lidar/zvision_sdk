@@ -148,6 +148,47 @@ namespace zvision
         return 0;
     }
 
+    int PcapReader::Read(std::string& data, int& len, std::string& header)
+    {
+        char buffer[256];
+        unsigned int cap_len = 0;
+
+        data.resize(2048);
+        char* data_out = const_cast<char*>(data.c_str());
+
+        const int PCAP_PKT_HEADER_LEN = 16; /*pcap header 16 bytes for every IP packet*/
+        if (!init_ok_)
+        {
+            return InitFailure;
+        }
+
+        file_.read(buffer, PCAP_PKT_HEADER_LEN); /*16 bytes pcap packet header*/
+        if (file_.fail())
+        {
+            if (file_.eof())
+                return EndOfFile;
+            else
+                return ReadFileError;
+        }
+
+        header = std::string(buffer, PCAP_PKT_HEADER_LEN);
+
+        unsigned int cap_len_network_byte_order = 0;
+        SwapByteOrder(buffer + 8, (char*)&cap_len_network_byte_order);
+        NetworkToHost((const unsigned char*)&cap_len_network_byte_order, (char*)&cap_len);
+
+        file_.read(data_out, cap_len); /*16 bytes pcap packet header*/
+
+        if (file_.fail())
+        {
+            return ReadFileError;
+        }
+
+        len = cap_len;
+
+        return 0;
+    }
+
     int PcapReader::SetFilePosition(std::streampos pos)
     {
         if (init_ok_)
