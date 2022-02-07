@@ -22,7 +22,7 @@
 
 
 #ifndef PACKET_SOURCE_H_
-#define PACKET_SROUCE_H_
+#define PACKET_SOURCE_H_
 #include <vector>
 #include <map>
 #include <string>
@@ -88,6 +88,14 @@ namespace zvision
         */
         virtual int Read(std::string& data, int& len);
 
+        /** \brief Calls the Read method to reveive data from local udp port.
+        * \param[in] data    the buffer to store the data received.
+        * \param[in] len     the length received.
+        * \param[in] header  the pcap header, 16 bytes.
+        * \return 0 for success, others for failure.
+        */
+        virtual int Read(std::string& data, int& len, std::string& header);
+
         /** \brief Calls the Close method to close the resource.
         * \return 0 for success, others for failure.
         */
@@ -132,7 +140,7 @@ namespace zvision
     private:
 
         /** \brief socket which represents the socket resource. */
-        int socket_;
+        ///int socket_;
 
     };
 
@@ -197,7 +205,7 @@ namespace zvision
     private:
 
         /** \brief socket which represents the socket resource. */
-        int socket_;
+        ///int socket_;
 
     };
 
@@ -216,6 +224,7 @@ namespace zvision
         /** \brief Empty destructor */
         virtual ~SocketUdpReader();
 
+	using Reader::Read;
         /** \brief Calls the Read method to reveive data from local udp port.
         * \param[in] data the buffer to store the data received.
         * \param[in] len  the length received.
@@ -332,10 +341,11 @@ namespace zvision
         /** \brief Pcap filename. */
         std::string filename_;
 
-    private:
-
         /** \brief socket which represents the udp resource. */
         std::shared_ptr<PcapReader> reader_;
+
+    private:
+
 
     };
 

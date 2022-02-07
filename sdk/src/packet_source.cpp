@@ -148,6 +148,47 @@ namespace zvision
         return 0;
     }
 
+    int PcapReader::Read(std::string& data, int& len, std::string& header)
+    {
+        char buffer[256];
+        unsigned int cap_len = 0;
+
+        data.resize(2048);
+        char* data_out = const_cast<char*>(data.c_str());
+
+        const int PCAP_PKT_HEADER_LEN = 16; /*pcap header 16 bytes for every IP packet*/
+        if (!init_ok_)
+        {
+            return InitFailure;
+        }
+
+        file_.read(buffer, PCAP_PKT_HEADER_LEN); /*16 bytes pcap packet header*/
+        if (file_.fail())
+        {
+            if (file_.eof())
+                return EndOfFile;
+            else
+                return ReadFileError;
+        }
+
+        header = std::string(buffer, PCAP_PKT_HEADER_LEN);
+
+        unsigned int cap_len_network_byte_order = 0;
+        SwapByteOrder(buffer + 8, (char*)&cap_len_network_byte_order);
+        NetworkToHost((const unsigned char*)&cap_len_network_byte_order, (char*)&cap_len);
+
+        file_.read(data_out, cap_len); /*16 bytes pcap packet header*/
+
+        if (file_.fail())
+        {
+            return ReadFileError;
+        }
+
+        len = cap_len;
+
+        return 0;
+    }
+
     int PcapReader::SetFilePosition(std::streampos pos)
     {
         if (init_ok_)
@@ -648,12 +689,14 @@ namespace zvision
     int CalibrationDataSource::ReadOne(std::string& data, int& len)
     {
         int ret = 0;
-        if(this)
-        if (!init_ok_)
-        {
-            if (0 != (ret = this->Open()))
+        ///if(this){
+ 	    if (!init_ok_)
+            {
+                if (0 != (ret = this->Open()))
                 return ret;
-        }
+            }
+	///}
+       
 
         while (1)
         {
@@ -730,11 +773,13 @@ namespace zvision
         this->reader_->Close();
         init_ok_ = false;
 
-        if (cal_pkt_valid != cal_pkt_cnt)
-            if (EndOfFile == ret)
+        if (cal_pkt_valid != cal_pkt_cnt){
+ 	    if (EndOfFile == ret)
                 return NotEnoughData;
             else
                 return ret;
+	}
+           
 
         for (auto& p : packets)
         {

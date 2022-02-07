@@ -142,7 +142,7 @@ namespace zvision
         file.close();
 
         if (lines.size() < file_min_lines)
-            InvalidContent;
+            return InvalidContent;
 
         // filter #
         int curr = 0;
@@ -1327,10 +1327,11 @@ namespace zvision
     {
         int ret = 0;
         CalibrationPackets pkts;
-        if (ret = LidarTools::GetDeviceCalibrationPackets(pkts))
+	ret = LidarTools::GetDeviceCalibrationPackets(pkts);
+        if (ret)
             return ret;
-        
-        if (ret = LidarTools::GetDeviceCalibrationData(pkts, cal))
+        ret = LidarTools::GetDeviceCalibrationData(pkts, cal);
+        if (ret)
             return ret;
         
         return 0;

@@ -222,7 +222,7 @@ namespace zvision
         std::string server_ip_;
 
         /** \brief Server listening port. */
-        int server_port_;
+        ///int server_port_;
 
         /** \brief timeout(ms) for connection. */
         int conn_timeout_ms_;
@@ -243,7 +243,7 @@ namespace zvision
         bool conn_ok_;
 
         /** \brief store the system error code when something wrong happen. */
-        int error_code_;
+        ///int error_code_;
 
         /** \brief store the internal error string when something wrong happen. */
         std::string error_str_;
