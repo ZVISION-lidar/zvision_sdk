@@ -51,6 +51,13 @@ namespace zvision
     */
     bool AssembleMacAddress(std::string mac, char* addr);
 
+	/** \brief Convert the mac address string("%hhx%hhx%hhx%hhx%hhx%hhx") to 6 bytes char array.
+	* \param[in] mac   mac address in the string format
+	* \param[in] addr  destination address for the char array
+	* \return true for success, false for failure.
+	*/
+	bool AssembleFactoryMacAddress(std::string mac, char* addr);
+
     /** \brief Convert the ip address in big-endian(network byte order) char array format to "%u.%u.%u.%u" string.
     * \param[in] addr  ip address in big-endian(network byte order) char array format
     * \param[in] ip    "%u.%u.%u.%u" string
@@ -178,6 +185,11 @@ namespace zvision
         * \return 0 for success, others for failure.
         */
         int SyncSend(std::string& data, int len);
+
+		/** \brief Get receive data length from server.
+		* \return data length available.
+		*/
+		int GetAvailableBytesLen();
 
         /** \brief Calls the SyncRecv method to reveive data from server.
           * \param[in] data the buffer to store the data from server

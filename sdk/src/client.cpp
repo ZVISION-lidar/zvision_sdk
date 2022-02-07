@@ -108,6 +108,11 @@ namespace zvision
         return (6 == sscanf_s(mac.c_str(), "%hhx-%hhx-%hhx-%hhx-%hhx-%hhx", (unsigned char*)&addr[0], (unsigned char*)&addr[1], (unsigned char*)&addr[2], (unsigned char*)&addr[3], (unsigned char*)&addr[4], (unsigned char*)&addr[5]));
     }
 
+	bool AssembleFactoryMacAddress(std::string mac, char* addr)
+	{
+		return (6 == sscanf_s(mac.c_str(), "%02hhx%02hhx%02hhx%02hhx%02hhx%02hhx", (unsigned char*)&addr[0], (unsigned char*)&addr[1], (unsigned char*)&addr[2], (unsigned char*)&addr[3], (unsigned char*)&addr[4], (unsigned char*)&addr[5]));
+	}
+
     void ResolveIpString(const unsigned char* addr, std::string& ip)
     {
         char cip[128] = "";
@@ -586,8 +591,20 @@ namespace zvision
         return 0;
     }
 
+	int TcpClient::GetAvailableBytesLen() {
+		int bytesRdy = 0;
+
+		char tempbuf[BUFFERSIZE];
+		int timeout = 1;
+		setsockopt(this->socket_, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout, sizeof(timeout));
+		bytesRdy = recv(this->socket_, tempbuf, sizeof(tempbuf), MSG_PEEK | MSG_PUSH_IMMEDIATE);
+		setsockopt(this->socket_, SOL_SOCKET, SO_RCVTIMEO, (const char *)&this->recv_timeout_ms_, sizeof(this->recv_timeout_ms_));
+
+		return bytesRdy;
+	}
+
     //////////////////////////////////////////////////////////////////////////////////////////////
-    int TcpClient::SyncRecv(std::string& data, int len)
+	int TcpClient::SyncRecv(std::string& data, int len)
     {
         int flags = 0;
         char *buf = const_cast<char*>(data.c_str());

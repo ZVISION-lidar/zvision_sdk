@@ -171,8 +171,8 @@ int sample_query_lidar_firmware_version(std::string lidar_ip)
     else
     {
         LOG_INFO("Query device [%s]'s firmware version ok.\n", lidar_ip.c_str());
-        LOG_INFO("Boot   version: %u.%u.%u\n", version.boot_version[0], version.boot_version[1], version.boot_version[2], version.boot_version[3]);
-        LOG_INFO("Kernel version: %u.%u.%u\n", version.kernel_version[0], version.kernel_version[1], version.kernel_version[2], version.kernel_version[3]);
+        LOG_INFO("FPGA   version: %u.%u.%u\n", version.boot_version[0], version.boot_version[1], version.boot_version[2], version.boot_version[3]);
+        LOG_INFO("Embedded version: %u.%u.%u\n", version.kernel_version[0], version.kernel_version[1], version.kernel_version[2], version.kernel_version[3]);
     }
     return ret;
 }
@@ -368,6 +368,47 @@ int sample_get_lidar_ptp_configuration_to_file(std::string lidar_ip, std::string
     return ret;
 }
 
+//Sample code 21 : Config lidar calibration file broadcast enable
+int sample_config_lidar_cali_file_broadcast_mode(std::string lidar_ip, bool en)
+{
+	int ret = 0;
+	zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
+	zvision::CalSendMode mode = zvision::CalSendMode::CalSendDisable;
+	if (en)
+		mode = zvision::CalSendMode::CalSendEnable;
+
+	if (ret = config.SetDeviceCalSendMode(mode))
+		LOG_ERROR("Set device [%s]'s calibration file broadcast enable to [%d] failed, ret = %d.\n", lidar_ip.c_str(), en, ret);
+	else
+		LOG_INFO("Set device [%s]'s calibration file broadcast enable to [%d] ok.\n", lidar_ip.c_str(), en);
+	return ret;
+}
+
+//Sample code 22 : Config lidar downsample mode
+int sample_config_lidar_downsample_mode(std::string lidar_ip, std::string mode)
+{
+	int ret = 0;
+	zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
+	zvision::DownsampleMode dm = zvision::DownsampleMode::DownsampleUnknown;
+	if (mode.compare("none") == 0)
+		dm = zvision::DownsampleNone;
+	else if (mode.compare("1/2") == 0)
+		dm = zvision::Downsample_1_2;
+	else if (mode.compare("1/4") == 0)
+		dm = zvision::Downsample_1_4;
+	else {
+		LOG_ERROR("Set device [%s]'s downsample mode to [%s] failed, invalid parameters input.\n", lidar_ip.c_str(), mode);
+		return ret;
+	}
+
+	if (ret = config.SetDeviceDownsampleMode(dm))
+		LOG_ERROR("Set device [%s]'s downsample mode to [%s] failed, ret = %d.\n", lidar_ip.c_str(), mode, ret);
+	else
+		LOG_INFO("Set device [%s]'s downsample mode to [%s] ok.\n", lidar_ip.c_str(), mode);
+	return ret;
+}
+
+
 int main(int argc, char** argv)
 {
     if (argc <= 2)
@@ -456,6 +497,14 @@ int main(int argc, char** argv)
             << "Sample 20 : get ptp configuration to file\n"
             << "Format: -get_ptp_cfg filename\n"
             << "Demo:   -get_ptp_cfg test.txt\n\n"
+
+			<< "Sample 21 : calibration file broadcast enabale\n"
+			<< "Format: -cali_file_broadcast_enable lidar_ip enable(0 for disable, 1 for enable) \n"
+			<< "Demo:   -cali_file_broadcast_enable 192.168.10.108 0\n\n"
+
+			<< "Sample 22 : config downsample mode\n"
+			<< "Format: -downsample_mode lidar_ip mode( none: no downsample, 1/2: 50% downsample, 1/4: 25% downsample)\n"
+			<< "Demo:   -downsample_mode 192.168.10.108 none\n\n"
 
             << "############################# END  GUIDE ################################\n\n"
             ;
@@ -548,6 +597,14 @@ int main(int argc, char** argv)
     else if (0 == std::string(argv[1]).compare("-get_ptp_cfg") && argc == 4)
         //Sample code 20 : Get lidar ptp configuration file
         sample_get_lidar_ptp_configuration_to_file(lidar_ip, std::string(argv[3]));
+
+	else if(0 == std::string(argv[1]).compare("-cali_file_broadcast_enable") && argc == 4)
+		//Sample code 21 : onfig lidar calibration file broadcast enable
+		sample_config_lidar_cali_file_broadcast_mode(lidar_ip, std::atoi(argv[3]));
+
+	else if (0 == std::string(argv[1]).compare("-downsample_mode") && argc == 4)
+		//Sample code 22 : Config lidar downsample mode
+		sample_config_lidar_downsample_mode(lidar_ip, std::string(argv[3]));
 
     else
     {

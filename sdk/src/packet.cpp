@@ -239,6 +239,54 @@ namespace zvision
         return (unsigned char)(packet[3]) + (((unsigned char)packet[2] & 0xF) << 8);
     }
 
+	int PointCloudPacket::GetPacketCount(std::string& packet) {
+
+		int cnt = -1;
+		zvision::ScanMode scan_mode = zvision::PointCloudPacket::GetScanMode(packet);
+		if (scan_mode == ScanMode::ScanUnknown)
+			return cnt;
+
+		int echo_cnt = (packet[2] >> 6) & 0x3;
+		switch (scan_mode)
+		{
+		case ScanMode::ScanML30B1_100:
+			cnt = 125 * echo_cnt; break;	// 125 = 30000/(80*3)
+		case ScanMode::ScanMLX_160: {
+			cnt = 400 * echo_cnt; break;	// 400 = 96000/(80*3)
+		}break;
+		case ScanMode::ScanML30SA1_160: {
+			cnt = 160 * echo_cnt; break;	// 160 = 51200/(320 points in one udp)
+		}break;
+		case ScanMode::ScanML30SA1_160_1_2: {
+			cnt = 80 * echo_cnt; break;		// 80 = 51200/2/(320 points in one udp)
+		}break;
+		case ScanMode::ScanML30SA1_160_1_4: {
+			cnt = 40 * echo_cnt; break;		// 40 = 51200/4/(320 points in one udp)
+		}break;
+		case ScanMode::ScanML30SA1_190: {
+			cnt = 190 * echo_cnt; break;		// 190 = 60800/(320 points in one udp)
+		}break;
+		case ScanMode::ScanMLX_190: {
+			cnt = 475 * echo_cnt; break;		// 475 = 114000/(80*3)
+		}break;
+		case ScanMode::ScanMLYA_190: {
+			cnt = 475 * echo_cnt; break;		// 475 = 114000/(80*3)
+		}break;
+		case ScanMode::ScanMLYB_190: {
+			cnt = 60 * echo_cnt; break;		// 60 = 14400/(80*3)
+		}break;
+		case ScanMode::ScanMLXS_180: {
+			cnt = 450 * echo_cnt; break;		// 450 = 108000/(80*3)
+		}break;
+
+		default:
+			break;
+		}
+
+		return cnt;
+	}
+
+
     int PointCloudPacket::GetEchoCount(std::string& packet)
     {
         return (packet[2] >> 6) & 0x3;

@@ -113,6 +113,11 @@ namespace zvision
         */
         static int GetPacketSeq(std::string& packet);
 
+		/** \brief Get the udp packet count in one frame pointcloud.
+		* \return udp packet count( -1 for failure ).
+		*/
+		static int GetPacketCount(std::string& packet);
+
         /** \brief Get the echo count from the pointcloud packet.
         * \return eho count( 1 for single echo and 2 for dual echo ).
         */
