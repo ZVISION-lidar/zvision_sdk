@@ -408,6 +408,136 @@ int sample_config_lidar_downsample_mode(std::string lidar_ip, std::string mode)
 	return ret;
 }
 
+//Sample code 23 : Config lidar retro parameter
+int sample_set_lidar_retro_parameters(std::string lidar_ip,int id, std::string val) {
+
+	int ret = 0;
+	zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
+	zvision::DeviceAlgoParam param;
+	switch (id)
+	{
+	case 2:
+		ret = config.SetDeviceRetroParam(zvision::RetroDisThres,std::atoi(val.c_str()));break;
+	case 3:
+		ret = config.SetDeviceRetroParam(zvision::RetroLowRangeThres, (unsigned short)std::atoi(val.c_str())); break;
+	case 4:
+		ret = config.SetDeviceRetroParam(zvision::RetroHighRangeThres, (unsigned short)std::atoi(val.c_str())); break;
+	case 1:
+		ret = config.SetDeviceRetroParam(zvision::RetroMinGrayNum, (unsigned char)std::atoi(val.c_str())); break;
+	case 5:
+		ret = config.SetDeviceRetroParam(zvision::RetroDelGrayThres, (unsigned char)std::atoi(val.c_str())); break;
+	case 6:
+		ret = config.SetDeviceRetroParam(zvision::RetroDelRatioGrayLowThres, (unsigned char)std::atoi(val.c_str())); break;
+	case 7:
+		ret = config.SetDeviceRetroParam(zvision::RetroDelRatioGrayHighThres, (unsigned char)std::atoi(val.c_str())); break;
+	case 8:
+		ret = config.SetDeviceRetroParam(zvision::RetroMinGray, (unsigned char)std::atoi(val.c_str())); break;
+	default:
+		ret = -1; break;
+	}
+
+	if (ret != 0)
+		LOG_ERROR("Set device [%s]'s retro parameters failed, ret = %d.\n", lidar_ip.c_str(), ret);
+	else
+		LOG_INFO("Set device [%s]'s retro parameters ok.\n", lidar_ip.c_str());
+
+	return ret;
+}
+
+//Sample code 24 : Config lidar adhesion parameter
+int sample_set_lidar_adhesion_parameters(std::string lidar_ip, int id, std::string val) {
+	int ret = 0;
+	zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
+	zvision::DeviceAlgoParam param;
+	switch (id)
+	{
+	case 1:
+		ret = config.SetDeviceAdhesionParam(zvision::MinimumHorizontalAngleRange, std::atoi(val.c_str())); break;
+	case 2:
+		ret = config.SetDeviceAdhesionParam(zvision::MaximumHorizontalAngleRange, std::atoi(val.c_str())); break;
+	case 3:
+		ret = config.SetDeviceAdhesionParam(zvision::MinimumVerticalAngleRange, std::atoi(val.c_str())); break;
+	case 4:
+		ret = config.SetDeviceAdhesionParam(zvision::MaximumVerticalAngleRange, std::atoi(val.c_str())); break;
+	case 5:
+		ret = config.SetDeviceAdhesionParam(zvision::HorizontalAngleResolution, (float)std::atof(val.c_str())); break;
+	case 6:
+		ret = config.SetDeviceAdhesionParam(zvision::VerticalAngleResolution, (float)std::atof(val.c_str())); break;
+	case 7:
+		ret = config.SetDeviceAdhesionParam(zvision::OutlierThreshold, (float)std::atof(val.c_str())); break;
+	case 8:
+		ret = config.SetDeviceAdhesionParam(zvision::MaximumProcessingRange, (float)std::atof(val.c_str())); break;
+	case 9:
+		ret = config.SetDeviceAdhesionParam(zvision::NearFarPointDiff, (float)std::atof(val.c_str())); break;
+	default:
+		ret = -1; break;
+	}
+
+	if (ret != 0)
+		LOG_ERROR("Set device [%s]'s adhesion parameters failed, ret = %d.\n", lidar_ip.c_str(), ret);
+	else
+		LOG_INFO("Set device [%s]'s adhesion parameters ok.\n", lidar_ip.c_str());
+
+	return ret;
+}
+
+//Sample code 25 : Get lidar algorithm parameter(retro and adhesion)
+int sample_get_lidar_algorithm_parameters(std::string lidar_ip) {
+
+	int ret = 0;
+	zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
+	zvision::DeviceAlgoParam param;
+	if (ret = config.QueryDeviceAlgoParam(param))
+		LOG_ERROR("Get device [%s]'s algorithm parameters failed, ret = %d.\n", lidar_ip.c_str(), ret);
+	else {
+		LOG_INFO("Get device [%s]'s algorithm parameters ok.\n", lidar_ip.c_str());
+		std::string msg;
+		msg += "------  Retro  -------\n";
+		msg += "min gray num: " + std::to_string(param.retro_min_gray_num) + "\n";
+		msg += "dis thres: " + std::to_string(param.retro_dis_thres) + "\n";
+		msg += "low range thres: " + std::to_string(param.retro_low_range_thres) + "\n";
+		msg += "high range thres: " + std::to_string(param.retro_high_range_thres) + "\n";
+		msg += "del gray thres: " + std::to_string(param.retro_del_gray_thres) + "\n";
+		msg += "del ratio gray low thres: " + std::to_string(param.retro_del_ratio_gray_low_thres) + "\n";
+		msg += "del ratio gray high thres: " + std::to_string(param.retro_del_ratio_gray_high_thres) + "\n";
+		msg += "min gray: " + std::to_string(param.retro_min_gray) + "\n";
+		msg += "-----  Adhesion  -----\n";
+		msg += "angle hor min: " + std::to_string(param.adhesion_angle_hor_min) +"\n";
+		msg += "angle hor max: " + std::to_string(param.adhesion_angle_hor_max) +"\n";
+		msg += "angle ver min: " + std::to_string(param.adhesion_angle_ver_min) +"\n";
+		msg += "angle ver max: " + std::to_string(param.adhesion_angle_ver_max) +"\n";
+		msg += "angle hor res: " + std::to_string(param.adhesion_angle_hor_res) +"\n";
+		msg += "angle ver res: " + std::to_string(param.adhesion_angle_ver_res) +"\n";
+		msg += "diff thres: " + std::to_string(param.adhesion_diff_thres) + "\n";
+		msg += "dis limit: " + std::to_string(param.adhesion_dis_limit) + "\n";
+		msg += "min diff: " + std::to_string(param.adhesion_min_diff) + "\n";
+		LOG_INFO(msg.c_str());
+	}
+
+	return ret;
+}
+
+//Sample code 26 : Config lidar delete close points enable
+int sample_config_lidar_delete_points(std::string lidar_ip, bool en) {
+	int ret = 0;
+	zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
+	if (ret = config.SetDeviceAlgorithmEnable(zvision::AlgoType::AlgoDeleteClosePoints,en))
+		LOG_ERROR("Set device [%s]'s delete close points enable to [%d] failed, ret = %d.\n", lidar_ip.c_str(), en, ret);
+	else
+		LOG_INFO("Set device [%s]'s delete close points enable to [%d] ok.\n", lidar_ip.c_str(), en);
+	return ret;
+}
+
+//Sample code 27 : Config lidar adhesion enable
+int sample_config_lidar_adhesion(std::string lidar_ip, bool en) {
+	int ret = 0;
+	zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
+	if (ret = config.SetDeviceAlgorithmEnable(zvision::AlgoType::AlgoAdhesion, en))
+		LOG_ERROR("Set device [%s]'s adhesion enable to [%d] failed, ret = %d.\n", lidar_ip.c_str(), en, ret);
+	else
+		LOG_INFO("Set device [%s]'s adhesion enable to [%d] ok.\n", lidar_ip.c_str(), en);
+	return ret;
+}
 
 int main(int argc, char** argv)
 {
@@ -506,6 +636,43 @@ int main(int argc, char** argv)
 			<< "Format: -downsample_mode lidar_ip mode( none: no downsample, 1/2: 50% downsample, 1/4: 25% downsample)\n"
 			<< "Demo:   -downsample_mode 192.168.10.108 none\n\n"
 
+			<< "Sample 23 : set Retro parameters\n"
+			<< "1. min gray num:              High gray value num threshold  (int8)\n"
+			<< "2. dis thres:                 Lock critical point distance   (uint32)\n"
+			<< "3. low range thres:           Delete point range low threshold distance  (uint16)\n"
+			<< "4. high range thres:          Delete point range high threshold distance (uint16)\n"
+			<< "5. del gray thres::           Delete point grayscale threshold   (uint8)\n"
+			<< "6. del ratio gray low thres:  The gray value low threshold of the deleted point ratio  (uint8)\n"
+			<< "7. del ratio gray high thres: The gray value high threshold of the deleted point ratio (uint8)\n"
+			<< "8. min gray:                  Minimum gray value  (uint8)\n"
+			<< "Format: -set_retro_param lidar_ip patameter_id value\n"
+			<< "Demo:   -set_retro_param 192.168.10.108 4 3\n\n"
+
+			<< "Sample 24 : set Adhesion parameters\n"
+			<< "1. angle hor min:  Minimum horizontal angle range (int32)\n"
+			<< "2. angle hor max:  Maximum horizontal angle range (int32)\n"
+			<< "3. angle ver min:  Minimum vertical angle range (int32)\n"
+			<< "4. angle ver max:  Maximum vertical angle range (int32)\n"
+			<< "5. angle hor res:  Horizontal angle resolution (float)\n"
+			<< "6. angle ver res:  Vertical angle resolution (float)\n"
+			<< "7. diff thres:     Delete point threshold (float)\n"
+			<< "8. dis limit:      Maximum processing distance  (float)\n"
+			<< "9. min diff:       Distance difference between nearest and farthest points (float)\n"
+			<< "Format: -set_adhesion_param lidar_ip patameter_id value\n"
+			<< "Demo:   -set_adhesion_param 192.168.10.108 3 -40\n\n"
+
+			<< "Sample 25 : get algorithm parameters\n"
+			<< "Format: -get_algo_param lidar_ip\n"
+			<< "Demo:   -get_algo_param 192.168.10.108\n\n"
+
+			<< "Sample 26 : config delete close points mode\n"
+			<< "Format: -config_delete_points lidar_ip mode(0 for disable, 1 for enable)\n"
+			<< "Demo:   -config_delete_points 192.168.10.108 0\n\n"
+
+			<< "Sample 27 : config adhesion mode\n"
+			<< "Format: -config_adhesion lidar_ip mode(0 for disable, 1 for enable)\n"
+			<< "Demo:   -config_adhesion 192.168.10.108 0\n\n"
+
             << "############################# END  GUIDE ################################\n\n"
             ;
         getchar();
@@ -513,98 +680,119 @@ int main(int argc, char** argv)
     }
     std::string lidar_ip = std::string(argv[2]);
 
-    if (0 == std::string(argv[1]).compare("-config_mac") && argc == 4)
-        //Sample code 0 : Set lidar's mac address
-        sample_config_lidar_mac_address(lidar_ip, std::string(argv[3]));
+	if (0 == std::string(argv[1]).compare("-config_mac") && argc == 4)
+		//Sample code 0 : Set lidar's mac address
+		sample_config_lidar_mac_address(lidar_ip, std::string(argv[3]));
 
-    else if (0 == std::string(argv[1]).compare("-config_static_ip") && argc == 4)
-        //Sample code 1 : Set lidar's static ip address
-        sample_config_lidar_ip(lidar_ip, std::string(argv[3]));
+	else if (0 == std::string(argv[1]).compare("-config_static_ip") && argc == 4)
+		//Sample code 1 : Set lidar's static ip address
+		sample_config_lidar_ip(lidar_ip, std::string(argv[3]));
 
-    else if (0 == std::string(argv[1]).compare("-config_subnet_mask") && argc == 4)
-        //Sample code 2 : Set lidar's subnet mask
-        sample_config_lidar_subnet_mask(lidar_ip, std::string(argv[3]));
+	else if (0 == std::string(argv[1]).compare("-config_subnet_mask") && argc == 4)
+		//Sample code 2 : Set lidar's subnet mask
+		sample_config_lidar_subnet_mask(lidar_ip, std::string(argv[3]));
 
-    else if (0 == std::string(argv[1]).compare("-config_dst_ip") && argc == 4)
-        //Sample code 3 : Set lidar's udp destination ip address
-        sample_config_lidar_udp_destination_ip(lidar_ip, std::string(argv[3]));
+	else if (0 == std::string(argv[1]).compare("-config_dst_ip") && argc == 4)
+		//Sample code 3 : Set lidar's udp destination ip address
+		sample_config_lidar_udp_destination_ip(lidar_ip, std::string(argv[3]));
 
-    else if (0 == std::string(argv[1]).compare("-config_dst_port") && argc == 4)
-        //Sample code 4 : Set lidar's udp destination port
-        sample_config_lidar_udp_destination_port(lidar_ip, std::atoi(argv[3]));
+	else if (0 == std::string(argv[1]).compare("-config_dst_port") && argc == 4)
+		//Sample code 4 : Set lidar's udp destination port
+		sample_config_lidar_udp_destination_port(lidar_ip, std::atoi(argv[3]));
 
-    else if (0 == std::string(argv[1]).compare("-config_retro") && argc == 4)
-        //Sample code 5 : Set lidar's retro function
-        sample_config_lidar_retro_enable(lidar_ip, std::atoi(argv[3]));
+	else if (0 == std::string(argv[1]).compare("-config_retro") && argc == 4)
+		//Sample code 5 : Set lidar's retro function
+		sample_config_lidar_retro_enable(lidar_ip, std::atoi(argv[3]));
 
-    else if (0 == std::string(argv[1]).compare("-config_time_sync") && argc == 4)
-        //Sample code 6 : Set lidar's time sync mode
-        sample_config_lidar_time_sync(lidar_ip, zvision::TimestampType(std::atoi(argv[3])));
+	else if (0 == std::string(argv[1]).compare("-config_time_sync") && argc == 4)
+		//Sample code 6 : Set lidar's time sync mode
+		sample_config_lidar_time_sync(lidar_ip, zvision::TimestampType(std::atoi(argv[3])));
 
-    else if (0 == std::string(argv[1]).compare("-query_version") && argc == 3)
-        //Sample code 7 : Query lidar's firmware version
-        sample_query_lidar_firmware_version(lidar_ip);
+	else if (0 == std::string(argv[1]).compare("-query_version") && argc == 3)
+		//Sample code 7 : Query lidar's firmware version
+		sample_query_lidar_firmware_version(lidar_ip);
 
-    else if (0 == std::string(argv[1]).compare("-query_sn") && argc == 3)
-        //Sample code 8 : Query lidar's serial number
-        sample_query_lidar_serial_number(lidar_ip);
+	else if (0 == std::string(argv[1]).compare("-query_sn") && argc == 3)
+		//Sample code 8 : Query lidar's serial number
+		sample_query_lidar_serial_number(lidar_ip);
 
-    else if (0 == std::string(argv[1]).compare("-query_temp") && argc == 3)
-        //Sample code 9 : Query lidar's hardware temperature
-        sample_query_lidar_hardware_temperature(lidar_ip);
+	else if (0 == std::string(argv[1]).compare("-query_temp") && argc == 3)
+		//Sample code 9 : Query lidar's hardware temperature
+		sample_query_lidar_hardware_temperature(lidar_ip);
 
-    else if (0 == std::string(argv[1]).compare("-query_cfg") && argc == 3)
-        //Sample code 10 : Query lidar's configurature
-        sample_query_lidar_configuration(lidar_ip);
+	else if (0 == std::string(argv[1]).compare("-query_cfg") && argc == 3)
+		//Sample code 10 : Query lidar's configurature
+		sample_query_lidar_configuration(lidar_ip);
 
-    else if (0 == std::string(argv[1]).compare("-get_cal") && argc == 4)
-        //Sample code 11 : Get lidar's calibration file by tcp connection.
-        sample_get_lidar_calibration(lidar_ip, std::string(argv[3]));
+	else if (0 == std::string(argv[1]).compare("-get_cal") && argc == 4)
+		//Sample code 11 : Get lidar's calibration file by tcp connection.
+		sample_get_lidar_calibration(lidar_ip, std::string(argv[3]));
 
-    else if (0 == std::string(argv[1]).compare("-firmware_update") && argc == 4)
-        //Sample code 12 : Firmware update.
-        sample_firmware_update(lidar_ip, std::string(argv[3]));
+	else if (0 == std::string(argv[1]).compare("-firmware_update") && argc == 4)
+		//Sample code 12 : Firmware update.
+		sample_firmware_update(lidar_ip, std::string(argv[3]));
 
-    else if (0 == std::string(argv[1]).compare("-reboot") && argc == 3)
-        //Sample code 13 : Reboot lidar by tcp connection.
-        sample_reboot_lidar(lidar_ip);
+	else if (0 == std::string(argv[1]).compare("-reboot") && argc == 3)
+		//Sample code 13 : Reboot lidar by tcp connection.
+		sample_reboot_lidar(lidar_ip);
 
-    else if (0 == std::string(argv[1]).compare("-scan_device") && argc == 3)
-        //Sample code 14 : Scan lidar on the heart beat port
-        //Notice, this function is supported by the lidar's new firmware kernel version, at least 0.1.20
-        sample_scan_lidar_on_heat_beat_port(std::atoi(argv[2]));
+	else if (0 == std::string(argv[1]).compare("-scan_device") && argc == 3)
+		//Sample code 14 : Scan lidar on the heart beat port
+		//Notice, this function is supported by the lidar's new firmware kernel version, at least 0.1.20
+		sample_scan_lidar_on_heat_beat_port(std::atoi(argv[2]));
 
-    else if (0 == std::string(argv[1]).compare("-retro_p1") && argc == 4)
-        //Sample code 15 : Config lidar retro parameter 1(min ref, [0,100])
-        sample_config_lidar_retro_param_min_ref(lidar_ip, std::atoi(argv[3]));
+	else if (0 == std::string(argv[1]).compare("-retro_p1") && argc == 4)
+		//Sample code 15 : Config lidar retro parameter 1(min ref, [0,100])
+		sample_config_lidar_retro_param_min_ref(lidar_ip, std::atoi(argv[3]));
 
-    else if (0 == std::string(argv[1]).compare("-retro_p2") && argc == 4)
-        //Sample code 16 : Config lidar retro parameter 2(point percentage, [0,100])
-        sample_config_lidar_retro_param_point_percentage(lidar_ip, std::atoi(argv[3]));
+	else if (0 == std::string(argv[1]).compare("-retro_p2") && argc == 4)
+		//Sample code 16 : Config lidar retro parameter 2(point percentage, [0,100])
+		sample_config_lidar_retro_param_point_percentage(lidar_ip, std::atoi(argv[3]));
 
-    else if (0 == std::string(argv[1]).compare("-phase_offset_enable") && argc == 4)
-        //Sample code 17 : Config lidar phaseoffset enable
-        sample_config_lidar_phase_offset_enable(lidar_ip, std::atoi(argv[3]));
+	else if (0 == std::string(argv[1]).compare("-phase_offset_enable") && argc == 4)
+		//Sample code 17 : Config lidar phaseoffset enable
+		sample_config_lidar_phase_offset_enable(lidar_ip, std::atoi(argv[3]));
 
-    else if (0 == std::string(argv[1]).compare("-phase_offset_value") && argc == 4)
-        //Sample code 18 : Config lidar phaseoffset value
-        sample_config_lidar_phase_offset_value(lidar_ip, std::atoi(argv[3]));
+	else if (0 == std::string(argv[1]).compare("-phase_offset_value") && argc == 4)
+		//Sample code 18 : Config lidar phaseoffset value
+		sample_config_lidar_phase_offset_value(lidar_ip, std::atoi(argv[3]));
 
-    else if (0 == std::string(argv[1]).compare("-set_ptp_cfg") && argc == 4)
-        //Sample code 19 : Config lidar ptp configuration file
-        sample_config_lidar_ptp_configuration_file(lidar_ip, std::string(argv[3]));
+	else if (0 == std::string(argv[1]).compare("-set_ptp_cfg") && argc == 4)
+		//Sample code 19 : Config lidar ptp configuration file
+		sample_config_lidar_ptp_configuration_file(lidar_ip, std::string(argv[3]));
 
-    else if (0 == std::string(argv[1]).compare("-get_ptp_cfg") && argc == 4)
-        //Sample code 20 : Get lidar ptp configuration file
-        sample_get_lidar_ptp_configuration_to_file(lidar_ip, std::string(argv[3]));
+	else if (0 == std::string(argv[1]).compare("-get_ptp_cfg") && argc == 4)
+		//Sample code 20 : Get lidar ptp configuration file
+		sample_get_lidar_ptp_configuration_to_file(lidar_ip, std::string(argv[3]));
 
-	else if(0 == std::string(argv[1]).compare("-cali_file_broadcast_enable") && argc == 4)
+	else if (0 == std::string(argv[1]).compare("-cali_file_broadcast_enable") && argc == 4)
 		//Sample code 21 : onfig lidar calibration file broadcast enable
 		sample_config_lidar_cali_file_broadcast_mode(lidar_ip, std::atoi(argv[3]));
 
 	else if (0 == std::string(argv[1]).compare("-downsample_mode") && argc == 4)
 		//Sample code 22 : Config lidar downsample mode
 		sample_config_lidar_downsample_mode(lidar_ip, std::string(argv[3]));
+
+	else if (0 == std::string(argv[1]).compare("-set_retro_param") && argc == 5)
+		//Sample code 23 : Set lidar retro parameter
+		sample_set_lidar_retro_parameters(lidar_ip, std::atoi(argv[3]), std::string(argv[4]));
+
+	else if (0 == std::string(argv[1]).compare("-set_adhesion_param") && argc == 5)
+		//Sample code 24 : Set lidar adhesion parameter
+		sample_set_lidar_adhesion_parameters(lidar_ip, std::atoi(argv[3]), std::string(argv[4]));
+
+	else if (0 == std::string(argv[1]).compare("-get_algo_param") && argc == 3)
+		//Sample code 25 : Get lidar algorithm parameter(retro and adhesion)
+		sample_get_lidar_algorithm_parameters(lidar_ip);
+
+	else if (0 == std::string(argv[1]).compare("-config_delete_points") && argc == 4)
+		//Sample code 26 : Config lidar delete close points enable
+		sample_config_lidar_delete_points(lidar_ip, std::atoi(argv[3]));
+
+	else if (0 == std::string(argv[1]).compare("-config_adhesion") && argc == 4)
+		//Sample code 27 : Config lidar adhesion mode
+		sample_config_lidar_adhesion(lidar_ip, std::atoi(argv[3]));
+
 
     else
     {

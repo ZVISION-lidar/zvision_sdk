@@ -93,28 +93,16 @@ void zvision::log::print(LogLevel level, const char *format, ...)
 		std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
 	time_t timestamp_ms = ptime.time_since_epoch().count();
 
-	std::string formatTemp;
-	std::string strTimestamp = std::string("\t\ttimestamp(ms):") + std::to_string(timestamp_ms);
-	int len = strlen(format);
-	if (len > 0) {
-		formatTemp.resize(len, ' ');
-		memcpy_s(&formatTemp[0], len, format, len);
-		if (format[len - 1] == '\n')
-		{
-			formatTemp[len - 1] = ' ';
-			strTimestamp.append("\n");
-		}
-	}
+	//std::string formatTemp;
+	std::string strTimestamp = std::string("timestamp(ms):") + std::to_string(timestamp_ms)+"\n";
+	printf(strTimestamp.data());
 	// <-
 
 
     va_list ap;
 
     va_start(ap, format);
-    ///vfprintf(stream, format, ap);
-	// log timestamp
-	vfprintf(stream, formatTemp.data(), ap);
-	printf(strTimestamp.data());
+    vfprintf(stream, format, ap);
     va_end(ap);
 
     reset_text_color(stream);

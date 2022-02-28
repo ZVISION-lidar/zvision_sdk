@@ -1306,19 +1306,27 @@ namespace zvision
 
 		unsigned char* header = (unsigned char*)recv.c_str();
 		param.isValid = true;
-		param.retro_gray_low_threshold = header[0];
-		param.retro_gray_high_threshold = header[1];
-		param.adj_delete_percent_low_gray = header[2];
-		param.adj_delete_percent_high_gray = header[3];
-		NetworkToHost(header + 4, (char*)&param.retro_delete_point_range);
-		NetworkToHost(header + 8, (char*)&param.angle_hor_min);
-		NetworkToHost(header + 12, (char*)&param.angle_hor_max);
-		NetworkToHost(header + 16, (char*)&param.angle_ver_min);
-		NetworkToHost(header + 20, (char*)&param.angle_ver_max);
-		NetworkToHost(header + 24, (char*)&param.angle_hor_res);
-		NetworkToHost(header + 28, (char*)&param.angle_ver_res);
-		NetworkToHost(header + 32, (char*)&param.diff_thres);
-		NetworkToHost(header + 36, (char*)&param.dis_limit);
+
+		NetworkToHost(header +0 , (char*)&param.retro_dis_thres);
+		NetworkToHostShort(header + 4, (char*)&param.retro_low_range_thres);
+		NetworkToHostShort(header + 6, (char*)&param.retro_high_range_thres);
+
+		NetworkToHost(header + 8, (char*)&param.adhesion_angle_hor_min);
+		NetworkToHost(header + 12, (char*)&param.adhesion_angle_hor_max);
+		NetworkToHost(header + 16, (char*)&param.adhesion_angle_ver_min);
+		NetworkToHost(header + 20, (char*)&param.adhesion_angle_ver_max);
+		NetworkToHost(header + 24, (char*)&param.adhesion_angle_hor_res);
+		NetworkToHost(header + 28, (char*)&param.adhesion_angle_ver_res);
+		NetworkToHost(header + 32, (char*)&param.adhesion_diff_thres);
+		NetworkToHost(header + 36, (char*)&param.adhesion_dis_limit);
+
+		param.retro_min_gray_num = header[40];
+		param.retro_del_gray_thres = header[41];
+		param.retro_del_ratio_gray_low_thres = header[42];
+		param.retro_del_ratio_gray_high_thres = header[43];
+		param.retro_min_gray = header[44];
+
+		NetworkToHost(header + 46, (char*)&param.adhesion_min_diff);
 
 		return 0;
 	}
@@ -1809,7 +1817,7 @@ namespace zvision
 		const int send_len = 4;
 		char set_cmd[send_len] = { (char)0xBA, (char)0x1F, (char)0x00, (char)0x00 };
 
-		if (AlgoDeleteIsolatedPoint == tp)
+		if (AlgoDeleteClosePoints == tp)
 			set_cmd[2] = 0x01;
 		else if (AlgoAdhesion == tp)
 			set_cmd[2] = 0x02;
@@ -2035,6 +2043,8 @@ namespace zvision
 			set_cmd[2] = 0x07;
 		else if (MaximumProcessingRange == tp)
 			set_cmd[2] = 0x08;
+		else if(NearFarPointDiff == tp)
+			set_cmd[2] = 0x09;
 		else
 			return -1;
 
@@ -2057,6 +2067,141 @@ namespace zvision
 		}
 
 		if (!CheckDeviceRet(recv))//check ret
+		{
+			DisConnect();
+			return -1;
+		}
+
+		return 0;
+	}
+	
+	int LidarTools::SetDeviceRetroParam(RetroParam tp, int val) {
+		
+		if (!CheckConnection())
+			return -1;
+
+		if (tp != RetroParam::RetroDisThres)
+			return -1;
+
+		const int send_len = 7;
+		char set_cmd[send_len] = { (char)0xBA, (char)0x15, (char)0x02,(char)0x00, (char)0x00, (char)0x00, (char)0x00 };
+		
+		HostToNetwork((const unsigned char*)&val, set_cmd + 3);
+		std::string cmd(set_cmd, send_len);
+
+		// send
+		if (client_->SyncSend(cmd, send_len))
+		{
+			DisConnect();
+			return -1;
+		}
+
+		// recv
+		const int recv_len = 4;
+		std::string recv(recv_len, 'x');
+		if (client_->SyncRecv(recv, recv_len))
+		{
+			DisConnect();
+			return -1;
+		}
+
+		// check
+		if (!CheckDeviceRet(recv))
+		{
+			DisConnect();
+			return -1;
+		}
+
+		return 0;
+	}
+
+	int LidarTools::SetDeviceRetroParam(RetroParam tp, unsigned short val) {
+
+		if (!CheckConnection())
+			return -1;
+
+		const int send_len = 5;
+		char set_cmd[send_len] = { (char)0xBA, (char)0x15, (char)0x00,(char)0x00, (char)0x00 };
+
+		if (tp == RetroParam::RetroLowRangeThres) 
+			set_cmd[2] = 0x03;
+		else if (tp == RetroParam::RetroHighRangeThres)
+			set_cmd[2] = 0x04;
+		else
+			return -1;
+
+		set_cmd[3] = val >> 8 & 0xFF;
+		set_cmd[4] = val & 0xFF;
+
+		std::string cmd(set_cmd, send_len);
+
+		// send
+		if (client_->SyncSend(cmd, send_len))
+		{
+			DisConnect();
+			return -1;
+		}
+
+		// recv
+		const int recv_len = 4;
+		std::string recv(recv_len, 'x');
+		if (client_->SyncRecv(recv, recv_len))
+		{
+			DisConnect();
+			return -1;
+		}
+
+		// check
+		if (!CheckDeviceRet(recv))
+		{
+			DisConnect();
+			return -1;
+		}
+		return 0;
+	}
+
+	int LidarTools::SetDeviceRetroParam(RetroParam tp, unsigned char val) {
+
+		if (!CheckConnection())
+			return -1;
+
+		const int send_len = 4;
+		char set_cmd[send_len] = { (char)0xBA, (char)0x15, (char)0x00,(char)0x00 };
+
+		if (tp == RetroParam::RetroMinGrayNum)
+			set_cmd[2] = 0x01;
+		else if (tp == RetroParam::RetroDelGrayThres)
+			set_cmd[2] = 0x05;
+		else if (tp == RetroParam::RetroDelRatioGrayLowThres)
+			set_cmd[2] = 0x06;
+		else if (tp == RetroParam::RetroDelRatioGrayHighThres)
+			set_cmd[2] = 0x07;
+		else if (tp == RetroParam::RetroMinGray)
+			set_cmd[2] = 0x08;
+		else
+			return -1;
+
+		set_cmd[3] = val;
+		std::string cmd(set_cmd, send_len);
+
+		// send
+		if (client_->SyncSend(cmd, send_len))
+		{
+			DisConnect();
+			return -1;
+		}
+
+		// recv
+		const int recv_len = 4;
+		std::string recv(recv_len, 'x');
+		if (client_->SyncRecv(recv, recv_len))
+		{
+			DisConnect();
+			return -1;
+		}
+
+		// check
+		if (!CheckDeviceRet(recv))
 		{
 			DisConnect();
 			return -1;

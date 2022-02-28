@@ -105,7 +105,7 @@ namespace zvision
 
 	typedef enum AlgoType
 	{
-		AlgoDeleteIsolatedPoint = 1,
+		AlgoDeleteClosePoints = 1,
 		AlgoAdhesion = 2,
 		AlgoRetro = 3,
 		AlgoUnknown,
@@ -121,8 +121,23 @@ namespace zvision
 		VerticalAngleResolution = 6,
 		OutlierThreshold = 7,
 		MaximumProcessingRange = 8,
-		ParamUnknown,
+		NearFarPointDiff = 9,
+		AdhesionParamUnknown,
 	}AdhesionParam;
+
+	typedef enum RetroParam
+	{
+		RetroDisThres = 1,
+		RetroLowRangeThres = 2,
+		RetroHighRangeThres = 3,
+		RetroMinGrayNum = 4,
+		RetroDelGrayThres = 5,
+		RetroDelRatioGrayLowThres = 6,
+		RetroDelRatioGrayHighThres = 7,
+		RetroMinGray = 8,
+		RetroParamUnknown,
+	}RetroParam;
+
 
     typedef enum CalSendMode
     {
@@ -171,22 +186,28 @@ namespace zvision
 	typedef struct DeviceAlgoParam {
 		DeviceAlgoParam() :isValid(false) {}
 		bool isValid;
-		unsigned char retro_gray_low_threshold;
-		unsigned char retro_gray_high_threshold;
-		unsigned char adj_delete_percent_low_gray;
-		unsigned char adj_delete_percent_high_gray;
-		float retro_delete_point_range;
+		// for retro
+		int retro_dis_thres;
+		unsigned short retro_low_range_thres;
+		unsigned short retro_high_range_thres;
+		unsigned char retro_min_gray_num;
+		unsigned char retro_del_gray_thres;
+		unsigned char retro_del_ratio_gray_low_thres;
+		unsigned char retro_del_ratio_gray_high_thres;
+		unsigned char retro_min_gray;
 
-		int angle_hor_min;
-		int angle_hor_max;
-		int angle_ver_min;
-		int angle_ver_max;
-		float angle_hor_res;
-		float angle_ver_res;
-		float diff_thres;
-		float dis_limit;
+		// for adhesion
+		int adhesion_angle_hor_min;
+		int adhesion_angle_hor_max;
+		int adhesion_angle_ver_min;
+		int adhesion_angle_ver_max;
+		float adhesion_angle_hor_res;
+		float adhesion_angle_ver_res;
+		float adhesion_diff_thres;
+		float adhesion_dis_limit;
+		float adhesion_min_diff;
 
-		unsigned char preserved[60];
+		unsigned char preserved[51];
 
 	}DeviceAlgoParam;
 
@@ -426,9 +447,10 @@ namespace zvision
 
 	/** \brief state mode to string
 	* \param[in] mode    the StateMode
+	* \param[in] onf     string select
 	* \return string.
 	*/
-	std::string get_state_mode_string(StateMode mode);
+	std::string get_state_mode_string(StateMode mode, bool onf = false);
 
     /** \brief downsample mode to string
     * \param[in] mode    the DownsampleMode

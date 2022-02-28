@@ -217,6 +217,22 @@ namespace zvision
 		*/
 		int SetDeviceAdhesionParam(AdhesionParam tp, float val);
 
+		/** \brief Set lidar Retro Parameters
+		* \param[in] tp                Parameter type
+		* \param[in] val               int value
+		*/
+		int SetDeviceRetroParam(RetroParam tp, int val);
+		/** \brief Set lidar Retro Parameters
+		* \param[in] tp                Parameter type
+		* \param[in] val               unsigned char value
+		*/
+		int SetDeviceRetroParam(RetroParam tp, unsigned short val);
+		/** \brief Set lidar Retro Parameters
+		* \param[in] tp                Parameter type
+		* \param[in] val               int value
+		*/
+		int SetDeviceRetroParam(RetroParam tp, unsigned char val);
+
         /** \brief Firmware update.
           * \param[in] filename        firmware filename
           */
