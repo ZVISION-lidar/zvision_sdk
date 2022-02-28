@@ -397,14 +397,14 @@ int sample_config_lidar_downsample_mode(std::string lidar_ip, std::string mode)
 	else if (mode.compare("1/4") == 0)
 		dm = zvision::Downsample_1_4;
 	else {
-		LOG_ERROR("Set device [%s]'s downsample mode to [%s] failed, invalid parameters input.\n", lidar_ip.c_str(), mode);
+		LOG_ERROR("Set device [%s]'s downsample mode to [%s] failed, invalid parameters input.\n", lidar_ip.c_str(), mode.c_str());
 		return ret;
 	}
 
 	if (ret = config.SetDeviceDownsampleMode(dm))
-		LOG_ERROR("Set device [%s]'s downsample mode to [%s] failed, ret = %d.\n", lidar_ip.c_str(), mode, ret);
+		LOG_ERROR("Set device [%s]'s downsample mode to [%s] failed, ret = %d.\n", lidar_ip.c_str(), mode.c_str(), ret);
 	else
-		LOG_INFO("Set device [%s]'s downsample mode to [%s] ok.\n", lidar_ip.c_str(), mode);
+		LOG_INFO("Set device [%s]'s downsample mode to [%s] ok.\n", lidar_ip.c_str(), mode.c_str());
 	return ret;
 }
 
