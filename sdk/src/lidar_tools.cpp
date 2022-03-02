@@ -2039,7 +2039,7 @@ namespace zvision
 			set_cmd[2] = 0x05;
 		else if (VerticalAngleResolution == tp)
 			set_cmd[2] = 0x06;
-		else if (OutlierThreshold == tp)
+		else if (DeletePointThreshold == tp)
 			set_cmd[2] = 0x07;
 		else if (MaximumProcessingRange == tp)
 			set_cmd[2] = 0x08;

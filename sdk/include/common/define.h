@@ -119,7 +119,7 @@ namespace zvision
 		MaximumVerticalAngleRange = 4,
 		HorizontalAngleResolution = 5,
 		VerticalAngleResolution = 6,
-		OutlierThreshold = 7,
+		DeletePointThreshold = 7,
 		MaximumProcessingRange = 8,
 		NearFarPointDiff = 9,
 		AdhesionParamUnknown,

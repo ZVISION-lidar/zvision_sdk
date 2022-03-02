@@ -464,7 +464,7 @@ int sample_set_lidar_adhesion_parameters(std::string lidar_ip, int id, std::stri
 	case 6:
 		ret = config.SetDeviceAdhesionParam(zvision::VerticalAngleResolution, (float)std::atof(val.c_str())); break;
 	case 7:
-		ret = config.SetDeviceAdhesionParam(zvision::OutlierThreshold, (float)std::atof(val.c_str())); break;
+		ret = config.SetDeviceAdhesionParam(zvision::DeletePointThreshold, (float)std::atof(val.c_str())); break;
 	case 8:
 		ret = config.SetDeviceAdhesionParam(zvision::MaximumProcessingRange, (float)std::atof(val.c_str())); break;
 	case 9:

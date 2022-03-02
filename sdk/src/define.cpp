@@ -263,6 +263,7 @@ namespace zvision
         pos += snprintf(ptr + pos, buffer_len - pos, "Retro enbale: %s\n", zvision::get_retro_mode_string(info.retro_enable).c_str());
         pos += snprintf(ptr + pos, buffer_len - pos, "Retro param: [%d] [%d]\n", info.retro_param_1_ref_min, info.retro_param_2_point_percent);
 		pos += snprintf(ptr + pos, buffer_len - pos, "Adhesion enbale: %s\n", zvision::get_state_mode_string(info.adhesion_enable,true).c_str());
+		pos += snprintf(ptr + pos, buffer_len - pos, "Delete close point enbale: %s\n", zvision::get_state_mode_string(info.delete_point_enable, true).c_str());
         pos += snprintf(ptr + pos, buffer_len - pos, "Frame offset: %u(x 5ns)\n", info.phase_offset);
         pos += snprintf(ptr + pos, buffer_len - pos, "Frame offset sync: %s\n", zvision::get_phase_offset_mode_string(info.phase_offset_mode).c_str());
         pos += snprintf(ptr + pos, buffer_len - pos, "Dual return: %s\n", zvision::get_echo_mode_string(info.echo_mode).c_str());
