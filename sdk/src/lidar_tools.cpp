@@ -1185,6 +1185,13 @@ namespace zvision
 		info.retro_gray_low_threshold = (*(header + 93));
 		info.retro_gray_high_threshold = (*(header + 94));
 
+		// clear recv buffer
+		int len = client_->GetAvailableBytesLen();
+		if (len > 0) {
+			std::string temp(len, 'x');
+			client_->SyncRecv(temp, len);
+		}
+
         // sn code and device type
         std::string sn = "Unknown";
         info.serial_number = "Unknown";
@@ -1294,7 +1301,8 @@ namespace zvision
 		// check whether algo param is valid
 		int len = client_->GetAvailableBytesLen();
 		if (len != 100) {
-			client_->SyncRecv(recv, len);
+			std::string temp(len, 'x');
+			client_->SyncRecv(temp, len);
 			return -1;
 		}
 
@@ -2574,24 +2582,20 @@ namespace zvision
 
     int LidarTools::SetDevicePtpConfiguration(std::string ptp_cfg_filename)
     {
-        // --- read ptp configuration file content
-        std::ifstream infile(ptp_cfg_filename);
+        //// --- read ptp configuration file content
+		// read file
+		std::string data;
+		char c;
+		std::ifstream inFile(ptp_cfg_filename, std::ios::in | std::ios::binary);
+		if (!inFile)
+			return ReturnCode::OpenFileError;
 
-        //get length of file
-        infile.seekg(0, std::ios::end);
-        size_t length = infile.tellg();
-        infile.seekg(0, std::ios::beg);
+		while ((c = inFile.get()) && c != EOF)
+			data.push_back(c);
+		inFile.close();
 
-        if (!infile.is_open())
-        {
-            return ReturnCode::OpenFileError;
-        }
-
-        std::unique_ptr<char> data(new char[length]);
-        infile.read(data.get(), length);
-        infile.close();
-
-        std::string content(data.get(), length);
+		int length = data.size();
+		std::string content = data;
 
         if (!CheckConnection())
             return -1;
