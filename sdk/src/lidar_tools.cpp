@@ -2289,7 +2289,7 @@ namespace zvision
                 }
                 if (0 == (readed % step_per_percent))
                 {
-                    cb(this->device_ip_.c_str(), start_percent++);
+                    cb(start_percent++, this->device_ip_.c_str());
                 }
             }
             idata.close();
@@ -2325,7 +2325,7 @@ namespace zvision
                 break;
             }
             unsigned char step = (unsigned char)recv_step[4];
-            cb(this->device_ip_.c_str(), 40 + int((double)step / 3.3));
+            cb(40 + int((double)step / 3.3), this->device_ip_.c_str());
             if (100 == step)
             {
                 ok = true;
@@ -2350,7 +2350,7 @@ namespace zvision
                 break;
             }
             unsigned char step = (unsigned char)recv_step[4];
-            cb(this->device_ip_.c_str(), 70 + int((double)step / 3.3));
+            cb(70 + int((double)step / 3.3), this->device_ip_.c_str());
             if (100 == step)
             {
                 ok = true;
@@ -2924,7 +2924,7 @@ namespace zvision
                 }
                 if (0 == (readed % step_per_percent))
                 {
-                    cb(this->device_ip_.c_str(), start_percent++);
+                    cb(start_percent++, this->device_ip_.c_str());
                 }
             }
             idata.close();
@@ -2960,7 +2960,7 @@ namespace zvision
                 break;
             }
             unsigned char step = (unsigned char)recv_step[4];
-            cb(this->device_ip_.c_str(), 40 + int((double)step / 3.3));
+            cb(40 + int((double)step / 3.3), this->device_ip_.c_str());
             if (100 == step)
             {
                 ok = true;
@@ -2984,7 +2984,7 @@ namespace zvision
                 break;
             }
             unsigned char step = (unsigned char)recv_step[4];
-            cb(this->device_ip_.c_str(), 70 + int((double)step / 3.3));
+            cb(70 + int((double)step / 3.3), this->device_ip_.c_str());
             if (100 == step)
             {
                 ok = true;

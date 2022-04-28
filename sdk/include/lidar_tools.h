@@ -42,7 +42,7 @@ namespace zvision
 	{
 	public:
 
-        typedef std::function<void(std::string,int)> ProgressCallback;
+        typedef std::function<void(int,std::string)> ProgressCallback;
 
         /** \brief zvision LidarTools constructor.
           * \param[in] lidar_ip        lidar's ip address

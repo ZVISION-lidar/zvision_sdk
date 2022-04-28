@@ -124,7 +124,7 @@ void print_current_progress(std::string ip, int percent)
 }
 
 /* Callback function for progress notifiy with progress bar */
-void print_current_progress_multi(std::string ip, int percent)
+void print_current_progress_multi(int percent, std::string ip)
 {
 	g_lidars_percent[ip] = percent;
 	//get min percent
