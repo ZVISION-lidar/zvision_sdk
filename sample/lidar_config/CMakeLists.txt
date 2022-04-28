@@ -5,4 +5,5 @@ add_executable(${DEMO_NAME} main.cpp)
 
 target_link_libraries(${DEMO_NAME}
         ${PROJECT_NAME}_static
+        -lpthread
         )
