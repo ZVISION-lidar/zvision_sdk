@@ -28,6 +28,14 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <set>
+#include <thread>
+
+/* Progress bar defination */
+#define PBSTR "||||||||||||||||||||||||||||||||||||||||||||||||||"
+#define PBWIDTH 50
+/* Progress information */
+static std::map<std::string, int> g_lidars_percent;
 
 class ParamResolver
 {
@@ -69,10 +77,76 @@ public:
 
 };
 
-//Callback function for progress notify
-void print_current_progress(int percent)
+/* String split */
+void strSplit(const std::string& s, std::vector<std::string>& tokens, const std::string& delimiters = " ") {
+	std::string::size_type lastPos = s.find_first_not_of(delimiters, 0);
+	std::string::size_type pos = s.find_first_of(delimiters, lastPos);
+	while (std::string::npos != pos || std::string::npos != lastPos) {
+		tokens.push_back(s.substr(lastPos, pos - lastPos));
+		//use emplace_back after C++11
+		lastPos = s.find_first_not_of(delimiters, pos);
+		pos = s.find_first_of(delimiters, lastPos);
+	}
+}
+
+/* Verify ip */
+bool AssembleIpString(const std::string& ip)
 {
-    LOG_INFO("# Current progress %3d.\n", percent);
+	try
+	{
+		/* ip format: xxx.xxx.xxx.xxx */
+		if (ip.size() > 15)
+			return false;
+
+		std::vector<std::string> vals;
+		strSplit(ip, vals, ".");
+		if (vals.size() != 4)
+			return false;
+
+		for (auto s : vals) {
+			for (auto c : s) {
+				if (c<'0' || c>'9')
+					return false;
+			}
+		}
+	}
+	catch (const std::exception& e)
+	{
+		return false;
+	}
+	return true;
+}
+
+//Callback function for progress notify
+void print_current_progress(std::string ip, int percent)
+{
+    LOG_INFO("#%s:Current progress %3d.\n", ip.c_str(), percent);
+}
+
+/* Callback function for progress notifiy with progress bar */
+void print_current_progress_multi(std::string ip, int percent)
+{
+	g_lidars_percent[ip] = percent;
+	//get min percent
+	int min_percent = percent;
+	for (auto it : g_lidars_percent)
+		if (it.second < min_percent) min_percent = it.second;
+
+	int lpad = (int)(1.0f * min_percent / 100 * PBWIDTH);
+	int rpad = PBWIDTH - lpad;
+	int idx = 0;
+	for (auto it : g_lidars_percent) {
+
+		if (idx == 0)
+			printf("\r\r #%s:[%3d%%] ", it.first.c_str(), it.second);
+		else
+			printf("#%s:[%3d%%] ", it.first.c_str(), it.second);
+
+		if (idx == (g_lidars_percent.size() - 1))
+			printf(" [%.*s%*s]", lpad, PBSTR, rpad, "");
+		idx++;
+	}
+	fflush(stdout);
 }
 
 //Sample code 0 : Set lidar's mac address
@@ -247,7 +321,7 @@ int sample_firmware_update(std::string lidar_ip, std::string filename)
 {
     int ret = 0;
     zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
-    if (ret = config.FirmwareUpdate(filename, print_current_progress))
+    if (ret = config.FirmwareUpdate(filename, print_current_progress_multi))
         LOG_ERROR("Update device [%s]'s firmware %s failed, ret = %d.\n", lidar_ip.c_str(), filename.c_str(), ret);
     else
     {
@@ -539,6 +613,79 @@ int sample_config_lidar_adhesion(std::string lidar_ip, bool en) {
 	return ret;
 }
 
+/* Handling multiple lidars */
+//Sample code 28 : Muitiple lidars Firmware update.
+int sample_firmware_update_multi(std::vector<std::string> lidars_ip, std::string filename)
+{
+	// start task
+	int devs = lidars_ip.size();
+	std::vector<std::shared_ptr<std::thread>> thr_vec;
+	thr_vec.resize(devs);
+	for (int i = 0; i < devs; i++) {
+		thr_vec[i].reset(new std::thread(std::bind(&sample_firmware_update, lidars_ip[i], filename)));
+	}
+	// wait for finish
+	for (int i = 0; i < devs; i++) {
+		if (thr_vec[i]->joinable())
+			thr_vec[i]->join();
+	}
+	return 0;
+}
+//Sample code 29 : Config muitiple lidars adhesion enable.
+int sample_config_lidar_adhesion_multi(std::vector<std::string> lidars_ip, bool en) {
+
+	// start task
+	for (auto ip : lidars_ip)
+		sample_config_lidar_adhesion(ip, en);
+
+	return 0;
+}
+//Sample code 30 : Config muitiple lidars delete_points enable.
+int sample_config_lidar_delete_points_multi(std::vector<std::string> lidars_ip, bool en) {
+
+	// start task
+	for (auto ip : lidars_ip)
+		sample_config_lidar_delete_points(ip, en);
+
+	return 0;
+}
+//Sample code 31 : Config muitiple lidars retro enable.
+int sample_config_lidar_retro_multi(std::vector<std::string> lidars_ip, bool en) {
+
+	// start task
+	for (auto ip: lidars_ip)
+		sample_config_lidar_retro_enable(ip, en);
+
+	return 0;
+}
+//Sample code 32 : Config muitiple lidars phase offset enable.
+int sample_config_lidar_phase_offset_multi(std::vector<std::string> lidars_ip, bool en) {
+
+	// start task
+	for (auto ip : lidars_ip)
+		sample_config_lidar_phase_offset_enable(ip, en);
+
+	return 0;
+}
+//Sample code 33 : Config muitiple lidars phase offset enable.
+int sample_query_lidar_configuration_multi(std::vector<std::string> lidars_ip) {
+
+	// start task
+	for (auto ip: lidars_ip)
+		sample_query_lidar_configuration(ip);
+
+	return 0;
+}
+//Sample code 34 : Reboot lidars by tcp connection.
+int sample_reboot_lidar_multi(std::vector<std::string> lidars_ip) {
+
+	// start task
+	for (auto ip: lidars_ip)
+		sample_reboot_lidar(ip);
+
+	return 0;
+}
+
 int main(int argc, char** argv)
 {
     if (argc <= 2)
@@ -566,7 +713,9 @@ int main(int argc, char** argv)
 
             << "Sample 5 : config retro mode\n"
             << "Format: -config_retro lidar_ip mode(0 for disable, 1 for enable)\n"
-            << "Demo:   -config_retro 192.168.10.108 0\n\n"
+			<< "Format: -config_retro_multi lidar1_ip lidar2_ip (MaxLidarCount:4) mode\n"
+            << "Demo:   -config_retro 192.168.10.108 0\n"
+			<< "Demo:   -config_retro_multi 192.168.10.108 192.168.10.109 0\n\n"
 
             << "Sample 6 : config time sync mode\n"
             << "Format: -config_time_sync lidar_ip mode(0 for ptp, 1 for gpspps)\n"
@@ -586,7 +735,9 @@ int main(int argc, char** argv)
 
             << "Sample 10 : query configuration\n"
             << "Format: -query_cfg lidar_ip\n"
-            << "Demo:   -query_cfg 192.168.10.108\n\n"
+			<< "Format: -query_cfg_multi lidar1_ip lidar2_ip(MaxLidarCount:4)\n"
+            << "Demo:   -query_cfg 192.168.10.108\n"
+			<< "Demo:   -query_cfg_multi 192.168.10.108 192.168.10.109\n\n"
 
             << "Sample 11 : get calibration data to file\n"
             << "Format: -get_cal lidar_ip savefilename\n"
@@ -594,11 +745,15 @@ int main(int argc, char** argv)
 
             << "Sample 12 : firmware update\n"
             << "Format: -firmware_update lidar_ip filename\n"
-            << "Demo:   -firmware_update 192.168.10.108 firmware_name.pack\n\n"
+			<< "Format: -firmware_update_multi lidar1_ip lidar2_ip(MaxLidarCount:4) filename\n"
+            << "Demo:   -firmware_update 192.168.10.108 firmware_name.pack\n"
+			<< "Demo:   -firmware_update_multi 192.168.10.108 192.168.10.109 firmware_name.pack\n\n"
 
             << "Sample 13 : reboot\n"
             << "Format: -reboot lidar_ip\n"
-            << "Demo:   -reboot 192.168.10.108\n\n"
+			<< "Format: -reboot_multi lidar1_ip lidar2_ip(MaxLidarCount:4) \n"
+            << "Demo:   -reboot 192.168.10.108\n"
+			<< "Demo:   -reboot_multi 192.168.10.108 192.168.10.109\n\n"
 
             << "Sample 14 : scan device\n"
             << "Format: -scan_device scan_time(s)\n"
@@ -613,8 +768,10 @@ int main(int argc, char** argv)
             << "Demo:   -retro_p2 5\n\n"
 
             << "Sample 17 : phase offset enable(0 for disable, 1 for enable)\n"
-            << "Format: -phase_offset_enable \n"
-            << "Demo:   -phase_offset_enable 0\n\n"
+            << "Format: -phase_offset_enable lidar_ip mode\n"
+			<< "Format: -phase_offset_enable_multi lidar1_ip lidar2_ip(MaxLidarCount:4)\n"
+            << "Demo:   -phase_offset_enable 192.168.10.108 0\n"
+			<< "Demo:   -phase_offset_enable_multi 192.168.10.108 192.168.10.109 0\n\n"
 
             << "Sample 18 : phase offset value\n"
             << "Format: -phase_offset_value value(x5ns)\n"
@@ -667,18 +824,40 @@ int main(int argc, char** argv)
 
 			<< "Sample 26 : config delete close points mode\n"
 			<< "Format: -config_delete_points lidar_ip mode(0 for disable, 1 for enable)\n"
-			<< "Demo:   -config_delete_points 192.168.10.108 0\n\n"
+			<< "Format: -config_delete_points_multi lidar1_ip lidar2_ip(MaxLidarCount:4) mode\n"
+			<< "Demo:   -config_delete_points 192.168.10.108 0\n"
+			<< "Demo:   -config_delete_points_multi 192.168.10.108 192.168.10.109 0\n\n"
 
 			<< "Sample 27 : config adhesion mode\n"
 			<< "Format: -config_adhesion lidar_ip mode(0 for disable, 1 for enable)\n"
-			<< "Demo:   -config_adhesion 192.168.10.108 0\n\n"
+			<< "Format: -config_adhesion_multi lidar1_ip lidar2_ip(MaxLidarCount:4) mode\n"
+			<< "Demo:   -config_adhesion 192.168.10.108 0\n"
+			<< "Demo:   -config_adhesion_multi 192.168.10.108 192.168.10.109 0\n\n"
 
-            << "############################# END  GUIDE ################################\n\n"
+			<< "############################# END  GUIDE ################################\n\n"
             ;
         getchar();
         return 0;
     }
     std::string lidar_ip = std::string(argv[2]);
+
+	// Get lidar list
+	std::vector<std::string> lidars_ip;
+	{
+		std::set<std::string> temp;
+		for (int i = 0; i < argc; i++) {
+			std::string ip(argv[i]);
+			// filter ip
+			if (AssembleIpString(ip)) {
+				if (temp.insert(ip).second)
+					lidars_ip.push_back(ip);
+			}
+		}
+
+		// check
+		if (lidars_ip.size() > 4)
+			lidars_ip = std::vector<std::string>{ std::begin(lidars_ip),std::begin(lidars_ip) + 3 };
+	}
 
 	if (0 == std::string(argv[1]).compare("-config_mac") && argc == 4)
 		//Sample code 0 : Set lidar's mac address
@@ -793,6 +972,34 @@ int main(int argc, char** argv)
 		//Sample code 27 : Config lidar adhesion mode
 		sample_config_lidar_adhesion(lidar_ip, std::atoi(argv[3]));
 
+	// Handling multiple lidars
+	else if (0 == std::string(argv[1]).compare("-config_retro_multi"))
+		//Sample code 28 : Set lidars` retro function
+		sample_config_lidar_retro_multi(lidars_ip, std::atoi(argv[argc-1]));
+
+	else if (0 == std::string(argv[1]).compare("-query_cfg_multi"))
+		//Sample code 29 : Query lidars` configurature
+		sample_query_lidar_configuration_multi(lidars_ip);
+
+	else if (0 == std::string(argv[1]).compare("-firmware_update_multi"))
+		//Sample code 30 : Firmwares update
+		sample_firmware_update_multi(lidars_ip, std::string(argv[argc-1]));
+
+	else if (0 == std::string(argv[1]).compare("-reboot_multi"))
+		//Sample code 31 : Reboot lidars by tcp connection.
+		sample_reboot_lidar_multi(lidars_ip);
+
+	else if (0 == std::string(argv[1]).compare("-phase_offset_enable_multi"))
+		//Sample code 32 : Config lidars` phaseoffset enable
+		sample_config_lidar_phase_offset_multi(lidars_ip, std::atoi(argv[argc-1]));
+
+	else if (0 == std::string(argv[1]).compare("-config_delete_points_multi"))
+		//Sample code 33 : Config lidars` delete close points enable
+		sample_config_lidar_delete_points_multi(lidars_ip, std::atoi(argv[argc-1]));
+
+	else if (0 == std::string(argv[1]).compare("-config_adhesion_multi"))
+		//Sample code 34 : Config lidars` adhesion mode
+		sample_config_lidar_adhesion_multi(lidars_ip, std::atoi(argv[argc-1]));
 
     else
     {

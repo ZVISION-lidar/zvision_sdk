@@ -2082,9 +2082,9 @@ namespace zvision
 
 		return 0;
 	}
-	
+
 	int LidarTools::SetDeviceRetroParam(RetroParam tp, int val) {
-		
+
 		if (!CheckConnection())
 			return -1;
 
@@ -2093,7 +2093,7 @@ namespace zvision
 
 		const int send_len = 7;
 		char set_cmd[send_len] = { (char)0xBA, (char)0x15, (char)0x02,(char)0x00, (char)0x00, (char)0x00, (char)0x00 };
-		
+
 		HostToNetwork((const unsigned char*)&val, set_cmd + 3);
 		std::string cmd(set_cmd, send_len);
 
@@ -2131,7 +2131,7 @@ namespace zvision
 		const int send_len = 5;
 		char set_cmd[send_len] = { (char)0xBA, (char)0x15, (char)0x00,(char)0x00, (char)0x00 };
 
-		if (tp == RetroParam::RetroLowRangeThres) 
+		if (tp == RetroParam::RetroLowRangeThres)
 			set_cmd[2] = 0x03;
 		else if (tp == RetroParam::RetroHighRangeThres)
 			set_cmd[2] = 0x04;
@@ -2289,7 +2289,7 @@ namespace zvision
                 }
                 if (0 == (readed % step_per_percent))
                 {
-                    cb(start_percent++);
+                    cb(this->device_ip_.c_str(), start_percent++);
                 }
             }
             idata.close();
@@ -2325,7 +2325,7 @@ namespace zvision
                 break;
             }
             unsigned char step = (unsigned char)recv_step[4];
-            cb(40 + int((double)step / 3.3));
+            cb(this->device_ip_.c_str(), 40 + int((double)step / 3.3));
             if (100 == step)
             {
                 ok = true;
@@ -2350,7 +2350,7 @@ namespace zvision
                 break;
             }
             unsigned char step = (unsigned char)recv_step[4];
-            cb(70 + int((double)step / 3.3));
+            cb(this->device_ip_.c_str(), 70 + int((double)step / 3.3));
             if (100 == step)
             {
                 ok = true;
@@ -2924,7 +2924,7 @@ namespace zvision
                 }
                 if (0 == (readed % step_per_percent))
                 {
-                    cb(start_percent++);
+                    cb(this->device_ip_.c_str(), start_percent++);
                 }
             }
             idata.close();
@@ -2960,7 +2960,7 @@ namespace zvision
                 break;
             }
             unsigned char step = (unsigned char)recv_step[4];
-            cb(40 + int((double)step / 3.3));
+            cb(this->device_ip_.c_str(), 40 + int((double)step / 3.3));
             if (100 == step)
             {
                 ok = true;
@@ -2984,7 +2984,7 @@ namespace zvision
                 break;
             }
             unsigned char step = (unsigned char)recv_step[4];
-            cb(70 + int((double)step / 3.3));
+            cb(this->device_ip_.c_str(), 70 + int((double)step / 3.3));
             if (100 == step)
             {
                 ok = true;
