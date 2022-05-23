@@ -18,4 +18,4 @@ endif(PCL_FOUND)
 #message(STATUS "PCL library found " ${DEMO_LIBS})
 target_link_libraries(${DEMO_NAME}
     ${DEMO_LIBS}
-    )
+    -lpthread)

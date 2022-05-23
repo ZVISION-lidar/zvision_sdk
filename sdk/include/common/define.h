@@ -96,6 +96,49 @@ namespace zvision
         EchoUnknown,
     }EchoMode;
 
+	typedef enum StateMode
+	{
+		StateDisable = 0,
+		StateEnable = 1,
+		StateUnknown,
+	}SwitchMode;
+
+	typedef enum AlgoType
+	{
+		AlgoDeleteClosePoints = 1,
+		AlgoAdhesion = 2,
+		AlgoRetro = 3,
+		AlgoUnknown,
+	}AlgoType;
+
+	typedef enum AdhesionParam
+	{
+		MinimumHorizontalAngleRange = 1,
+		MaximumHorizontalAngleRange = 2,
+		MinimumVerticalAngleRange = 3,
+		MaximumVerticalAngleRange = 4,
+		HorizontalAngleResolution = 5,
+		VerticalAngleResolution = 6,
+		DeletePointThreshold = 7,
+		MaximumProcessingRange = 8,
+		NearFarPointDiff = 9,
+		AdhesionParamUnknown,
+	}AdhesionParam;
+
+	typedef enum RetroParam
+	{
+		RetroDisThres = 1,
+		RetroLowRangeThres = 2,
+		RetroHighRangeThres = 3,
+		RetroMinGrayNum = 4,
+		RetroDelGrayThres = 5,
+		RetroDelRatioGrayLowThres = 6,
+		RetroDelRatioGrayHighThres = 7,
+		RetroMinGray = 8,
+		RetroParamUnknown,
+	}RetroParam;
+
+
     typedef enum CalSendMode
     {
         CalSendDisable = 0,
@@ -139,6 +182,35 @@ namespace zvision
         ScanUnknown,
     }ScanMode;
 
+
+	typedef struct DeviceAlgoParam {
+		DeviceAlgoParam() :isValid(false) {}
+		bool isValid;
+		// for retro
+		int retro_dis_thres;
+		unsigned short retro_low_range_thres;
+		unsigned short retro_high_range_thres;
+		unsigned char retro_min_gray_num;
+		unsigned char retro_del_gray_thres;
+		unsigned char retro_del_ratio_gray_low_thres;
+		unsigned char retro_del_ratio_gray_high_thres;
+		unsigned char retro_min_gray;
+
+		// for adhesion
+		int adhesion_angle_hor_min;
+		int adhesion_angle_hor_max;
+		int adhesion_angle_ver_min;
+		int adhesion_angle_ver_max;
+		float adhesion_angle_hor_res;
+		float adhesion_angle_ver_res;
+		float adhesion_diff_thres;
+		float adhesion_dis_limit;
+		float adhesion_min_diff;
+
+		unsigned char preserved[51];
+
+	}DeviceAlgoParam;
+
     typedef struct DeviceConfigurationInfo
     {
         DeviceType device;
@@ -146,6 +218,7 @@ namespace zvision
         FirmwareVersion version;
         FirmwareVersion backup_version;
 
+		std::string config_mac;
         std::string device_mac;
         std::string device_ip;
         std::string subnet_mask;
@@ -165,6 +238,18 @@ namespace zvision
 
         int retro_param_1_ref_min; // 0-255
         int retro_param_2_point_percent; // 0-100
+
+		StateMode dhcp_enable;
+		std::string gateway_addr;
+		StateMode delete_point_enable;
+		StateMode adhesion_enable;
+		unsigned char retro_gray_low_threshold;
+		unsigned char retro_gray_high_threshold;
+		// factory mac
+		std::string factory_mac;
+
+		// device algo param
+		DeviceAlgoParam algo_param;
 
     } DeviceConfigurationInfo;
 
@@ -359,6 +444,13 @@ namespace zvision
     * \return string.
     */
     std::string get_cal_send_mode_string(CalSendMode mode);
+
+	/** \brief state mode to string
+	* \param[in] mode    the StateMode
+	* \param[in] onf     string select
+	* \return string.
+	*/
+	std::string get_state_mode_string(StateMode mode, bool onf = false);
 
     /** \brief downsample mode to string
     * \param[in] mode    the DownsampleMode

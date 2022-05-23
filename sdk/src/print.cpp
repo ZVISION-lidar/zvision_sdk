@@ -23,6 +23,9 @@
 
 #include "print.h"
 
+#include <string>
+#include <time.h>
+#include <chrono>
 #if defined _WIN32
 # include <windows.h>
 
@@ -84,6 +87,16 @@ void zvision::log::print(LogLevel level, const char *format, ...)
     default:
         break;
     }
+
+	// add timestamp  ->
+	std::chrono::time_point<std::chrono::system_clock, std::chrono::milliseconds> ptime = \
+		std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
+	time_t timestamp_ms = ptime.time_since_epoch().count();
+
+	std::string tstmp = std::string("timestamp(ms):") + std::to_string(timestamp_ms)+"\n";
+	printf("%s", tstmp.data());
+	// <-
+
 
     va_list ap;
 

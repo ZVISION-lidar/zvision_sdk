@@ -42,7 +42,7 @@ namespace zvision
 	{
 	public:
 
-        typedef std::function<void(int)> ProgressCallback;
+        typedef std::function<void(int,std::string)> ProgressCallback;
 
         /** \brief zvision LidarTools constructor.
           * \param[in] lidar_ip        lidar's ip address
@@ -92,6 +92,16 @@ namespace zvision
         */
         static void ComputeCalibrationSinCos(CalibrationData& cal, CalibrationDataSinCosTable& cal_cos_sin_lut);
 
+		/** \brief Get lidar's dhcp network address.
+		* \param[out] addrs            return the device's ip|mask|gateway|dstIp address
+		*/
+		int QueryDeviceHdcpNetAddr(std::string& addrs);
+
+		/** \brief Get lidar's Factory Mac.
+		* \param[out] mac            return the device's factory mac address
+		*/
+		int QueryDeviceFactoryMac(std::string& mac);
+
         /** \brief Get lidar's sn code.
           * \param[out] sn            return the device's sn code
           */
@@ -112,6 +122,11 @@ namespace zvision
           * \param[out] info          return configuration info
           */
         int QueryDeviceConfigurationInfo(DeviceConfigurationInfo& info);
+
+		/** \brief Get device algorithm parameters from lidar.
+		* \param[out] info          return algorithm parameters
+		*/
+		int QueryDeviceAlgoParam(DeviceAlgoParam& param);
 
         /** \brief Get calibration data from lidar.
           * \param[out] cal           return device's calibration data
@@ -169,6 +184,12 @@ namespace zvision
           */
 		int SetDeviceTimestampType(TimestampType tp);
 
+		/** \brief Set lidar algorithm switch.
+		* \param[in] tp              algorithm type.
+		* \param[in] en              true for enable, false for disable.
+		*/
+		int SetDeviceAlgorithmEnable(AlgoType tp,bool en);
+
         /** \brief Set lidar retro mode.
           * \param[in] en              true for enable, false for disable
           */
@@ -183,6 +204,34 @@ namespace zvision
         * \param[in] en                point percentage
         */
         int SetDeviceRetroParam2PointPercentage(int percentage);
+
+		/** \brief Set lidar Adhesion Parameters
+		* \param[in] tp                Parameter type
+		* \param[in] val               int value
+		*/
+		int SetDeviceAdhesionParam(AdhesionParam tp, int val);
+
+		/** \brief Set lidar Adhesion Parameters
+		* \param[in] tp                Parameter type
+		* \param[in] val               float value
+		*/
+		int SetDeviceAdhesionParam(AdhesionParam tp, float val);
+
+		/** \brief Set lidar Retro Parameters
+		* \param[in] tp                Parameter type
+		* \param[in] val               int value
+		*/
+		int SetDeviceRetroParam(RetroParam tp, int val);
+		/** \brief Set lidar Retro Parameters
+		* \param[in] tp                Parameter type
+		* \param[in] val               unsigned char value
+		*/
+		int SetDeviceRetroParam(RetroParam tp, unsigned short val);
+		/** \brief Set lidar Retro Parameters
+		* \param[in] tp                Parameter type
+		* \param[in] val               int value
+		*/
+		int SetDeviceRetroParam(RetroParam tp, unsigned char val);
 
         /** \brief Firmware update.
           * \param[in] filename        firmware filename
@@ -234,7 +283,7 @@ namespace zvision
         * \param[in] fire_en_filename  point fire enable config filename
         * \return 0 for ok, others for failure.
         */
-        int SetDevicePointFireEnConfiguration(std::string fire_en_filename);
+        int SetDevicePointFireEnConfiguration(std::string fire_en_filename, DeviceType devType = DeviceType::LidarUnknown);
 
         /** \brief Backup firmware update.
         * \param[in] filename        backup firmware filename
@@ -263,6 +312,24 @@ namespace zvision
         * \return 0 for ok, others for failure.
         */
         int SetDeviceDownsampleMode(DownsampleMode mode);
+
+		/** \brief Set lidar's dhcp mode.
+		* \param[in] mode            StateMode
+		* \return 0 for ok, others for failure.
+		*/
+		int SetDeviceDHCPMode(StateMode mode);
+
+		/** \brief Set lidar's gateway addr.
+		* \param[in] addr            gateway addr
+		* \return 0 for ok, others for failure.
+		*/
+		int SetDeviceGatewayAddr(std::string addr);
+
+		/** \brief Set lidar's Factory Mac.
+		* \param[in] mac            Factory Mac
+		* \return 0 for ok, others for failure.
+		*/
+		int SetDeviceFactoryMac(std::string& mac);
 
 	protected:
         
