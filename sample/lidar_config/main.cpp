@@ -686,6 +686,19 @@ int sample_reboot_lidar_multi(std::vector<std::string> lidars_ip) {
 	return 0;
 }
 
+//Sample code 35 : Set lidar's calibration file by tcp connection.
+int sample_config_lidar_calibration(std::string lidar_ip, std::string filename) {
+	int ret = 0;
+	zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
+	if (ret = config.SetDeviceCalibrationData(filename))
+		LOG_ERROR("Set device [%s]`s calibration data failed, ret = %d.\n", lidar_ip.c_str(), ret);
+	else
+	{
+		LOG_INFO("Set device [%s]`s calibration data ok.\n", lidar_ip.c_str());
+	}
+	return ret;
+}
+
 int main(int argc, char** argv)
 {
     if (argc <= 2)
@@ -760,12 +773,12 @@ int main(int argc, char** argv)
             << "Demo:   -scan_device 5\n\n"
 
             << "Sample 15 : retro param 1(min ref[0,100])\n"
-            << "Format: -retro_p1 value\n"
-            << "Demo:   -retro_p1 5\n\n"
+            << "Format: -retro_p1 lidar_ip value\n"
+            << "Demo:   -retro_p1 192.168.10.108 5\n\n"
 
             << "Sample 16 : retro param 2(point percentage[0,100])\n"
-            << "Format: -retro_p2 value\n"
-            << "Demo:   -retro_p2 5\n\n"
+            << "Format: -retro_p2 lidar_ip value\n"
+            << "Demo:   -retro_p2 192.168.10.108 5\n\n"
 
             << "Sample 17 : phase offset enable(0 for disable, 1 for enable)\n"
             << "Format: -phase_offset_enable lidar_ip mode\n"
@@ -774,16 +787,16 @@ int main(int argc, char** argv)
 			<< "Demo:   -phase_offset_enable_multi 192.168.10.108 192.168.10.109 0\n\n"
 
             << "Sample 18 : phase offset value\n"
-            << "Format: -phase_offset_value value(x5ns)\n"
-            << "Demo:   -phase_offset_value 0\n\n"
+            << "Format: -phase_offset_value lidar_ip value(x5ns)\n"
+            << "Demo:   -phase_offset_value 192.168.10.108 0\n\n"
 
             << "Sample 19 : config ptp configuration\n"
-            << "Format: -set_ptp_cfg filename\n"
-            << "Demo:   -set_ptp_cfg test.txt\n\n"
+            << "Format: -set_ptp_cfg lidar_ip filename\n"
+            << "Demo:   -set_ptp_cfg 192.168.10.108 test.txt\n\n"
 
             << "Sample 20 : get ptp configuration to file\n"
-            << "Format: -get_ptp_cfg filename\n"
-            << "Demo:   -get_ptp_cfg test.txt\n\n"
+            << "Format: -get_ptp_cfg lidar_ip filename\n"
+            << "Demo:   -get_ptp_cfg 192.168.10.108 test.txt\n\n"
 
 			<< "Sample 21 : calibration file broadcast enabale\n"
 			<< "Format: -cali_file_broadcast_enable lidar_ip enable(0 for disable, 1 for enable) \n"
@@ -833,6 +846,10 @@ int main(int argc, char** argv)
 			<< "Format: -config_adhesion_multi lidar1_ip lidar2_ip(MaxLidarCount:4) mode\n"
 			<< "Demo:   -config_adhesion 192.168.10.108 0\n"
 			<< "Demo:   -config_adhesion_multi 192.168.10.108 192.168.10.109 0\n\n"
+
+			<< "Sample 28 : set calibration data from file\n"
+			<< "Format: -set_cali lidar_ip savefilename\n"
+			<< "Demo:   -set_cali 192.168.10.108 device.cal\n\n"
 
 			<< "############################# END  GUIDE ################################\n\n"
             ;
@@ -1000,6 +1017,10 @@ int main(int argc, char** argv)
 	else if (0 == std::string(argv[1]).compare("-config_adhesion_multi"))
 		//Sample code 34 : Config lidars` adhesion mode
 		sample_config_lidar_adhesion_multi(lidars_ip, std::atoi(argv[argc-1]));
+
+	else if (0 == std::string(argv[1]).compare("-set_cali") && argc == 4)
+		//Sample code 28 : Set lidar's calibration file by tcp connection.
+		sample_config_lidar_calibration(lidar_ip, std::string(argv[3]));
 
     else
     {

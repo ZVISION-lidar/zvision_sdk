@@ -150,6 +150,11 @@ namespace zvision
           */
         int GetDeviceCalibrationDataToFile(std::string filename);
 
+		/** \brief Set calibration data to lidar .
+		* \param[in] filename        calibration data file path
+		*/
+		int SetDeviceCalibrationData(std::string filename);
+
         /** \brief Set lidar static ip address.
           * \param[in] ip             ip to configure
           */

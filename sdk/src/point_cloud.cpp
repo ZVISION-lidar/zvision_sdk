@@ -265,11 +265,25 @@ namespace zvision
             LOG_ERROR("Packet loss, last seq [%3d], current seq[%3d]\n", this->last_seq_, seq);
         }
 
+#if 0	// special for baidu
+		if (((seq < this->last_seq_) && (this->last_seq_ != 159)) || (159 == seq))
+		{
+			// we should process current packet first
+			int ret = PointCloudPacket::ProcessPacket(packet, *(this->cal_lut_), *points_);
+			if (0 != ret)
+				LOG_WARN("ProcessPacket error, %d.\n", ret);
+
+			this->ProcessOneSweep();
+			this->last_seq_ = seq;
+			return;
+		}
+#else
         // we get last packet by seq, but 10Hz has a 50ms delay issues
         if (seq < this->last_seq_)/*we have get one total frame*/
         {
             this->ProcessOneSweep();
         }
+#endif
 
         int ret = PointCloudPacket::ProcessPacket(packet, *(this->cal_lut_), *points_);
         if(0 != ret)
