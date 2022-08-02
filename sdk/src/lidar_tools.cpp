@@ -848,13 +848,12 @@ namespace zvision
 		}
 
 		std::string addr = recv.substr(2,6);
-		// check valid (000000ffffff ~ ffffffffffff is invalid)
-		if (addr[0]!=0x00 || addr[1] != 0x00 || addr[2] != 0x00) {
+		if (addr[0]!=(char)0xF8 || addr[1] != (char)0xA9 || addr[2] != (char)0x1F) {
 			return -1;
 		}
-		char cmac[128] = "";
-		addr = addr.substr(3, 3);
-		sprintf_s(cmac, "%02X%02X%02X", addr[0], addr[1], addr[2]);
+		char cmac[256] = "";
+		sprintf_s(cmac, "%02X%02X%02X%02X%02X%02X", \
+        (uint8_t)addr[0],  (uint8_t)addr[1],  (uint8_t)addr[2], (uint8_t)addr[3],  (uint8_t)addr[4],  (uint8_t)addr[5]);
 		mac = std::string(cmac);
 		return 0;
 	}
@@ -1547,6 +1546,98 @@ namespace zvision
             return LidarTools::ExportCalibrationData(cal, filename);
 
     }
+
+int LidarTools::SetDeviceCalibrationData(std::string filename) {
+
+		// 1. read cali data from file
+		CalibrationData cal;
+		int ret = 0;
+		if (0 != (ret = LidarTools::ReadCalibrationData(filename, cal)))
+            return ret;
+
+		const int cali_pkt_len = 1024;
+		// only support for ml30sa1
+		if (cal.scan_mode != ScanML30SA1_160)
+			return -1;
+
+		// 2. generate calibration buffer
+        size_t cali_data_len = cal.data.size();
+        if(cali_data_len != 102400)
+            return -1;
+
+		std::vector<std::string> cali_pkts;
+		std::string pkt(cali_pkt_len, '0');
+		for (int i = 0; i < cali_data_len; i++) {
+			// float to str
+            float ang = cal.data[i];
+			char* pdata = (char*)(&ang);
+			int* paddr = (int*)pdata;
+			*paddr = ntohl(*paddr);
+			// update packet
+			for (int j = 0; j < 4; j++)
+				pkt.at(i * 4 % cali_pkt_len + j) = *(pdata + j);
+
+			// generate packet
+			if ((i + 1) % 256 == 0) {
+				cali_pkts.push_back(pkt);
+				pkt = std::string(cali_pkt_len, '0');
+			}
+		}
+
+		// 3. send cmd
+        if (!CheckConnection())
+            return TcpConnTimeout;
+
+		const int cmd_len = 4;
+		char cal_cmd[cmd_len] = { (char)0xAB, (char)0x04, (char)0x00, (char)0x00 };
+		std::string cmd(cal_cmd, cmd_len);
+		if (client_->SyncSend(cmd, cmd_len))
+		{
+			DisConnect();
+			return -4;
+		}
+		// recv ret
+		std::string recv(cmd_len, 'x');
+		if (client_->SyncRecv(recv, cmd_len))
+		{
+			DisConnect();
+			return -5;
+		}
+		// check ret
+		if (!CheckDeviceRet(recv))
+		{
+			DisConnect();
+			return -6;
+		}
+
+		// 4. send cali data to lidar
+		for (int i = 0; i < cali_pkts.size();i++) {
+			ret = client_->SyncSend(cali_pkts[i], cali_pkts[i].size());
+			if (ret)
+			{
+				LOG_ERROR("Send calibration data error, ret = %d.\n", ret);
+				DisConnect();
+				return TcpSendTimeout;
+			}
+			std::this_thread::sleep_for(std::chrono::microseconds(110));
+		}
+
+		// 5. check
+		recv = std::string(cmd_len, 'x');
+		if (client_->SyncRecv(recv, cmd_len))
+		{
+			DisConnect();
+			return -1;
+		}
+		// check ret
+		if (!CheckDeviceRet(recv))
+		{
+			DisConnect();
+			return -1;
+		}
+
+		return 0;
+	}
 
     int LidarTools::SetDeviceStaticIpAddress(std::string ip)
     {

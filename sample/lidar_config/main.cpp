@@ -686,6 +686,19 @@ int sample_reboot_lidar_multi(std::vector<std::string> lidars_ip) {
 	return 0;
 }
 
+//Sample code 35 : Set lidar's calibration file by tcp connection.
+int sample_config_lidar_calibration(std::string lidar_ip, std::string filename) {
+	int ret = 0;
+	zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
+	if (ret = config.SetDeviceCalibrationData(filename))
+		LOG_ERROR("Set device [%s]`s calibration data failed, ret = %d.\n", lidar_ip.c_str(), ret);
+	else
+	{
+		LOG_INFO("Set device [%s]`s calibration data ok.\n", lidar_ip.c_str());
+	}
+	return ret;
+}
+
 int main(int argc, char** argv)
 {
     if (argc <= 2)
@@ -833,6 +846,10 @@ int main(int argc, char** argv)
 			<< "Format: -config_adhesion_multi lidar1_ip lidar2_ip(MaxLidarCount:4) mode\n"
 			<< "Demo:   -config_adhesion 192.168.10.108 0\n"
 			<< "Demo:   -config_adhesion_multi 192.168.10.108 192.168.10.109 0\n\n"
+
+			<< "Sample 28 : set calibration data from file\n"
+			<< "Format: -set_cali lidar_ip savefilename\n"
+			<< "Demo:   -set_cali 192.168.10.108 device.cal\n\n"
 
 			<< "############################# END  GUIDE ################################\n\n"
             ;
@@ -1000,6 +1017,10 @@ int main(int argc, char** argv)
 	else if (0 == std::string(argv[1]).compare("-config_adhesion_multi"))
 		//Sample code 34 : Config lidars` adhesion mode
 		sample_config_lidar_adhesion_multi(lidars_ip, std::atoi(argv[argc-1]));
+
+		else if(0 == std::string(argv[1]).compare("-set_cali") && argc == 4)
+		//Sample code 35 : Set lidar's calibration file by tcp connection.
+		sample_config_lidar_calibration(lidar_ip, std::string(argv[3]));
 
     else
     {
