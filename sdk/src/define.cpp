@@ -28,7 +28,7 @@ namespace zvision
 {
 
     std::string get_sdk_version_string() {
-        std::string ver = "v0.1.11";
+        std::string ver = "v0.1.12";
         return ver;
     }
 
