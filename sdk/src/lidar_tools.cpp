@@ -25,6 +25,10 @@
 #include "packet.h"
 #include "lidar_tools.h"
 #include "print.h"
+#include "json_ml30s_plus.h"
+
+#include <rapidjson/document.h>
+
 #include <set>
 #include <cmath>
 #include <math.h>
@@ -60,13 +64,12 @@ namespace zvision
         UdpReceiver recv(heart_beat_port, 100);
         std::string data;
         const int heart_beat_len = 48;
-        const int heart_beat_len_v1 = 137;
-		const int heart_beat_len_v2 = 138;
 
         int len = 0;
         uint32_t ip = 0;
         int ret = 0;
         std::string packet_header = "ZVSHEARTBEAT";
+		std::string packet_header_30splus = "zvision";
         std::vector<std::string> lidars;
         device_list.clear();
 
@@ -79,10 +82,12 @@ namespace zvision
                 break;
             }
 
-            ///if (((heart_beat_len == len) || (heart_beat_len_v1 == len) || (heart_beat_len_v2 == len))
 			if ((len >= heart_beat_len) \
-				&& (0 == packet_header.compare(0, packet_header.size(), data.substr(0, packet_header.size())))) // heart beat packet
-            {
+				&& ((0 == packet_header.compare(0, packet_header.size(), data.substr(0, packet_header.size()))) || \
+				(0 == packet_header_30splus.compare(0, packet_header_30splus.size(), data.substr(0, packet_header_30splus.size())))\
+					)\
+				)
+			{
                 std::string ip_string = IpToString(ip);
                 lidars.push_back(ip_string);
             }
@@ -276,6 +281,53 @@ namespace zvision
                     cal.description += "\n";
                 }
             }
+			else if ("ML30SPlus_160" == mode_str || "ML30SPlus_160_1_2" == mode_str || "ML30SPlus_160_1_4" == mode_str ) {
+				// for ml30sa1Plus
+				int cali_len = 6400;
+				cal.device_type = DeviceType::LidarMl30SA1Plus;
+				cal.scan_mode = ScanMode::ScanML30SA1Plus_160;
+				cal.description = "";
+				if ("ML30SPlus_160_1_2" == mode_str) {
+					cali_len = 3200;
+					cal.scan_mode = ScanMode::ScanML30SA1Plus_160_1_2;
+				}
+				else if ("ML30SPlus_160_1_4" == mode_str) {
+					cali_len = 1600;
+					cal.scan_mode = ScanMode::ScanML30SA1Plus_160_1_4;
+				}
+
+				if ((lines.size() - curr) < cali_len)
+					return InvalidContent;
+
+				cal.data.resize(cali_len * 8 * 2);
+				const int column = 17;
+				const int lpos = cal.data.size() / 2;
+				for (int i = 0; i < cali_len; i++)
+				{
+					std::vector<std::string>& datas = lines[i+curr];
+					if (datas.size() != column)
+					{
+						ret = InvalidContent;
+						break;
+					}
+
+					// for line with fov 0,1,2,3,4,5,6,7
+					for (int j = 1; j < column; j++)
+					{
+						if (j <= column / 2) // for H view
+							cal.data[i * 8 + j - 1] = static_cast<float>(std::atof(datas[j].c_str()));
+						else // for L view
+							cal.data[i * 8 + j - 1 - column / 2 + lpos] = static_cast<float>(std::atof(datas[j].c_str()));
+					}
+				}
+
+				for (int i = 0; i < curr; i++)
+				{
+					for (int j = 0; j < lines[i].size(); j++)
+						cal.description += lines[i][j];
+					cal.description += "\n";
+				}
+			}
             else
             {
                 return InvalidContent;
@@ -506,6 +558,49 @@ namespace zvision
                 return OpenFileError;
             }
         }
+        else if (ScanML30SA1Plus_160 == cal.scan_mode || ScanML30SA1Plus_160_1_2 == cal.scan_mode || ScanML30SA1Plus_160_1_4 == cal.scan_mode) {
+            std::fstream outfile;
+            outfile.open(filename, std::ios::out);
+            const int data_in_line = 16;
+            if (outfile.is_open())
+            {
+                outfile << "# file version:ML30SPlus.cal_v0.1";
+                outfile << "VERSION 0.1\n";
+				if (ScanML30SA1Plus_160 == cal.scan_mode)
+					outfile << "Mode ML30SPlus_160\n";
+				else if(ScanML30SA1Plus_160_1_2 == cal.scan_mode)
+					outfile << "Mode ML30SPlus_160_1_2\n";
+				else
+					outfile << "Mode ML30SPlus_160_1_4\n";
+
+                outfile.setf(std::ios::fixed, std::ios::floatfield);
+                outfile.precision(3);
+                int lpos = cal.data.size() / 2;
+                for (unsigned int i = 0; i < cal.data.size(); i++)
+                {
+                    if (0 == (i % data_in_line))
+                    {
+                        if (i > 0)
+                            outfile << "\n";
+                        outfile << i / data_in_line + 1;
+                    }
+                    int idx = i % 16;
+                    int grp = i / 16;
+                    if (idx < 8) {
+                        outfile << " " << cal.data[idx + grp * 8];
+                    }
+                    else {
+                        outfile << " " << cal.data[(idx - 8) + grp * 8 + lpos];
+                    }
+                }
+                outfile.close();
+                return 0;
+            }
+            else
+            {
+                return OpenFileError;
+            }
+        }
         else if (ScanMode::ScanML30B1_100 == cal.scan_mode)
         {
             std::fstream outfile;
@@ -678,6 +773,27 @@ namespace zvision
                 point_cal.ele = ele;
             }
         }
+		else if(ScanMode::ScanML30SA1Plus_160 == cal.scan_mode) {
+			const int start = 4;
+			int fov_index[start] = { 0, 1, 2, 3 };
+			for (unsigned int i = 0; i < cal.data.size() / 2; ++i)
+			{
+				int start_number = i % start;
+				int group_number = i / start;
+				int point_numer = group_number * start + fov_index[start_number];
+				float azi = static_cast<float>(cal.data[point_numer * 2] / 180.0 * 3.1416);
+				float ele = static_cast<float>(cal.data[point_numer * 2 + 1] / 180.0 * 3.1416);
+
+				CalibrationDataSinCos& point_cal = cal_cos_sin_lut.data[i];
+				point_cal.cos_ele = std::cos(ele);
+				point_cal.sin_ele = std::sin(ele);
+				point_cal.cos_azi = std::cos(azi);
+				point_cal.sin_azi = std::sin(azi);
+				point_cal.azi = azi;
+				point_cal.ele = ele;
+			}
+
+		}
         else if ((ScanMode::ScanMLX_160 == cal.scan_mode) || (ScanMode::ScanMLX_190 == cal.scan_mode) || (ScanMode::ScanMLXS_180 == cal.scan_mode))
         {
             const int start = 3;
@@ -849,13 +965,11 @@ namespace zvision
 		}
 
 		std::string addr = recv.substr(2,6);
-		// check valid (000000ffffff ~ ffffffffffff is invalid)
-		if (addr[0]!=0x00 || addr[1] != 0x00 || addr[2] != 0x00) {
+		if (addr[0]!= (char)0xF8 || addr[1] != (char)0xA9 || addr[2] != (char)0x1F) {
 			return -1;
 		}
-		char cmac[128] = "";
-		addr = addr.substr(3, 3);
-		sprintf_s(cmac, "%02X%02X%02X", addr[0], addr[1], addr[2]);
+		char cmac[256] = "";
+		sprintf_s(cmac, "%02X%02X%02X%02X%02X%02X", (uint8_t)addr[0], (uint8_t)addr[1], (uint8_t)addr[2], (uint8_t)addr[3], (uint8_t)addr[4], (uint8_t)addr[5]);
 		mac = std::string(cmac);
 		return 0;
 	}
@@ -1354,7 +1468,7 @@ namespace zvision
         return 0;
     }
 
-    int LidarTools::GetDeviceCalibrationPackets(CalibrationPackets& pkts)
+    int LidarTools::GetDeviceCalibrationPackets(CalibrationPackets& pkts, std::string cmd)
     {
         const int ppf = 256000; // points per frame, 256000 reserved
         const int ppk = 128; // points per cal udp packet
@@ -1363,7 +1477,12 @@ namespace zvision
         std::unique_ptr<unsigned char> packet_data(new unsigned char[packet_buffer_size]);
         const int send_len = 4;
         char cal_cmd[send_len] = { (char)0xBA, (char)0x07, (char)0x00, (char)0x00 };
-        std::string cmd(cal_cmd, send_len);
+        std::string str_cmd(cal_cmd, send_len);
+
+		// use user input tcp cmd
+		if (cmd.size() == 4)
+			str_cmd = cmd;
+
         pkts.clear();
 
         const int recv_len = 4;
@@ -1372,7 +1491,7 @@ namespace zvision
         if (!CheckConnection())
             return TcpConnTimeout;
 
-        if (client_->SyncSend(cmd, send_len))
+        if (client_->SyncSend(str_cmd, send_len))
         {
             DisConnect();
             return TcpSendTimeout;
@@ -1408,15 +1527,15 @@ namespace zvision
         {
             total_packet = 235;// 10000 * 3 * 2 * 4 / 1024
         }
-        else if (ScanMode::ScanML30SA1_160 == sm)
+        else if (ScanMode::ScanML30SA1_160 == sm || ScanMode::ScanML30SA1Plus_160 == sm)
         {
             total_packet = 400;// 6400 * 8 * 2 * 4 / 1024
         }
-        else if (ScanMode::ScanML30SA1_160_1_2 == sm)
+        else if (ScanMode::ScanML30SA1_160_1_2 == sm || ScanMode::ScanML30SA1Plus_160_1_2 == sm)
         {
             total_packet = 200;// 6400 * 8 * 2 * 4 / 1024 / 2
         }
-        else if (ScanMode::ScanML30SA1_160_1_4 == sm)
+        else if (ScanMode::ScanML30SA1_160_1_4 == sm || ScanMode::ScanML30SA1Plus_160_1_4 == sm)
         {
             total_packet = 100;// 6400 * 8 * 2 * 4 / 1024 / 4
         }
@@ -1504,15 +1623,15 @@ namespace zvision
         {
             cal.data.resize(10000 * 3 * 2); //10000 for per sub fov, 3 fovs, 2(azimuth and elevation)
         }
-        else if (ScanMode::ScanML30SA1_160 == sm)
+        else if (ScanMode::ScanML30SA1_160 == sm || ScanML30SA1Plus_160 == sm)
         {
             cal.data.resize(6400 * 8 * 2);
         }
-        else if (ScanMode::ScanML30SA1_160_1_2 == sm)
+        else if (ScanMode::ScanML30SA1_160_1_2 == sm || ScanML30SA1Plus_160_1_2 == sm)
         {
             cal.data.resize(6400 * 8 * 2 / 2);
         }
-        else if (ScanMode::ScanML30SA1_160_1_4 == sm)
+        else if (ScanMode::ScanML30SA1_160_1_4 == sm || ScanML30SA1Plus_160_1_4 == sm)
         {
             cal.data.resize(6400 * 8 * 2 / 4);
         }
@@ -1532,6 +1651,26 @@ namespace zvision
         {
 
         }
+
+		// now we reorder the cali data   0~15... -> 0~7... + 8~15...
+		if (ScanML30SA1Plus_160 == sm || ScanML30SA1Plus_160_1_2 == sm || ScanML30SA1Plus_160_1_4 == sm) {
+			std::vector<float> dst;
+			dst.resize(cal.data.size(),.0f);
+			int id_h = 0;
+			int id_l = cal.data.size() / 2;
+			for (int i = 0; i < cal.data.size(); i++) {
+				if (i / 8 % 2 == 0) {
+					dst.at(id_h) = cal.data[i];
+					id_h++;
+				}
+				else {
+					dst.at(id_l) = cal.data[i];
+					id_l++;
+				}
+			}
+			cal.data = dst;
+		}
+
 
         cal.scan_mode = sm;
         return 0;
@@ -1557,22 +1696,18 @@ namespace zvision
 		if (0 != (ret = LidarTools::ReadCalibrationData(filename, cal)))
 			return ret;
 
-		const int cali_pkt_len = 1024;
 		// only support for ml30sa1
-		if (cal.scan_mode != ScanML30SA1_160)
+		if (cal.scan_mode != ScanML30SA1_160 && cal.scan_mode != ScanML30SA1Plus_160)
 			return -1;
 
-		// 2. generate calibration buffer
+		const int cali_pkt_len = 1024;
 		size_t cali_data_len = cal.data.size();
-		if (cali_data_len != 102400)
-			return -1;
-
+		// 2. generate calibration buffer
 		std::vector<std::string> cali_pkts;
 		std::string pkt(cali_pkt_len, '0');
 		for (int i = 0; i < cali_data_len; i++) {
 			// float to str
-			float ang = cal.data[i];
-			char* pdata = (char*)(&ang);
+			char* pdata = (char*)(&cal.data[i]);
 			int* paddr = (int*)pdata;
 			*paddr = ntohl(*paddr);
 			// update packet
@@ -1586,34 +1721,34 @@ namespace zvision
 			}
 		}
 
-		// 3. send cmd
-		if (!CheckConnection())
-			return TcpConnTimeout;
+        if (!CheckConnection())
+            return TcpConnTimeout;
 
+		// 3. send cmd
 		const int cmd_len = 4;
 		char cal_cmd[cmd_len] = { (char)0xAB, (char)0x04, (char)0x00, (char)0x00 };
 		std::string cmd(cal_cmd, cmd_len);
 		if (client_->SyncSend(cmd, cmd_len))
 		{
 			DisConnect();
-			return -4;
+			return -1;
 		}
 		// recv ret
 		std::string recv(cmd_len, 'x');
 		if (client_->SyncRecv(recv, cmd_len))
 		{
 			DisConnect();
-			return -5;
+			return -1;
 		}
 		// check ret
 		if (!CheckDeviceRet(recv))
 		{
 			DisConnect();
-			return -6;
+			return -1;
 		}
 
 		// 4. send cali data to lidar
-		for (int i = 0; i < cali_pkts.size(); i++) {
+		for (int i = 0; i < cali_pkts.size();i++) {
 			ret = client_->SyncSend(cali_pkts[i], cali_pkts[i].size());
 			if (ret)
 			{
@@ -2747,6 +2882,124 @@ namespace zvision
 
     }
 
+	int LidarTools::SetDeviceConfigFile(std::string cfg_filename) {
+
+		// read file data
+		std::string data;
+		std::ifstream inFile(cfg_filename, std::ios::in | std::ios::binary);
+		if (!inFile)
+			return ReturnCode::OpenFileError;
+
+		std::stringstream ss;
+		ss << inFile.rdbuf();
+		data = ss.str();
+		inFile.close();
+
+		int length = data.size();
+		std::string content = data;
+		if (!CheckConnection())
+			return -1;
+
+		// --- send data to device
+		const int send_len = 7;
+		char set_cmd[send_len] = { (char)0xBA, (char)0x21, (char)0x01, (char)0x00, (char)0x00, (char)0x00, (char)0x00 };
+
+		uint32_t file_len = length;
+		HostToNetwork((const unsigned char*)&file_len, set_cmd + 3);
+
+		std::string cmd(set_cmd, send_len);
+
+		const int recv_len = 4;
+		std::string recv(recv_len, 'x');
+
+		if (client_->SyncSend(cmd, send_len))//send cmd
+		{
+			DisConnect();
+			return -1;
+		}
+
+		if (client_->SyncRecv(recv, recv_len))//recv ret
+		{
+			DisConnect();
+			return -1;
+		}
+
+		if (!CheckDeviceRet(recv))//check ret
+		{
+			DisConnect();
+			return -1;
+		}
+
+		// send file to device
+		if (client_->SyncSend(content, file_len))
+		{
+			DisConnect();
+			return -1;
+		}
+
+		// final ack
+		if (client_->SyncRecv(recv, recv_len))//recv ret
+		{
+			DisConnect();
+			return -1;
+		}
+
+		if (!CheckDeviceRet(recv))//check ret
+		{
+			DisConnect();
+			return -1;
+		}
+
+		return ReturnCode::Success;
+		return 0;
+	}
+
+    int LidarTools::QueryDeviceConfigFileVersion(std::string& ver) {
+        if (!CheckConnection())
+            return -1;
+
+        /*Read version info*/
+        const int send_len = 4;
+        char bv_read_cmd[send_len] = { (char)0xBA, (char)0x02, (char)0x03, (char)0x00 };
+        std::string bv_cmd(bv_read_cmd, 4);
+
+        const int recv_len = 4;
+        std::string recv(recv_len, 'x');
+
+        if (client_->SyncSend(bv_cmd, send_len))//send cmd
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (client_->SyncRecv(recv, recv_len))//recv ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (!CheckDeviceRet(recv))//check ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        const int recv_ver_len = 3;
+        std::string recv_ver(recv_ver_len, 'x');
+        if (client_->SyncRecv(recv_ver, recv_ver_len))//recv version data
+        {
+            DisConnect();
+            return -1;
+        }
+
+        char cver[128] = "";
+        const uint8_t* pver = (uint8_t*)recv_ver.data();
+        sprintf_s(cver, "%u.%u.%u",*(pver + 0) , *(pver + 1), *(pver + 2));
+        ver = std::string(cver);
+
+        return 0;
+    }
+
     int LidarTools::GetDevicePtpConfiguration(std::string& ptp_cfg)
     {
         if (!CheckConnection())
@@ -3409,6 +3662,9 @@ namespace zvision
 		if (!AssembleFactoryMacAddress(mac, set_cmd + 2))
 			return InvalidParameter;
 
+        if (set_cmd[2] != (char)0xF8 || set_cmd[3] != (char)0xA9 || set_cmd[4] != (char)0x1F)
+            return InvalidParameter;
+
 		std::string cmd(set_cmd, send_len);
 
 		const int recv_len = 4;
@@ -3465,6 +3721,1019 @@ namespace zvision
         return (0x00 == ret[2]) && (0x00 == ret[3]);
     }
 
-   
+	/* for ml30s plus only */
+	int LidarTools::GetML30sPlusLogFile(std::string& log, bool isFull) {
+
+		const int recv_len = 4;
+		std::string recv(recv_len,'x');
+		// get log buffer length
+		if (client_->SyncRecv(recv, recv_len))
+		{
+			DisConnect();
+			return -1;
+		}
+		uint32_t log_buffer_len = 0;
+		NetworkToHost((const unsigned char*)recv.c_str(), (char *)&log_buffer_len);
+
+		// get log buffer
+		std::string log_buffer(log_buffer_len,'x');
+		if (client_->SyncRecv(log_buffer, log_buffer_len))
+		{
+			DisConnect();
+			return -1;
+		}
+
+		if (isFull) {
+			log = log_buffer;
+			return 0;
+		}
+
+		// assemble the buffer to string
+		unsigned char file_count = reinterpret_cast<unsigned char&>(log_buffer[0]);
+
+		std::vector<std::string> file_contents;
+		uint32_t position = 1;
+		for (int i = 0; i < file_count; ++i)
+		{
+			uint32_t file_len = 0;
+			NetworkToHost((const unsigned char*)(&log_buffer[position]), (char *)&file_len);
+			LOG_INFO("FILE %d len %u.\n", i, file_len);
+			// copy to file list
+			std::string content(log_buffer, position + 4, file_len);
+			file_contents.push_back(content);
+			position += (file_len + 4);
+		}
+
+		// reorder the log file
+		log = "";
+		for (int i = file_count - 1; i >= 0; i--)
+			log += file_contents[i];
+
+		recv.resize(4, 'x');
+		if (client_->SyncRecv(recv, recv_len))
+		{
+			DisConnect();
+			return -1;
+		}
+		//check ret
+		if (!CheckDeviceRet(recv))
+		{
+			DisConnect();
+			return -1;
+		}
+		return 0;
+	}
+
+	int LidarTools::GenerateML30SPlusDeviceCmdString(EML30SPlusCmd type, std::string& buf, zvision::JsonConfigFileParam* param) {
+
+		if (!param) return -1;
+		param->temp_recv_data_len = 0;
+
+		std::string str_cmd;
+		std::string str_value;
+		bool valid = true;
+		switch (type)
+		{
+		// set lidar config
+		case zvision::set_dhcp_switch: {
+			char cmd[3] = { (char)0xBA,(char)0x02,(char)0x07 };
+			str_cmd.append(cmd, 3);
+			GenerateStringFromValue(param->dhcp_switch, str_value);
+		}break;
+		case zvision::set_ip: {
+			char cmd[3] = { (char)0xBA,(char)0x02,(char)0x01 };
+			str_cmd.append(cmd, 3);
+            char ip[4] = {0};
+            if (!AssembleIpString(param->ip, ip))
+                return -1;
+            str_value = std::string(ip, 6);
+		}break;
+		case zvision::set_gateway: {
+			char cmd[3] = { (char)0xBA,(char)0x02,(char)0x02 };
+			str_cmd.append(cmd, 3);
+            char ip[4] = { 0 };
+            if (!AssembleIpString(param->gateway, ip))
+                return -1;
+            str_value = std::string(ip, 6);
+		}break;
+		case zvision::set_netmask: {
+			char cmd[3] = { (char)0xBA,(char)0x02,(char)0x03 };
+			str_cmd.append(cmd, 3);
+            char ip[4] = { 0 };
+            if (!AssembleIpString(param->netmask, ip))
+                return -1;
+            str_value = std::string(ip, 6);
+		}break;
+		case zvision::set_mac: {
+			char cmd[3] = { (char)0xBA,(char)0x02,(char)0x04 };
+			str_cmd.append(cmd, 3);
+            char mac[6] = { 0 };
+            if (!AssembleMacAddress(param->mac, mac))
+               return -1;
+            str_value = std::string(mac, 6);
+		}break;
+		case zvision::set_udp_dest_ip: {
+			char cmd[3] = { (char)0xBA,(char)0x02,(char)0x05 };
+			str_cmd.append(cmd, 3);
+            char ip[4] = { 0 };
+            if (!AssembleIpString(param->udp_dest_ip, ip))
+                return -1;
+            str_value = std::string(ip, 6);
+		}break;
+		case zvision::set_udp_dest_port: {
+			char cmd[3] = { (char)0xBA,(char)0x02,(char)0x06 };
+			str_cmd.append(cmd, 3);
+			GenerateStringFromValue(param->udp_dest_port, str_value);
+		}break;
+		case zvision::set_near_point_delete_switch: {
+			char cmd[3] = { (char)0xBA,(char)0x03,(char)0x01 };
+			str_cmd.append(cmd, 3);
+			GenerateStringFromValue(param->switch_near_point_delete, str_value);
+		}break;
+		case zvision::set_retro_switch: {
+			char cmd[3] = { (char)0xBA,(char)0x04,(char)0x01 };
+			str_cmd.append(cmd, 3);
+			GenerateStringFromValue(param->switch_retro, str_value);
+		}break;
+		case zvision::set_retro_target_gray_thre: {
+			char cmd[3] = { (char)0xBA,(char)0x04,(char)0x03 };
+			str_cmd.append(cmd, 3);
+			GenerateStringFromValue(param->target_gray_thre_retro, str_value);
+		}break;
+		case zvision::set_retro_target_point_num_thre: {
+			char cmd[3] = { (char)0xBA,(char)0x04,(char)0x02 };
+			str_cmd.append(cmd, 3);
+			GenerateStringFromValue(param->target_point_num_thre_retro, str_value);
+		}break;
+		case zvision::set_retro_critical_point_dis_thre: {
+			char cmd[3] = { (char)0xBA,(char)0x04,(char)0x04 };
+			str_cmd.append(cmd, 3);
+			GenerateStringFromValue(param->critical_point_dis_thre_retro, str_value);
+		}break;
+		case zvision::set_retro_del_point_dis_low_thre: {
+			char cmd[3] = { (char)0xBA,(char)0x04,(char)0x05 };
+			str_cmd.append(cmd, 3);
+			GenerateStringFromValue(param->del_point_dis_low_thre_retro, str_value);
+		}break;
+		case zvision::set_retro_del_point_dis_high_thre: {
+			char cmd[3] = { (char)0xBA,(char)0x04,(char)0x06 };
+			str_cmd.append(cmd, 3);
+			GenerateStringFromValue(param->del_point_dis_high_thre_retro, str_value);
+		}break;
+		case zvision::set_retro_del_point_gray_thre: {
+			char cmd[3] = { (char)0xBA,(char)0x04,(char)0x07 };
+			str_cmd.append(cmd, 3);
+			GenerateStringFromValue(param->del_point_gray_thre_retro, str_value);
+		}break;
+		case zvision::set_adhesion_switch: {
+			char cmd[3] = { (char)0xBA,(char)0x05,(char)0x01 };
+			str_cmd.append(cmd, 3);
+			GenerateStringFromValue(param->switch_adhesion, str_value);
+		}break;
+		case zvision::set_adhesion_angle_hor_min: {
+			char cmd[3] = { (char)0xBA,(char)0x05,(char)0x02 };
+			str_cmd.append(cmd, 3);
+			GenerateStringFromValue(param->angle_hor_min_adhesion, str_value);
+		}break;
+		case zvision::set_adhesion_angle_hor_max: {
+			char cmd[3] = { (char)0xBA,(char)0x05,(char)0x03 };
+			str_cmd.append(cmd, 3);
+			GenerateStringFromValue(param->angle_hor_max_adhesion, str_value);
+		}break;
+		case zvision::set_adhesion_angle_ver_min: {
+			char cmd[3] = { (char)0xBA,(char)0x05,(char)0x04 };
+			str_cmd.append(cmd, 3);
+			GenerateStringFromValue(param->angle_ver_min_adhesion, str_value);
+		}break;
+		case zvision::set_adhesion_angle_ver_max: {
+			char cmd[3] = { (char)0xBA,(char)0x05,(char)0x05 };
+			str_cmd.append(cmd, 3);
+			GenerateStringFromValue(param->angle_ver_max_adhesion, str_value);
+		}break;
+		case zvision::set_adhesion_angle_hor_res: {
+			char cmd[3] = { (char)0xBA,(char)0x05,(char)0x06 };
+			str_cmd.append(cmd, 3);
+			GenerateStringFromValue(param->angle_hor_res_adhesion, str_value);
+		}break;
+		case zvision::set_adhesion_angle_ver_res: {
+			char cmd[3] = { (char)0xBA,(char)0x05,(char)0x07 };
+			str_cmd.append(cmd, 3);
+			GenerateStringFromValue(param->angle_ver_res_adhesion, str_value);
+		}break;
+		case zvision::set_adhesion_diff_thre: {
+			char cmd[3] = { (char)0xBA,(char)0x05,(char)0x08 };
+			str_cmd.append(cmd, 3);
+			GenerateStringFromValue(param->diff_thre_adhesion, str_value);
+		}break;
+		case zvision::set_adhesion_dist_limit: {
+			char cmd[3] = { (char)0xBA,(char)0x05,(char)0x09 };
+			str_cmd.append(cmd, 3);
+			GenerateStringFromValue(param->dist_limit_adhesion, str_value);
+		}break;
+		case zvision::set_adhesion_min_diff: {
+			char cmd[3] = { (char)0xBA,(char)0x05,(char)0x0A };
+			str_cmd.append(cmd, 3);
+			GenerateStringFromValue(param->min_diff_adhesion, str_value);
+		}break;
+		case zvision::set_down_sample_mode: {
+			char cmd[3] = { (char)0xBA,(char)0x06,(char)0x01 };
+			str_cmd.append(cmd, 3);
+			 GenerateStringFromValue(param->down_sample_mode, str_value);
+		}break;
+		case zvision::set_dirty_detect_switch: {
+			char cmd[3] = { (char)0xBA,(char)0x07,(char)0x01 };
+			str_cmd.append(cmd, 3);
+			GenerateStringFromValue(param->switch_dirty_detect, str_value);
+		}break;
+		case zvision::set_dirty_detect_refresh: {
+
+		}break;
+		case zvision::set_dirty_detect_cycle: {
+
+		}break;
+		case zvision::set_dirty_detect_set_thre: {
+
+		}break;
+		case zvision::set_dirty_detect_reset_thre: {
+
+		}break;
+		case zvision::set_dirty_detect_inner_thre: {
+
+		}break;
+		case zvision::set_dirty_detect_outer_thre: {
+
+		}break;
+		case zvision::set_echo_mode: {
+			char cmd[3] = { (char)0xBA,(char)0x08,(char)0x01 };
+			str_cmd.append(cmd, 3);
+			GenerateStringFromValue(param->echo_mode, str_value);
+		}break;
+		case zvision::set_ptp_sync: {
+			char cmd[3] = { (char)0xBA,(char)0x09,(char)0x01 };
+			str_cmd.append(cmd, 3);
+			GenerateStringFromValue(param->ptp_sync, str_value);
+		}break;
+		case zvision::set_ptp_file: {
+			char cmd[3] = { (char)0xBA,(char)0x09,(char)0x02 };
+			str_cmd.append(cmd, 3);
+			// read file data
+			std::ifstream infile(param->temp_filepath);
+			if (!infile.is_open())
+				return -1;
+			std::stringstream ss;
+			ss << infile.rdbuf();
+			param->temp_send_data = ss.str();
+			param->temp_send_data_len = param->temp_send_data.size();
+			GenerateStringFromValue(param->temp_send_data_len, str_value);
+		}break;
+		case zvision::set_frame_sync: {
+			char cmd[3] = { (char)0xBA,(char)0x0A,(char)0x01 };
+			str_cmd.append(cmd, 3);
+			GenerateStringFromValue(param->frame_sync, str_value);
+		}break;
+		case zvision::set_frame_offset: {
+			char cmd[3] = { (char)0xBA,(char)0x0A,(char)0x02 };
+			str_cmd.append(cmd, 3);
+			GenerateStringFromValue(param->frame_offset, str_value);
+		}break;
+		case zvision::set_angle_send: {
+			char cmd[3] = { (char)0xBA,(char)0x0B,(char)0x01 };
+			str_cmd.append(cmd, 3);
+			GenerateStringFromValue(param->angle_send, str_value);
+		}break;
+		case zvision::set_json_config_file: {
+			char cmd[3] = { (char)0xBA,(char)0x0E,(char)0x01 };
+			str_cmd.append(cmd, 3);
+			// read file data
+			std::ifstream infile(param->temp_filepath);
+			if (!infile.is_open())
+				return -1;
+			std::stringstream ss;
+			ss << infile.rdbuf();
+			std::string str = ss.str();
+			// check json format
+			rapidjson::Document doc;
+			if (doc.Parse(str.c_str()).HasParseError())
+				return -1;
+
+			param->temp_send_data = str;
+			param->temp_send_data_len = str.size();
+			GenerateStringFromValue(param->temp_send_data_len, str_value);
+		}break;
+		// lidar control
+		case zvision::reboot: {
+			char cmd[4] = { (char)0xBA,(char)0x0c,(char)0x01,(char)0x01 };
+			str_cmd.append(cmd, 4);
+		}break;
+
+		// get lidar config
+		case zvision::read_serial_number: {
+			char cmd[4] = { (char)0xBA,(char)0x0D,(char)0x01,(char)0x00 };
+			str_cmd.append(cmd, 4);
+			param->temp_recv_data_len = 0;
+		}break;
+		case zvision::read_factory_mac: {
+			char cmd[4] = { (char)0xBA,(char)0x0D,(char)0x02,(char)0x00 };
+			str_cmd.append(cmd, 4);
+			param->temp_recv_data_len = 8;
+		}break;
+		case zvision::read_network_param: {
+			char cmd[4] = { (char)0xBA,(char)0x0D,(char)0x03,(char)0x00 };
+			str_cmd.append(cmd, 4);
+			param->temp_recv_data_len = 27;
+		}break;
+		case zvision::read_embeded_fpga_version: {
+			char cmd[4] = { (char)0xBA,(char)0x0D,(char)0x04,(char)0x00 };
+			str_cmd.append(cmd, 4);
+			param->temp_recv_data_len = 16;
+		}break;
+		case zvision::read_config_param_in_use: {
+			char cmd[4] = { (char)0xBA,(char)0x0D,(char)0x05,(char)0x00 };
+			str_cmd.append(cmd, 4);
+			param->temp_recv_data_len = -2; //50;
+		}break;
+		case zvision::read_config_param_saved: {
+			char cmd[4] = { (char)0xBA,(char)0x0D,(char)0x06,(char)0x00 };
+			str_cmd.append(cmd, 4);
+			param->temp_recv_data_len = -2; //50;
+		}break;
+		case zvision::read_algo_param_in_use: {
+			char cmd[4] = { (char)0xBA,(char)0x0D,(char)0x07,(char)0x00 };
+			str_cmd.append(cmd, 4);
+			param->temp_recv_data_len = -2; //84;
+		}break;
+		case zvision::read_algo_param_saved: {
+			char cmd[4] = { (char)0xBA,(char)0x0D,(char)0x08,(char)0x00 };
+			str_cmd.append(cmd, 4);
+			param->temp_recv_data_len = -2; //84;
+		}break;
+		case zvision::read_json_config_file: {
+			char cmd[4] = { (char)0xBA,(char)0x0D,(char)0x09,(char)0x00 };
+			str_cmd.append(cmd, 4);
+			param->temp_recv_data_len = -4;
+		}break;
+		case zvision::read_cali_packets: {
+			char cmd[4] = { (char)0xBA,(char)0x0D,(char)0x0A,(char)0x00 };
+			str_cmd.append(cmd, 4);
+			param->temp_recv_data_len = 0;
+		}break;
+		case zvision::read_temp_log: {
+			char cmd[4] = { (char)0xBA,(char)0x0D,(char)0x0B,(char)0x00 };
+			str_cmd.append(cmd, 4);
+			// special deal
+			param->temp_recv_data_len = 0;
+		}break;
+		case zvision::read_full_log: {
+			char cmd[4] = { (char)0xBA,(char)0x0D,(char)0x0C,(char)0x00 };
+			str_cmd.append(cmd, 4);
+			// special deal
+			param->temp_recv_data_len = 0;
+		}break;
+		case read_ptp_file: {
+			char cmd[4] = { (char)0xBA,(char)0x0D,(char)0x0D,(char)0x00 };
+			str_cmd.append(cmd, 4);
+			param->temp_recv_data_len = -4;
+		}break;
+
+		default:
+			return -1;
+		}
+
+		std::string str = str_cmd + str_value;
+		if (!valid || str.empty())
+			return -1;
+
+		buf = str;
+		return 0;
+	}
+
+	int LidarTools::RunPost(EML30SPlusCmd type, zvision::JsonConfigFileParam* param) {
+
+		if (!param)
+			return -1;
+
+		const unsigned char* pdata = (unsigned char*)param->temp_recv_data.c_str();
+		const int data_len = param->temp_recv_data.size();
+		switch (type)
+		{
+		case zvision::read_serial_number:
+			param->serial_number = param->temp_recv_data;
+			break;
+		case zvision::read_factory_mac: {
+			char fmac[128] = "";
+			sprintf_s(fmac, "%02X%02X%02X%02X%02X%02X", pdata[2], pdata[3], pdata[4], pdata[5], pdata[6], pdata[7]);
+			param->factory_mac = std::string(fmac);
+		}break;
+		case zvision::read_network_param: {
+			param->dhcp_switch = *(pdata + 0);
+			ResolveIpString(pdata + 1, param->ip);
+			ResolveIpString(pdata + 5, param->netmask);
+			ResolveIpString(pdata + 9, param->gateway);
+			ResolveIpString(pdata + 13, param->mac);
+			ResolveIpString(pdata + 19, param->udp_dest_ip);
+			int port = 0;
+			ResolvePort(pdata + 23, port);
+			param->udp_dest_port = port;
+		}break;
+		case zvision::read_embeded_fpga_version: {
+			memcpy(param->embedded_ver, pdata, 4);
+			memcpy(param->fpga_ver, pdata + 4 , 4);
+			ResolveIpString(pdata, param->embedded_version);
+			ResolveIpString(pdata + 4, param->fpga_version);
+
+			memcpy(param->embedded_ver_bak, pdata + 8, 4);
+			memcpy(param->fpga_ver_bak, pdata + 12, 4);
+			ResolveIpString(pdata + 8, param->embedded_version_bak);
+			ResolveIpString(pdata + 12, param->fpga_version_bak);
+		}break;
+		case zvision::read_config_param_in_use:
+		case zvision::read_config_param_saved: {
+			//NetworkToHostShort(pdata,(char*)&param->algo_param_len);
+			if (data_len < 48)
+				return -1;
+			memcpy(param->embedded_ver, pdata, 4);
+			ResolveIpString(pdata, param->embedded_version);
+			memcpy(param->fpga_ver, pdata + 4, 4);
+			ResolveIpString(pdata + 4, param->fpga_version);
+			ResolveIpString(pdata + 8, param->ip);
+			ResolveIpString(pdata + 12, param->gateway);
+			ResolveIpString(pdata + 16, param->netmask);
+			ResolveMacAddress(pdata + 20, param->mac);
+			ResolveIpString(pdata + 26, param->udp_dest_ip);
+			NetworkToHost(pdata + 30, (char*)&param->udp_dest_port);
+			param->dhcp_switch = *(pdata + 34);
+			param->switch_retro = *(pdata + 35);
+			param->switch_near_point_delete = *(pdata + 36);
+			param->switch_adhesion = *(pdata + 37);
+			param->down_sample_mode = *(pdata + 38);
+			param->echo_mode = *(pdata + 39);
+			param->ptp_sync = *(pdata + 40);
+			param->switch_dirty_detect = *(pdata + 41);
+			param->angle_send = *(pdata + 42);
+			param->frame_sync = *(pdata + 43);
+			NetworkToHost(pdata + 44, (char*)&param->frame_offset);
+		}break;
+		case zvision::read_algo_param_in_use:
+		case zvision::read_algo_param_saved: {
+
+			// parameter data
+			const unsigned char* param_data = pdata + 20;
+			uint16_t param_len = data_len - 20;
+			// before 20 bytes is header data
+			// near point delete
+            uint16_t offset = 0;
+            uint16_t len = 0;
+			{
+				NetworkToHostShort(pdata , (char*)&offset);
+				NetworkToHostShort(pdata + 2, (char*)&len);
+                if (len >= 1 && ((offset + len) <= param_len)) {
+                    const unsigned char* param_del = param_data + offset;
+                    param->switch_near_point_delete = *(param_del + 0);
+                }
+			}
+			// retro
+			{
+                NetworkToHostShort(pdata + 4, (char*)&offset);
+                NetworkToHostShort(pdata + 6, (char*)&len);
+                if (len >= 12 && ((offset + len) <= param_len)) {
+                    const unsigned char* param_retro = param_data + offset;
+                    param->switch_retro = *(param_retro + 0);
+                    param->target_gray_thre_retro = *(param_retro + 1);
+                    param->target_point_num_thre_retro = *(param_retro + 2);
+                    NetworkToHost(param_retro + 3, (char*)&param->critical_point_dis_thre_retro);
+                    NetworkToHostShort(param_retro + 7, (char*)&param->del_point_dis_low_thre_retro);
+                    NetworkToHostShort(param_retro + 9, (char*)&param->del_point_dis_high_thre_retro);
+                    param->del_point_gray_thre_retro = *(param_retro + 11);
+                }
+			}
+
+			// adhesion
+            {
+                NetworkToHostShort(pdata + 8, (char*)&offset);
+                NetworkToHostShort(pdata + 10, (char*)&len);
+                if (len >= 37 && ((offset + len) <= param_len)) {
+                    const unsigned char* param_adhesion = param_data + offset;
+                    param->switch_adhesion = *(param_adhesion + 0);
+                    NetworkToHost(param_adhesion + 1, (char*)&param->angle_hor_min_adhesion);
+                    NetworkToHost(param_adhesion + 5, (char*)&param->angle_hor_max_adhesion);
+                    NetworkToHost(param_adhesion + 9, (char*)&param->angle_ver_min_adhesion);
+                    NetworkToHost(param_adhesion + 13, (char*)&param->angle_ver_max_adhesion);
+                    NetworkToHost(param_adhesion + 17, (char*)&param->angle_hor_res_adhesion);
+                    NetworkToHost(param_adhesion + 21, (char*)&param->angle_ver_res_adhesion);
+                    NetworkToHost(param_adhesion + 25, (char*)&param->diff_thre_adhesion);
+                    NetworkToHost(param_adhesion + 29, (char*)&param->dist_limit_adhesion);
+                    NetworkToHost(param_adhesion + 33, (char*)&param->min_diff_adhesion);
+                }
+            }
+
+			// downsample
+            {
+                NetworkToHostShort(pdata + 12, (char*)&offset);
+                NetworkToHostShort(pdata + 14, (char*)&len);
+                if (len >= 1 && ((offset + len) <= param_len)) {
+                    const unsigned char* param_downsample = param_data + offset;
+                    param->down_sample_mode = *(param_downsample + 0);
+                }
+            }
+
+			// dirty detect
+            {
+                NetworkToHostShort(pdata + 16, (char*)&offset);
+                NetworkToHostShort(pdata + 18, (char*)&len);
+                if (len >= 12 && ((offset + len) <= param_len)) {
+                    const unsigned char* param_dirty = param_data + offset;
+                    param->switch_dirty_detect = *(param_dirty + 0);
+                    param->switch_dirty_refresh = *(param_dirty + 1);
+                    NetworkToHostShort(param_dirty + 2, (char*)&param->dirty_refresh_cycle);
+                    NetworkToHostShort(param_dirty + 4, (char*)&param->dirty_detect_set_thre);
+                    NetworkToHostShort(param_dirty + 6, (char*)&param->dirty_detect_reset_thre);
+                    NetworkToHostShort(param_dirty + 8, (char*)&param->dirty_detect_inner_thre);
+                    NetworkToHostShort(param_dirty + 10, (char*)&param->dirty_detect_outer_thre);
+                }
+            }
+		}break;
+		case zvision::read_json_config_file:
+        {
+
+        }break;
+		case zvision::read_temp_log:
+        {
+
+        }break;
+		case zvision::read_full_log:
+        {
+
+        }break;
+		default:
+			break;
+		}
+
+		return 0;
+	}
+
+	int LidarTools::RunML30sPlusDeviceManager(EML30SPlusCmd type, zvision::JsonConfigFileParam* param){
+
+		// pre check
+		if (!param)
+			return -1;
+
+		/* for special command */
+		// read cali packets
+		if (type == read_cali_packets) {
+			char cmd[4] = { (char)0xBA, (char)0x0D, (char)0x0A, (char)0x00 };
+			return GetDeviceCalibrationPackets(param->temp_recv_packets, std::string(cmd, 4));
+		}
+
+		/*  1. We generate tcp command , send data if in need. */
+		std::string cmd_str;
+		int ret = GenerateML30SPlusDeviceCmdString(type, cmd_str, param);
+		if (ret != 0)
+			return -1;
+
+		/* 2. Send cmd to device. */
+		// Check tcp connection.
+		if (!CheckConnection())
+			return -1;
+		// send cmd
+		if (client_->SyncSend(cmd_str, cmd_str.size()))
+		{
+			DisConnect();
+			return -1;
+		}
+
+		// need ack
+		if (type != set_json_config_file) {
+			const int recv_len = 4;
+			std::string recv(4,'x');
+			if (client_->SyncRecv(recv, recv_len))
+			{
+				DisConnect();
+				return -1;
+			}
+
+			if (!CheckDeviceRet(recv))
+			{
+				DisConnect();
+				return -1;
+			}
+		}
+
+		// If don`t send or receive data, return.
+		if (type < cmd_section_control)
+			return 0;
+
+		/* 3. for special command */
+		// read log ...
+		if (type == read_temp_log || type == read_full_log) {
+			return GetML30sPlusLogFile(param->temp_recv_data, type == read_full_log);
+		}
+
+		// We send/receive 1024 bytes once.
+		int pkt_len = 1024;
+		/* 4.  Send data to device. */
+		if (type > cmd_section_control && type < cmd_section_send_data ) {
+			int send_len = param->temp_send_data.size();
+			if (!send_len)
+				return -1;
+
+			std::string send_data = param->temp_send_data;
+			int pkt_cnt = send_len / pkt_len;
+			if (send_len % pkt_len) pkt_cnt++;
+			for (int i = 0; i < pkt_cnt; i++) {
+
+				int len = pkt_len;
+				if (i == send_len / pkt_len)
+					len = send_len % pkt_len;
+
+                // send
+				std::string str_send(send_data.c_str() + i*pkt_len, len);
+				if (client_->SyncSend(str_send, len))
+				{
+					DisConnect();
+					return -1;
+				}
+
+				// update
+				if(i > 5)
+					std::this_thread::sleep_for(std::chrono::microseconds(110));
+			}
+
+            // 4.1 check ret.
+            {
+                const int recv_len = 4;
+                std::string recv(4, 'x');
+                if (client_->SyncRecv(recv, recv_len))
+                {
+                    DisConnect();
+                    return -1;
+                }
+                if (!CheckDeviceRet(recv))
+                {
+                    DisConnect();
+                    return -1;
+                }
+            }
+		}
+		/* 5.  Receive data from device. */
+		else if(type > cmd_section_send_data && type < cmd_section_receive_data ) {
+
+			std::string recv_data;
+			uint32_t recv_len = 0;
+			// Get recv data length.
+			if (param->temp_recv_data_len < 0) {
+				int bytes = std::abs(param->temp_recv_data_len);
+				std::string str(bytes,'x');
+				if (client_->SyncRecv(str, bytes))
+				{
+					DisConnect();
+					return -1;
+				}
+
+				// Get length.
+				if (bytes == 1)
+					recv_len = (uint8_t)str[0];
+				else if (bytes == 2) {
+					uint16_t val = 0;
+					NetworkToHostShort((uint8_t*)str.c_str(), (char*)&val);
+					recv_len = val;
+				}
+				else if (bytes == 4)
+					NetworkToHost((uint8_t*)str.c_str(), (char*)&recv_len);
+				else
+					return -1;
+			}
+			else if (param->temp_recv_data_len == 0)
+				recv_len = client_->GetAvailableBytesLen();
+			else
+				recv_len = param->temp_recv_data_len;
+
+			if(recv_len == 0) return -1;
+
+
+			// for special cmd
+			if (type == read_algo_param_in_use || type == read_algo_param_saved) {
+				// 20 bytes header
+				recv_len += 20;
+			}
+
+			// Read data.
+			int pkt_cnt = recv_len / pkt_len;
+			if (recv_len % pkt_len) pkt_cnt++;
+			for (int i = 0; i < pkt_cnt; i++) {
+
+				int len = pkt_len;
+				if (i == recv_len / pkt_len)
+					len = recv_len % pkt_len;
+
+				// recv ret
+				std::string pkt(len, 'x');
+				if (client_->SyncRecv(pkt, len))
+				{
+					DisConnect();
+					return -1;
+				}
+				// update
+                const char* pdata = pkt.data();
+                recv_data += std::string(pdata,len);
+				if(i > 10)
+					std::this_thread::sleep_for(std::chrono::microseconds(110));
+			}
+
+			param->temp_recv_data = recv_data;
+		}
+
+		// 6. post deal
+		if (RunPost(type, param) != 0)
+			return -1;
+
+		// read all recv buf if necessar
+		{
+			int len = client_->GetAvailableBytesLen();
+			if (len > 0) {
+				std::string tmp(len,'x');
+				client_->SyncRecv(tmp, len);
+			}
+		}
+
+		return 0;
+	}
+
+	int LidarTools::QueryML30sPlusDeviceConfigurationInfo(DeviceConfigurationInfo& info) {
+
+		int ret = 0;
+		JsonConfigFileParam param;
+		ret = RunML30sPlusDeviceManager(EML30SPlusCmd::read_config_param_in_use, &param);
+		if (ret != 0)
+			return ret;
+
+		ret = RunML30sPlusDeviceManager(EML30SPlusCmd::read_embeded_fpga_version, &param);
+		if (ret != 0)
+			return ret;
+
+        info.device = DeviceType::LidarMl30SA1Plus;
+        info.serial_number = param.serial_number;
+        memcpy(info.version.boot_version, param.fpga_ver, 4);
+        memcpy(info.version.kernel_version, param.embedded_ver, 4);
+		memcpy(info.backup_version.boot_version, param.fpga_ver_bak, 4);
+		memcpy(info.backup_version.kernel_version, param.embedded_ver_bak, 4);
+        info.config_mac = param.mac;
+        info.device_mac = param.mac;
+        info.factory_mac = param.factory_mac;
+        info.device_ip = param.ip;
+        info.subnet_mask = param.netmask;
+        info.destination_ip = param.udp_dest_ip;
+        info.destination_port = param.udp_dest_port;
+        info.time_sync = TimestampType::TimestampPtp;
+        info.phase_offset = param.frame_offset;
+        info.phase_offset_mode = PhaseOffsetMode::PhaseOffsetUnknown;
+        if (param.frame_sync == 0)  info.phase_offset_mode = PhaseOffsetMode::PhaseOffsetDisable;
+        else if (param.frame_sync == 1)  info.phase_offset_mode = PhaseOffsetMode::PhaseOffsetEnable;
+
+        info.echo_mode = EchoMode::EchoUnknown;
+        if (param.echo_mode == 1)  info.echo_mode = EchoMode::EchoSingleFirst;
+        else if (param.echo_mode == 2)  info.echo_mode = EchoMode::EchoSingleStrongest;
+		else if (param.echo_mode == 3)  info.echo_mode = EchoMode::EchoSingleLast;
+		else if (param.echo_mode == 4)  info.echo_mode = EchoMode::EchoDoubleFirstStrongest;
+		else if (param.echo_mode == 5)  info.echo_mode = EchoMode::EchoDoubleFirstLast;
+		else if (param.echo_mode == 6)  info.echo_mode = EchoMode::EchoDoubleStrongestLast;
+
+        info.cal_send_mode = CalSendMode::CalSendUnknown;
+        if (param.angle_send == 0)  info.cal_send_mode = CalSendMode::CalSendDisable;
+        else if (param.angle_send == 1)  info.cal_send_mode = CalSendMode::CalSendEnable;
+
+        info.downsample_mode = DownsampleMode::DownsampleUnknown;
+        if (param.down_sample_mode == 0)  info.downsample_mode = DownsampleMode::DownsampleNone;
+        else if (param.switch_near_point_delete == 1)  info.downsample_mode = DownsampleMode::Downsample_1_2;
+        else if (param.switch_near_point_delete == 2)  info.downsample_mode = DownsampleMode::Downsample_1_4;
+
+        info.dhcp_enable = StateMode::StateUnknown;
+        if (param.dhcp_switch == 0)  info.dhcp_enable = StateMode::StateDisable;
+        else if (param.dhcp_switch == 1)  info.dhcp_enable = StateMode::StateEnable;
+
+        info.gateway_addr = param.gateway;
+
+		//return 0;
+
+		// serial number
+		ret = RunML30sPlusDeviceManager(EML30SPlusCmd::read_serial_number, &param);
+		if (ret != 0)
+			return ret;
+
+		info.serial_number = param.serial_number;
+
+        // algo param section
+        info.algo_param.isValid = false;
+        info.adhesion_enable = StateMode::StateUnknown;
+        info.retro_enable = RetroMode::RetroUnknown;
+        info.delete_point_enable = StateMode::StateUnknown;
+        ret = RunML30sPlusDeviceManager(EML30SPlusCmd::read_algo_param_in_use, &param);
+        if (ret != 0)
+           return ret;
+
+        info.algo_param.isValid = true;
+        if(param.switch_adhesion == 0)  info.adhesion_enable = StateMode::StateDisable;
+        else if(param.switch_adhesion == 1)  info.adhesion_enable = StateMode::StateEnable;
+
+        if (param.switch_retro == 0)  info.retro_enable = RetroMode::RetroDisable;
+        else if (param.switch_retro == 1)  info.retro_enable = RetroMode::RetroEnable;
+
+        if (param.switch_near_point_delete == 0)  info.delete_point_enable = StateMode::StateDisable;
+        else if (param.switch_near_point_delete == 1)  info.delete_point_enable = StateMode::StateEnable;
+
+        info.algo_param.isValid = true;
+        info.algo_param.adhesion_angle_hor_max = param.angle_hor_max_adhesion;
+        info.algo_param.adhesion_angle_hor_min = param.angle_hor_min_adhesion;
+        info.algo_param.adhesion_angle_hor_res = param.angle_hor_res_adhesion;
+        info.algo_param.adhesion_angle_ver_max = param.angle_ver_max_adhesion;
+        info.algo_param.adhesion_angle_ver_min = param.angle_ver_min_adhesion;
+        info.algo_param.adhesion_angle_ver_res = param.angle_ver_res_adhesion;
+        info.algo_param.adhesion_diff_thres = param.diff_thre_adhesion;
+        info.algo_param.adhesion_dis_limit = param.dist_limit_adhesion;
+        info.algo_param.adhesion_min_diff = param.min_diff_adhesion;
+
+        info.algo_param.retro_del_gray_thres = param.del_point_gray_thre_retro;
+        info.algo_param.retro_del_ratio_gray_high_thres = 0;
+        info.algo_param.retro_del_ratio_gray_low_thres = 0;
+        info.algo_param.retro_dis_thres = param.critical_point_dis_thre_retro;
+        info.algo_param.retro_high_range_thres = param.del_point_dis_high_thre_retro;
+        info.algo_param.retro_low_range_thres = param.del_point_dis_low_thre_retro;
+        info.algo_param.retro_min_gray = param.target_gray_thre_retro;
+        info.algo_param.retro_min_gray_num = param.target_point_num_thre_retro;
+
+		// read factory mac
+		ret = RunML30sPlusDeviceManager(EML30SPlusCmd::read_factory_mac, &param);
+		if (ret != 0)
+			return ret;
+		info.factory_mac = param.factory_mac;
+		return 0;
+	}
+
+    int LidarTools::ML30sPlusFirmwareUpdate(std::string& filename, ProgressCallback cb,bool isBak)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        std::ifstream in(filename, std::ifstream::ate | std::ifstream::binary);
+        if (!in.is_open())
+        {
+            LOG_ERROR("Open file error.\n");
+            return -1;
+        }
+
+        std::streampos end = in.tellg();
+        int size = static_cast<int>(end);
+        in.close();
+
+        const int send_len = 7;
+        char upgrade_cmd[send_len] = { (char)0xBA, (char)0x01, (char)0x01, (char)0x00, (char)0x00, (char)0x00 ,(char)0x00 };
+        if (isBak)
+            upgrade_cmd[2] = 0x02;
+
+        HostToNetwork((const unsigned char*)&size, upgrade_cmd + 3);
+        std::string cmd(upgrade_cmd, send_len);
+
+        const int recv_len = 4;
+        std::string recv(recv_len, 'x');
+
+
+        if (client_->SyncSend(cmd, send_len))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (client_->SyncRecv(recv, recv_len))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (!CheckDeviceRet(recv))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        // transfer, erase flash, write
+        const int pkt_len = 256;
+        int start_percent = 10;
+        int block_total = size / pkt_len;
+        if (0 != (size % pkt_len))
+            block_total += 1;
+        int step_per_percent = block_total / 30;
+
+        std::ifstream idata(filename, std::ios::in | std::ios::binary);
+        char fw_data[pkt_len] = { 0x00 };
+        int readed = 0;
+
+        // data transfer
+        if (idata.is_open())
+        {
+            for (readed = 0; readed < block_total; readed++)
+            {
+                int read_len = pkt_len;
+                if ((readed == (block_total - 1)) && (0 != (size % pkt_len)))
+                    read_len = size % pkt_len;
+                idata.read(fw_data, read_len);
+                std::string fw(fw_data, read_len);
+                if (client_->SyncSend(fw, read_len))
+                {
+                    break;
+                }
+                if (0 == (readed % step_per_percent))
+                {
+                    cb(start_percent++, this->device_ip_.c_str());
+                }
+            }
+            idata.close();
+        }
+        if (readed != block_total)
+        {
+            client_->Close();
+            return -1;
+        }
+
+        if (client_->SyncRecv(recv, recv_len))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (!CheckDeviceRet(recv))
+        {
+            DisConnect();
+            return -1;
+        }
+        LOG_DEBUG("Data transfer ok...\n");
+
+        // waitting for step 2
+        const int recv_step_len = 5;
+        std::string recv_step(recv_step_len, 'x');
+        bool ok = false;
+        while (1)
+        {
+            if (client_->SyncRecv(recv_step, recv_step_len))
+            {
+                ok = false;
+                break;
+            }
+            unsigned char step = (unsigned char)recv_step[4];
+            cb(40 + int((double)step / 3.3), this->device_ip_.c_str());
+            if (100 == step)
+            {
+                ok = true;
+                break;
+            }
+        }
+
+        if (!ok)
+        {
+            LOG_ERROR("Waiting for erase flash failed...\n");
+            DisConnect();
+            return -1;
+        }
+        LOG_DEBUG("Waiting for erase flash ok...\n");
+
+        // waitting for step 3
+        while (1)
+        {
+            if (client_->SyncRecv(recv_step, recv_step_len))
+            {
+                ok = false;
+                break;
+            }
+            unsigned char step = (unsigned char)recv_step[4];
+            cb(70 + int((double)step / 3.3), this->device_ip_.c_str());
+            if (100 == step)
+            {
+                ok = true;
+                break;
+            }
+        }
+
+        if (!ok)
+        {
+            LOG_ERROR("Waiting for write flash failed...\n");
+            DisConnect();
+            return -1;
+        }
+        LOG_DEBUG("Waiting for write flash ok...\n");
+
+        //device check data
+        if (client_->SyncRecv(recv, recv_len))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (!CheckDeviceRet(recv))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        return 0;
+
+    }
 
 }

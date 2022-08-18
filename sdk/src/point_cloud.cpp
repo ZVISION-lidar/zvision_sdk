@@ -124,12 +124,13 @@ namespace zvision
         bool enqueue_data_;
     };
 
-    PointCloudProducer::PointCloudProducer(int data_port, std::string lidar_ip, std::string cal_filename, bool multicast_en, std::string mc_group_ip) :
+    PointCloudProducer::PointCloudProducer(int data_port, std::string lidar_ip, std::string cal_filename, bool multicast_en, std::string mc_group_ip, DeviceType tp) :
         cal_(new CalibrationData()),
         points_(new PointCloud()),
         device_ip_(lidar_ip),
         cal_filename_(cal_filename),
         device_type_(LidarUnknown),
+		device_type_usr_(tp),
         scan_mode_(ScanUnknown),
         last_seq_(-1),
         data_port_(data_port),
@@ -166,11 +167,21 @@ namespace zvision
                 return false;
             }
 
+			int ret = -1;
             // if port is negative or auto join multicast, we need to get the cfg from lidar by tcp connection
             if ((data_port_ < 0) || (join_multicast_ && (!data_dst_ip_.size())))
             {
                 // get the cfg from lidar by tcp
-                if (tool.QueryDeviceConfigurationInfo(cfg))
+
+				if (device_type_usr_ == DeviceType::LidarMl30SA1Plus || \
+					device_type_usr_ == DeviceType::LidarMl30SB1Plus) {
+					ret = tool.QueryML30sPlusDeviceConfigurationInfo(cfg);
+				}
+				else {
+					ret = tool.QueryDeviceConfigurationInfo(cfg);
+				}
+
+                if (ret)
                 {
                     LOG_ERROR("Query device configuration info failed.\n");
                     if (data_port_ < 0)
@@ -205,8 +216,25 @@ namespace zvision
             }
             else
             {
-                if (tool.GetDeviceCalibrationData(*(this->cal_.get())))
-                    return false;
+				if (device_type_usr_ == DeviceType::LidarMl30SA1Plus || \
+					device_type_usr_ == DeviceType::LidarMl30SB1Plus) {
+					zvision::JsonConfigFileParam param;
+					ret = tool.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::read_cali_packets, &param);
+					if (ret != 0) {
+						LOG_ERROR("Get lidar[%s]`s calibration packets error\n", device_ip_.c_str());
+						return false;
+					}
+
+					zvision::CalibrationPackets cal_pkts = param.temp_recv_packets;
+					if (0 != (ret = LidarTools::GetDeviceCalibrationData(cal_pkts, *(this->cal_.get())))) {
+						LOG_ERROR("Convert lidar[%s]`s calibration packets error\n", device_ip_.c_str());
+						return false;
+					}
+				}
+				else {
+					if (tool.GetDeviceCalibrationData(*(this->cal_.get())))
+						return false;
+				}
             }
 
             if (!this->cal_lut_)
@@ -265,25 +293,11 @@ namespace zvision
             LOG_ERROR("Packet loss, last seq [%3d], current seq[%3d]\n", this->last_seq_, seq);
         }
 
-#if 0	// special for baidu
-		if (((seq < this->last_seq_) && (this->last_seq_ != 159)) || (159 == seq))
-		{
-			// we should process current packet first
-			int ret = PointCloudPacket::ProcessPacket(packet, *(this->cal_lut_), *points_);
-			if (0 != ret)
-				LOG_WARN("ProcessPacket error, %d.\n", ret);
-
-			this->ProcessOneSweep();
-			this->last_seq_ = seq;
-			return;
-		}
-#else
         // we get last packet by seq, but 10Hz has a 50ms delay issues
         if (seq < this->last_seq_)/*we have get one total frame*/
         {
             this->ProcessOneSweep();
         }
-#endif
 
         int ret = PointCloudPacket::ProcessPacket(packet, *(this->cal_lut_), *points_);
         if(0 != ret)

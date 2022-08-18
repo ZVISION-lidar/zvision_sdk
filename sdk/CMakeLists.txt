@@ -14,7 +14,9 @@ target_include_directories(${ZVISION_SDK_LIBRARY}
         include
         PRIVATE
         include/commu
-        include/protocol)
+        include/protocol
+        include/crypto
+        include/json)
 
 set_target_properties(${ZVISION_SDK_LIBRARY} PROPERTIES PUBLIC_HEADER "include/lidar_tools.h;include/point_cloud.h;include/common/define.h;include/common/print.h")
 
@@ -31,7 +33,9 @@ target_sources(${ZVISION_SDK_LIBRARY}
         src/point_cloud.cpp
         src/print.cpp
         src/client.cpp
-        src/define.cpp)
+        src/define.cpp
+        src/crypto/md5.cpp
+        src/json/json_ml30s_plus.cpp)
 
 install(TARGETS ${ZVISION_SDK_LIBRARY}
         PUBLIC_HEADER DESTINATION include

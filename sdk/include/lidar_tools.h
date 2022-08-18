@@ -26,13 +26,14 @@
 #include <string>
 #include <memory>
 #include <functional>
+#include <type_traits>
 #include "define.h"
-
+#include "protocol/zv_cmd.h"
 
 namespace zvision
 {
     class TcpClient;
-
+	enum EML30SPlusCmd;
 
     //////////////////////////////////////////////////////////////////////////////////////////////
     /** \brief LidarTools for lidar's configuration.
@@ -136,7 +137,7 @@ namespace zvision
         /** \brief Get calibration data from lidar.
         * \param[out] pkts          return device's calibration packets
         */
-        int GetDeviceCalibrationPackets(CalibrationPackets& pkts);
+        int GetDeviceCalibrationPackets(CalibrationPackets& pkts,std::string cmd = "");
 
         /** \brief Get calibration data from calibration packet.
         * \param[in]  pkts          the whole calibration packets.
@@ -150,8 +151,8 @@ namespace zvision
           */
         int GetDeviceCalibrationDataToFile(std::string filename);
 
-		/** \brief Set calibration data to lidar .
-		* \param[in] filename        calibration data file path
+		/** \brief Set calibration data to lidar.
+		* \param[in] filename       calibration file path
 		*/
 		int SetDeviceCalibrationData(std::string filename);
 
@@ -272,6 +273,18 @@ namespace zvision
         */
         int SetDevicePtpConfiguration(std::string ptp_cfg_filename);
 
+		/** \brief Set device's config file.
+		* \param[in] cfg_filename  config filename
+		* \return 0 for ok, others for failure.
+		*/
+		int SetDeviceConfigFile(std::string cfg_filename);
+
+        /** \brief Query device's config file version.
+        * \param[out] ver  config filename version
+        * \return 0 for ok, others for failure.
+        */
+        int QueryDeviceConfigFileVersion(std::string& ver);
+
         /** \brief Get device's PTP configuration.
         * \param[out] ptp_cfg          ptp config string
         * \return 0 for ok, others for failure.
@@ -336,8 +349,86 @@ namespace zvision
 		*/
 		int SetDeviceFactoryMac(std::string& mac);
 
+		/********************* only for ml30s+ *********************/
+		/** \brief get ml30s+ command string.
+		* \param[in] type           command type.
+		* \param[in] val            command value.
+		* \param[out] str          command string.
+		* \return 0 for ok, others for failure.
+		*/
+		template<typename REAL>
+		int GenerateStringFromValue(REAL val, std::string& str) {
+			char val_buf[64] = {0};
+			if (std::is_same<int32_t, REAL>::value || std::is_same<uint32_t, REAL>::value || std::is_same<float, REAL>::value) {
+        int ori = *(int*)((const uint8_t*)&val);
+        int* now = (int*)(val_buf);
+        *now = htonl(ori);
+				str = std::string(val_buf, 4);
+			}
+			else if (std::is_same<int16_t, REAL>::value || std::is_same<uint16_t, REAL>::value) {
+        u_short ori = *(u_short*)((const uint8_t*)&val);
+        u_short* now = (u_short*)(val_buf);
+        *now = ntohs(ori);
+				str = std::string(val_buf, 2);
+			}
+			else if (std::is_same<uint8_t, REAL>::value) {
+				val_buf[0] = *((const uint8_t*)&val);
+				str = std::string(val_buf, 1);
+			}
+			else if (std::is_same<std::string, REAL>::value) {
+				str = val;
+			}
+			else if (std::is_same<bool, REAL>::value) {
+				val_buf[0] = *((const uint8_t*)&val);
+				str = std::string(val_buf, 1);
+			}
+			else
+				return -1;
+
+			return 0;
+		}
+
+		/** \brief manage ml30s+ command operation.
+		* \param[in] type           command type.
+		* \param[out] str          command string.
+		* \return 0 for ok, others for failure.
+		*/
+		int RunML30sPlusDeviceManager(EML30SPlusCmd type, zvision::JsonConfigFileParam* param);
+
+
+		/** \brief get ml30s+  device info.
+		* \param[out] str          command string.
+		* \return 0 for ok, others for failure.
+		*/
+		int QueryML30sPlusDeviceConfigurationInfo(DeviceConfigurationInfo& info);
+
+        int ML30sPlusFirmwareUpdate(std::string& filename, ProgressCallback cb, bool isBak = false);
+
+		/*****************************************************************/
 	protected:
-        
+		/********************* only for ml30s+ *********************/
+		/** \brief denerate ml30s+ cmd string.
+		* \param[in] type           ml30splus command
+		* \param[out] buf           command string
+		* \param[in/out]param       parameters
+		* \return 0 for ok, others for failure.
+		*/
+		int GenerateML30SPlusDeviceCmdString(EML30SPlusCmd type, std::string& buf, zvision::JsonConfigFileParam* param);
+
+		/** \brief get ml30s+ log file.
+		* \param[out] data           log data
+		* \return 0 for ok, others for failure.
+		*/
+		int GetML30sPlusLogFile(std::string& data, bool isFull = false);
+
+		/** \brief post deal.
+		* \param[in] type            cmd type
+		* \param[in/out] param       lidar parameter
+		* \return 0 for ok, others for failure.
+		*/
+		int RunPost(EML30SPlusCmd type, zvision::JsonConfigFileParam* param);
+		/*****************************************************************/
+
         /** \brief Check the connection to device, if connection is not established, try to connect.
           * \return true for ok, false for failure.
           */

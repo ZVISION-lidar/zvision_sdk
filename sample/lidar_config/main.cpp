@@ -30,7 +30,8 @@
 #include <map>
 #include <set>
 #include <thread>
-
+#include <memory>
+#include <string.h>
 /* Progress bar defination */
 #define PBSTR "||||||||||||||||||||||||||||||||||||||||||||||||||"
 #define PBWIDTH 50
@@ -150,11 +151,19 @@ void print_current_progress_multi(int percent, std::string ip)
 }
 
 //Sample code 0 : Set lidar's mac address
-int sample_config_lidar_mac_address(std::string lidar_ip, std::string mac)
+int sample_config_lidar_mac_address(std::string lidar_ip, std::string mac, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown)
 {
     int ret = 0;
     zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
-    if (ret = config.SetDeviceMacAddress(mac))
+	if (tp == zvision::DeviceType::LidarMl30SA1Plus) {
+		zvision::JsonConfigFileParam param_30sp;
+		param_30sp.mac = mac;
+		ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::set_mac, &param_30sp);
+	}
+	else {
+		ret = config.SetDeviceMacAddress(mac);
+	}
+    if (ret)
         LOG_ERROR("Set device [%s]'s MAC address to [%s] failed, ret = %d.\n", lidar_ip.c_str(), mac.c_str(), ret);
     else
         LOG_INFO("Set device [%s]'s MAC address to [%s] ok.\n", lidar_ip.c_str(), mac.c_str());
@@ -162,11 +171,19 @@ int sample_config_lidar_mac_address(std::string lidar_ip, std::string mac)
 }
 
 //Sample code 1 : Set lidar's static ip address
-int sample_config_lidar_ip(std::string lidar_ip, std::string new_ip)
+int sample_config_lidar_ip(std::string lidar_ip, std::string new_ip, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown)
 {
     int ret = 0;
     zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
-    if (ret = config.SetDeviceStaticIpAddress(new_ip))
+	if (tp == zvision::DeviceType::LidarMl30SA1Plus) {
+		zvision::JsonConfigFileParam param_30sp;
+		param_30sp.ip = new_ip;
+		ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::set_ip, &param_30sp);
+	}
+	else {
+		ret = config.SetDeviceStaticIpAddress(new_ip);
+	}
+    if (ret)
         LOG_ERROR("Set device [%s]'s IP address to [%s] failed, ret = %d.\n", lidar_ip.c_str(), new_ip.c_str(), ret);
     else
         LOG_INFO("Set device [%s]'s IP address to [%s] ok.\n", lidar_ip.c_str(), new_ip.c_str());
@@ -174,11 +191,20 @@ int sample_config_lidar_ip(std::string lidar_ip, std::string new_ip)
 }
 
 //Sample code 2 : Set lidar's subnet mask
-int sample_config_lidar_subnet_mask(std::string lidar_ip, std::string subnetmask)
+int sample_config_lidar_subnet_mask(std::string lidar_ip, std::string subnetmask, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown)
 {
     int ret = 0;
     zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
-    if (ret = config.SetDeviceSubnetMask(subnetmask))
+	if (tp == zvision::DeviceType::LidarMl30SA1Plus) {
+		zvision::JsonConfigFileParam param_30sp;
+		param_30sp.netmask = subnetmask;
+		ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::set_netmask, &param_30sp);
+	}
+	else {
+		ret = config.SetDeviceSubnetMask(subnetmask);
+	}
+
+    if (ret)
         LOG_ERROR("Set device [%s]'s subnet mask to [%s] failed, ret = %d.\n", lidar_ip.c_str(), subnetmask.c_str(), ret);
     else
         LOG_INFO("Set device [%s]'s subnet mask to [%s] ok.\n", lidar_ip.c_str(), subnetmask.c_str());
@@ -186,11 +212,19 @@ int sample_config_lidar_subnet_mask(std::string lidar_ip, std::string subnetmask
 }
 
 //Sample code 3 : Set lidar's udp destination ip address
-int sample_config_lidar_udp_destination_ip(std::string lidar_ip, std::string dst_ip)
+int sample_config_lidar_udp_destination_ip(std::string lidar_ip, std::string dst_ip, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown)
 {
     int ret = 0;
     zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
-    if (ret = config.SetDeviceUdpDestinationIpAddress(dst_ip))
+	if (tp == zvision::DeviceType::LidarMl30SA1Plus) {
+		zvision::JsonConfigFileParam param_30sp;
+		param_30sp.udp_dest_ip = dst_ip;
+		ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::set_udp_dest_ip, &param_30sp);
+	}
+	else {
+		ret = config.SetDeviceUdpDestinationIpAddress(dst_ip);
+	}
+    if (ret)
         LOG_ERROR("Set device [%s]'s UDP destination ip to [%s] failed, ret = %d.\n", lidar_ip.c_str(), dst_ip.c_str(), ret);
     else
         LOG_INFO("Set device [%s]'s UDP destination ip to [%s] ok.\n", lidar_ip.c_str(), dst_ip.c_str());
@@ -198,11 +232,19 @@ int sample_config_lidar_udp_destination_ip(std::string lidar_ip, std::string dst
 }
 
 //Sample code 4 : Set lidar's udp destination port
-int sample_config_lidar_udp_destination_port(std::string lidar_ip, int dst_port)
+int sample_config_lidar_udp_destination_port(std::string lidar_ip, int dst_port, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown)
 {
     int ret = 0;
     zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
-    if (ret = config.SetDeviceUdpDestinationPort(dst_port))
+	if (tp == zvision::DeviceType::LidarMl30SA1Plus) {
+		zvision::JsonConfigFileParam param_30sp;
+		param_30sp.udp_dest_port = dst_port;
+		ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::set_udp_dest_port, &param_30sp);
+	}
+	else {
+		ret = config.SetDeviceUdpDestinationPort(dst_port);
+	}
+    if (ret)
         LOG_ERROR("Set device [%s]'s UDP destination port to [%d] failed, ret = %d.\n", lidar_ip.c_str(), dst_port, ret);
     else
         LOG_INFO("Set device [%s]'s UDP destination port to [%d] ok.\n", lidar_ip.c_str(), dst_port);
@@ -210,11 +252,19 @@ int sample_config_lidar_udp_destination_port(std::string lidar_ip, int dst_port)
 }
 
 //Sample code 5 : Set lidar's retro function
-int sample_config_lidar_retro_enable(std::string lidar_ip, bool enable)
+int sample_config_lidar_retro_enable(std::string lidar_ip, bool enable, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown)
 {
     int ret = 0;
     zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
-    if (ret = config.SetDeviceRetroEnable(enable))
+	if (tp == zvision::DeviceType::LidarMl30SA1Plus) {
+		zvision::JsonConfigFileParam param_30sp;
+		param_30sp.switch_retro = enable;
+		ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::set_retro_switch, &param_30sp);
+	}
+	else {
+		ret = config.SetDeviceRetroEnable(enable);
+	}
+    if (ret)
         LOG_ERROR("Set device [%s]'s retro to [%d] failed, ret = %d.\n", lidar_ip.c_str(), enable, ret);
     else
         LOG_INFO("Set device [%s]'s retro to [%d] ok.\n", lidar_ip.c_str(), enable);
@@ -234,13 +284,22 @@ int sample_config_lidar_time_sync(std::string lidar_ip, zvision::TimestampType t
 }
 
 //Sample code 7 : Query lidar's firmware version
-int sample_query_lidar_firmware_version(std::string lidar_ip)
+int sample_query_lidar_firmware_version(std::string lidar_ip, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown)
 {
     int ret = 0;
     zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
     std::string boot_version, kernel_version;
     zvision::FirmwareVersion version;
-    if (ret = config.QueryDeviceFirmwareVersion(version))
+	if (tp == zvision::DeviceType::LidarMl30SA1Plus) {
+		zvision::JsonConfigFileParam param_30sp;
+		ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::read_embeded_fpga_version, &param_30sp);
+		memcpy(version.kernel_version, param_30sp.embedded_ver, 4);
+		memcpy(version.boot_version, param_30sp.fpga_ver, 4);
+	}
+	else {
+		ret = config.QueryDeviceFirmwareVersion(version);
+	}
+    if (ret)
         LOG_ERROR("Query device [%s]'s firmware version failed, ret = %d.\n", lidar_ip.c_str(), ret);
     else
     {
@@ -252,12 +311,20 @@ int sample_query_lidar_firmware_version(std::string lidar_ip)
 }
 
 //Sample code 8 : Query lidar's serial number
-int sample_query_lidar_serial_number(std::string lidar_ip)
+int sample_query_lidar_serial_number(std::string lidar_ip, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown)
 {
     int ret = 0;
     zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
     std::string serial_number;
-    if (ret = config.QueryDeviceSnCode(serial_number))
+	if (tp == zvision::DeviceType::LidarMl30SA1Plus) {
+		zvision::JsonConfigFileParam param_30sp;
+		ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::read_serial_number, &param_30sp);
+		serial_number = param_30sp.serial_number;
+	}
+	else {
+		ret = config.QueryDeviceSnCode(serial_number);
+	}
+    if (ret)
         LOG_ERROR("Query device [%s]'s serial number failed, ret = %d.\n", lidar_ip.c_str(), ret);
     else
     {
@@ -285,12 +352,18 @@ int sample_query_lidar_hardware_temperature(std::string lidar_ip)
 }
 
 //Sample code 10 : Query lidar's configurature
-int sample_query_lidar_configuration(std::string lidar_ip)
+int sample_query_lidar_configuration(std::string lidar_ip, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown)
 {
     int ret = 0;
     zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
     zvision::DeviceConfigurationInfo info;
-    if (ret = config.QueryDeviceConfigurationInfo(info))
+	if (tp == zvision::DeviceType::LidarMl30SA1Plus) {
+		ret = config.QueryML30sPlusDeviceConfigurationInfo(info);
+	}
+	else {
+		ret = config.QueryDeviceConfigurationInfo(info);
+	}
+    if (ret)
         LOG_ERROR("Query device [%s]'s configuration info failed, ret = %d.\n", lidar_ip.c_str(), ret);
     else
     {
@@ -302,7 +375,7 @@ int sample_query_lidar_configuration(std::string lidar_ip)
 }
 
 //Sample code 11 : Get lidar's calibration file by tcp connection.
-int sample_get_lidar_calibration(std::string lidar_ip, std::string savefilename)
+int sample_get_lidar_calibration(std::string lidar_ip, std::string savefilename, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown)
 {
     int ret = 0;
     zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
@@ -317,11 +390,17 @@ int sample_get_lidar_calibration(std::string lidar_ip, std::string savefilename)
 }
 
 //Sample code 12 : Firmware update.
-int sample_firmware_update(std::string lidar_ip, std::string filename)
+int sample_firmware_update(std::string lidar_ip, std::string filename, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown)
 {
     int ret = 0;
     zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
-    if (ret = config.FirmwareUpdate(filename, print_current_progress_multi))
+	if (tp == zvision::DeviceType::LidarMl30SA1Plus) {
+		ret = config.ML30sPlusFirmwareUpdate(filename, print_current_progress_multi);
+	}
+	else {
+		ret = config.FirmwareUpdate(filename, print_current_progress_multi);
+	}
+    if (ret)
         LOG_ERROR("Update device [%s]'s firmware %s failed, ret = %d.\n", lidar_ip.c_str(), filename.c_str(), ret);
     else
     {
@@ -331,11 +410,18 @@ int sample_firmware_update(std::string lidar_ip, std::string filename)
 }
 
 //Sample code 13 : Reboot lidar by tcp connection.
-int sample_reboot_lidar(std::string lidar_ip)
+int sample_reboot_lidar(std::string lidar_ip, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown)
 {
     int ret = 0;
     zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
-    if (ret = config.RebootDevice())
+	if (tp == zvision::DeviceType::LidarMl30SA1Plus) {
+		zvision::JsonConfigFileParam param_30sp;
+		ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::reboot, &param_30sp);
+	}
+	else {
+		ret = config.RebootDevice();
+	}
+    if (ret)
         LOG_ERROR("Reboot device [%s] failed, ret = %d.\n", lidar_ip.c_str(), ret);
     else
     {
@@ -395,11 +481,19 @@ int sample_config_lidar_retro_param_point_percentage(std::string lidar_ip, int p
 }
 
 //Sample code 17 : Config lidar phaseoffset enable
-int sample_config_lidar_phase_offset_enable(std::string lidar_ip, bool en)
+int sample_config_lidar_phase_offset_enable(std::string lidar_ip, bool en, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown)
 {
     int ret = 0;
     zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
-    if (ret = config.SetDevicePhaseOffsetEnable(en))
+	if (tp == zvision::DeviceType::LidarMl30SA1Plus) {
+		zvision::JsonConfigFileParam param_30sp;
+		param_30sp.frame_sync = en;
+		ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::set_frame_sync, &param_30sp);
+	}
+	else {
+		ret = config.SetDevicePhaseOffsetEnable(en);
+	}
+    if (ret)
         LOG_ERROR("Set device [%s]'s phase offset enable to [%d] failed, ret = %d.\n", lidar_ip.c_str(), en, ret);
     else
         LOG_INFO("Set device [%s]'s phase offset enable to [%d] ok.\n", lidar_ip.c_str(), en);
@@ -407,11 +501,19 @@ int sample_config_lidar_phase_offset_enable(std::string lidar_ip, bool en)
 }
 
 //Sample code 18 : Config lidar phaseoffset value
-int sample_config_lidar_phase_offset_value(std::string lidar_ip, int value_5ns)
+int sample_config_lidar_phase_offset_value(std::string lidar_ip, int value_5ns, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown)
 {
     int ret = 0;
     zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
-    if (ret = config.SetDevicePhaseOffset(value_5ns))
+	if (tp == zvision::DeviceType::LidarMl30SA1Plus) {
+		zvision::JsonConfigFileParam param_30sp;
+		param_30sp.frame_offset = value_5ns;
+		ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::set_frame_offset, &param_30sp);
+	}
+	else {
+		ret = config.SetDevicePhaseOffset(value_5ns);
+	}
+    if (ret)
         LOG_ERROR("Set device [%s]'s phase offset value to [%d]x5ns failed, ret = %d.\n", lidar_ip.c_str(), value_5ns, ret);
     else
         LOG_INFO("Set device [%s]'s phase offset value to [%d]x5ns ok.\n", lidar_ip.c_str(), value_5ns);
@@ -419,11 +521,19 @@ int sample_config_lidar_phase_offset_value(std::string lidar_ip, int value_5ns)
 }
 
 //Sample code 19 : Config lidar ptp configuration file
-int sample_config_lidar_ptp_configuration_file(std::string lidar_ip, std::string filename)
+int sample_config_lidar_ptp_configuration_file(std::string lidar_ip, std::string filename, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown)
 {
     int ret = 0;
     zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
-    if (ret = config.SetDevicePtpConfiguration(filename))
+	if (tp == zvision::DeviceType::LidarMl30SA1Plus) {
+		zvision::JsonConfigFileParam param_30sp;
+		param_30sp.temp_filepath = filename;
+		ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::set_ptp_file, &param_30sp);
+	}
+	else {
+		ret = config.SetDevicePtpConfiguration(filename);
+	}
+    if (ret)
         LOG_ERROR("Set device [%s]'s ptp configuration file to [%s] failed, ret = %d.\n", lidar_ip.c_str(), filename.c_str(), ret);
     else
         LOG_INFO("Set device [%s]'s ptp configuration file to [%s] ok.\n", lidar_ip.c_str(), filename.c_str());
@@ -431,11 +541,19 @@ int sample_config_lidar_ptp_configuration_file(std::string lidar_ip, std::string
 }
 
 //Sample code 20 : Get lidar ptp configuration file
-int sample_get_lidar_ptp_configuration_to_file(std::string lidar_ip, std::string filename)
+int sample_get_lidar_ptp_configuration_to_file(std::string lidar_ip, std::string filename, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown)
 {
     int ret = 0;
     zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
-    if (ret = config.GetDevicePtpConfigurationToFile(filename))
+	if (tp == zvision::DeviceType::LidarMl30SA1Plus) {
+		zvision::JsonConfigFileParam param_30sp;
+		param_30sp.temp_filepath = filename;
+		ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::read_ptp_file, &param_30sp);
+	}
+	else {
+		ret = config.GetDevicePtpConfigurationToFile(filename);
+	}
+    if (ret)
         LOG_ERROR("Get device [%s]'s ptp configuration file to [%s] failed, ret = %d.\n", lidar_ip.c_str(), filename.c_str(), ret);
     else
         LOG_INFO("Get device [%s]'s ptp configuration file to [%s] ok.\n", lidar_ip.c_str(), filename.c_str());
@@ -443,7 +561,7 @@ int sample_get_lidar_ptp_configuration_to_file(std::string lidar_ip, std::string
 }
 
 //Sample code 21 : Config lidar calibration file broadcast enable
-int sample_config_lidar_cali_file_broadcast_mode(std::string lidar_ip, bool en)
+int sample_config_lidar_cali_file_broadcast_mode(std::string lidar_ip, bool en, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown)
 {
 	int ret = 0;
 	zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
@@ -451,7 +569,15 @@ int sample_config_lidar_cali_file_broadcast_mode(std::string lidar_ip, bool en)
 	if (en)
 		mode = zvision::CalSendMode::CalSendEnable;
 
-	if (ret = config.SetDeviceCalSendMode(mode))
+	if (tp == zvision::DeviceType::LidarMl30SA1Plus) {
+		zvision::JsonConfigFileParam param_30sp;
+		param_30sp.angle_send = en;
+		ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::set_angle_send, &param_30sp);
+	}
+	else {
+		ret = config.SetDeviceCalSendMode(mode);
+	}
+	if (ret)
 		LOG_ERROR("Set device [%s]'s calibration file broadcast enable to [%d] failed, ret = %d.\n", lidar_ip.c_str(), en, ret);
 	else
 		LOG_INFO("Set device [%s]'s calibration file broadcast enable to [%d] ok.\n", lidar_ip.c_str(), en);
@@ -483,32 +609,73 @@ int sample_config_lidar_downsample_mode(std::string lidar_ip, std::string mode)
 }
 
 //Sample code 23 : Config lidar retro parameter
-int sample_set_lidar_retro_parameters(std::string lidar_ip,int id, std::string val) {
+int sample_set_lidar_retro_parameters(std::string lidar_ip,int id, std::string val, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown) {
 
 	int ret = 0;
 	zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
 	zvision::DeviceAlgoParam param;
-	switch (id)
-	{
-	case 2:
-		ret = config.SetDeviceRetroParam(zvision::RetroDisThres,std::atoi(val.c_str()));break;
-	case 3:
-		ret = config.SetDeviceRetroParam(zvision::RetroLowRangeThres, (unsigned short)std::atoi(val.c_str())); break;
-	case 4:
-		ret = config.SetDeviceRetroParam(zvision::RetroHighRangeThres, (unsigned short)std::atoi(val.c_str())); break;
-	case 1:
-		ret = config.SetDeviceRetroParam(zvision::RetroMinGrayNum, (unsigned char)std::atoi(val.c_str())); break;
-	case 5:
-		ret = config.SetDeviceRetroParam(zvision::RetroDelGrayThres, (unsigned char)std::atoi(val.c_str())); break;
-	case 6:
-		ret = config.SetDeviceRetroParam(zvision::RetroDelRatioGrayLowThres, (unsigned char)std::atoi(val.c_str())); break;
-	case 7:
-		ret = config.SetDeviceRetroParam(zvision::RetroDelRatioGrayHighThres, (unsigned char)std::atoi(val.c_str())); break;
-	case 8:
-		ret = config.SetDeviceRetroParam(zvision::RetroMinGray, (unsigned char)std::atoi(val.c_str())); break;
-	default:
-		ret = -1; break;
+	if (tp == zvision::DeviceType::LidarMl30SA1Plus) {
+		zvision::JsonConfigFileParam param_30sp;
+		switch (id)
+		{
+		case 2:
+			param_30sp.critical_point_dis_thre_retro = std::atoi(val.c_str());
+			ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::set_retro_critical_point_dis_thre, &param_30sp);
+			break;
+		case 3:
+			LOG_ERROR("Not support for 30sp device [%s].\n", lidar_ip.c_str());
+			return -1;
+		case 4:
+			LOG_ERROR("Not support for 30sp device [%s].\n", lidar_ip.c_str());
+			return -1;
+		case 1:
+			param_30sp.target_point_num_thre_retro = (unsigned char)std::atoi(val.c_str());
+			ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::set_retro_target_point_num_thre, &param_30sp);
+			break;
+		case 5:
+			param_30sp.del_point_gray_thre_retro = (unsigned char)std::atoi(val.c_str());
+			ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::set_retro_del_point_gray_thre, &param_30sp);
+			break;
+		case 6:
+			param_30sp.del_point_dis_low_thre_retro = (unsigned char)std::atoi(val.c_str());
+			ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::set_retro_del_point_dis_low_thre, &param_30sp);
+			break;
+		case 7:
+			param_30sp.del_point_dis_high_thre_retro = (unsigned char)std::atoi(val.c_str());
+			ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::set_retro_del_point_dis_high_thre, &param_30sp);
+			break;
+		case 8:
+			param_30sp.target_gray_thre_retro = (unsigned char)std::atoi(val.c_str());
+			ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::set_retro_target_gray_thre, &param_30sp);
+			break;
+		default:
+			ret = -1; break;
+		}
 	}
+	else {
+		switch (id)
+		{
+		case 2:
+			ret = config.SetDeviceRetroParam(zvision::RetroDisThres,std::atoi(val.c_str()));break;
+		case 3:
+			ret = config.SetDeviceRetroParam(zvision::RetroLowRangeThres, (unsigned short)std::atoi(val.c_str())); break;
+		case 4:
+			ret = config.SetDeviceRetroParam(zvision::RetroHighRangeThres, (unsigned short)std::atoi(val.c_str())); break;
+		case 1:
+			ret = config.SetDeviceRetroParam(zvision::RetroMinGrayNum, (unsigned char)std::atoi(val.c_str())); break;
+		case 5:
+			ret = config.SetDeviceRetroParam(zvision::RetroDelGrayThres, (unsigned char)std::atoi(val.c_str())); break;
+		case 6:
+			ret = config.SetDeviceRetroParam(zvision::RetroDelRatioGrayLowThres, (unsigned char)std::atoi(val.c_str())); break;
+		case 7:
+			ret = config.SetDeviceRetroParam(zvision::RetroDelRatioGrayHighThres, (unsigned char)std::atoi(val.c_str())); break;
+		case 8:
+			ret = config.SetDeviceRetroParam(zvision::RetroMinGray, (unsigned char)std::atoi(val.c_str())); break;
+		default:
+			ret = -1; break;
+		}
+	}
+	
 
 	if (ret != 0)
 		LOG_ERROR("Set device [%s]'s retro parameters failed, ret = %d.\n", lidar_ip.c_str(), ret);
@@ -519,32 +686,78 @@ int sample_set_lidar_retro_parameters(std::string lidar_ip,int id, std::string v
 }
 
 //Sample code 24 : Config lidar adhesion parameter
-int sample_set_lidar_adhesion_parameters(std::string lidar_ip, int id, std::string val) {
+int sample_set_lidar_adhesion_parameters(std::string lidar_ip, int id, std::string val, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown) {
 	int ret = 0;
 	zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
 	zvision::DeviceAlgoParam param;
-	switch (id)
-	{
-	case 1:
-		ret = config.SetDeviceAdhesionParam(zvision::MinimumHorizontalAngleRange, std::atoi(val.c_str())); break;
-	case 2:
-		ret = config.SetDeviceAdhesionParam(zvision::MaximumHorizontalAngleRange, std::atoi(val.c_str())); break;
-	case 3:
-		ret = config.SetDeviceAdhesionParam(zvision::MinimumVerticalAngleRange, std::atoi(val.c_str())); break;
-	case 4:
-		ret = config.SetDeviceAdhesionParam(zvision::MaximumVerticalAngleRange, std::atoi(val.c_str())); break;
-	case 5:
-		ret = config.SetDeviceAdhesionParam(zvision::HorizontalAngleResolution, (float)std::atof(val.c_str())); break;
-	case 6:
-		ret = config.SetDeviceAdhesionParam(zvision::VerticalAngleResolution, (float)std::atof(val.c_str())); break;
-	case 7:
-		ret = config.SetDeviceAdhesionParam(zvision::DeletePointThreshold, (float)std::atof(val.c_str())); break;
-	case 8:
-		ret = config.SetDeviceAdhesionParam(zvision::MaximumProcessingRange, (float)std::atof(val.c_str())); break;
-	case 9:
-		ret = config.SetDeviceAdhesionParam(zvision::NearFarPointDiff, (float)std::atof(val.c_str())); break;
-	default:
-		ret = -1; break;
+	if (tp == zvision::DeviceType::LidarMl30SA1Plus) {
+		zvision::JsonConfigFileParam param_30sp;
+		switch (id)
+		{
+		case 1:
+			param_30sp.angle_hor_min_adhesion = std::atoi(val.c_str());
+			ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::set_adhesion_angle_hor_min, &param_30sp);
+			break;
+		case 2:
+			param_30sp.angle_hor_max_adhesion = std::atoi(val.c_str());
+			ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::set_adhesion_angle_hor_max, &param_30sp);
+			break;
+		case 3:
+			param_30sp.angle_ver_min_adhesion = std::atoi(val.c_str());
+			ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::set_adhesion_angle_ver_min, &param_30sp);
+			break;
+		case 4:
+			param_30sp.angle_ver_max_adhesion = std::atoi(val.c_str());
+			ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::set_adhesion_angle_ver_max, &param_30sp);
+			break;
+		case 5:
+			param_30sp.angle_hor_res_adhesion = (float)std::atof(val.c_str());
+			ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::set_adhesion_angle_hor_res, &param_30sp);
+			break;
+		case 6:
+			param_30sp.angle_ver_res_adhesion = (float)std::atof(val.c_str());
+			ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::set_adhesion_angle_ver_res, &param_30sp);
+			break;
+		case 7:
+			param_30sp.diff_thre_adhesion = (float)std::atof(val.c_str());
+			ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::set_adhesion_diff_thre, &param_30sp);
+			break;
+		case 8:
+			param_30sp.dist_limit_adhesion = (float)std::atof(val.c_str());
+			ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::set_adhesion_dist_limit, &param_30sp);
+			break;
+		case 9:
+			param_30sp.min_diff_adhesion = (float)std::atof(val.c_str());
+			ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::set_adhesion_min_diff, &param_30sp);
+			break;
+		default:
+			ret = -1; break;
+		}
+	}
+	else {
+		switch (id)
+		{
+		case 1:
+			ret = config.SetDeviceAdhesionParam(zvision::MinimumHorizontalAngleRange, std::atoi(val.c_str())); break;
+		case 2:
+			ret = config.SetDeviceAdhesionParam(zvision::MaximumHorizontalAngleRange, std::atoi(val.c_str())); break;
+		case 3:
+			ret = config.SetDeviceAdhesionParam(zvision::MinimumVerticalAngleRange, std::atoi(val.c_str())); break;
+		case 4:
+			ret = config.SetDeviceAdhesionParam(zvision::MaximumVerticalAngleRange, std::atoi(val.c_str())); break;
+		case 5:
+			ret = config.SetDeviceAdhesionParam(zvision::HorizontalAngleResolution, (float)std::atof(val.c_str())); break;
+		case 6:
+			ret = config.SetDeviceAdhesionParam(zvision::VerticalAngleResolution, (float)std::atof(val.c_str())); break;
+		case 7:
+			ret = config.SetDeviceAdhesionParam(zvision::DeletePointThreshold, (float)std::atof(val.c_str())); break;
+		case 8:
+			ret = config.SetDeviceAdhesionParam(zvision::MaximumProcessingRange, (float)std::atof(val.c_str())); break;
+		case 9:
+			ret = config.SetDeviceAdhesionParam(zvision::NearFarPointDiff, (float)std::atof(val.c_str())); break;
+		default:
+			ret = -1; break;
+		}
 	}
 
 	if (ret != 0)
@@ -556,12 +769,39 @@ int sample_set_lidar_adhesion_parameters(std::string lidar_ip, int id, std::stri
 }
 
 //Sample code 25 : Get lidar algorithm parameter(retro and adhesion)
-int sample_get_lidar_algorithm_parameters(std::string lidar_ip) {
+int sample_get_lidar_algorithm_parameters(std::string lidar_ip, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown) {
 
 	int ret = 0;
 	zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
 	zvision::DeviceAlgoParam param;
-	if (ret = config.QueryDeviceAlgoParam(param))
+	if (tp == zvision::DeviceType::LidarMl30SA1Plus) {
+		zvision::JsonConfigFileParam param_30sp;
+		ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::read_algo_param_in_use, &param_30sp);
+		if (ret == 0) {
+			// retro
+			param.retro_min_gray_num = param_30sp.target_point_num_thre_retro;
+			param.retro_dis_thres = param_30sp.critical_point_dis_thre_retro;
+			param.retro_del_gray_thres = param_30sp.del_point_gray_thre_retro;
+			param.retro_del_ratio_gray_low_thres = param_30sp.del_point_dis_low_thre_retro;
+			param.retro_del_ratio_gray_high_thres = param_30sp.del_point_dis_high_thre_retro;
+			param.retro_min_gray = param_30sp.target_gray_thre_retro;
+			// adhesion
+			param.adhesion_angle_hor_min = param_30sp.angle_hor_min_adhesion;
+			param.adhesion_angle_hor_max = param_30sp.angle_hor_max_adhesion;
+			param.adhesion_angle_ver_min = param_30sp.angle_ver_min_adhesion;
+			param.adhesion_angle_ver_max = param_30sp.angle_ver_max_adhesion;
+			param.adhesion_angle_hor_res = param_30sp.angle_hor_res_adhesion;
+			param.adhesion_angle_ver_res = param_30sp.angle_ver_res_adhesion;
+			param.adhesion_diff_thres = param_30sp.diff_thre_adhesion;
+			param.adhesion_dis_limit = param_30sp.dist_limit_adhesion;
+			param.adhesion_min_diff = param_30sp.min_diff_adhesion;
+		}
+	}
+	else {
+		ret = config.QueryDeviceAlgoParam(param);
+	}
+
+	if (ret)
 		LOG_ERROR("Get device [%s]'s algorithm parameters failed, ret = %d.\n", lidar_ip.c_str(), ret);
 	else {
 		LOG_INFO("Get device [%s]'s algorithm parameters ok.\n", lidar_ip.c_str());
@@ -569,8 +809,10 @@ int sample_get_lidar_algorithm_parameters(std::string lidar_ip) {
 		msg += "------  Retro  -------\n";
 		msg += "min gray num: " + std::to_string(param.retro_min_gray_num) + "\n";
 		msg += "dis thres: " + std::to_string(param.retro_dis_thres) + "\n";
-		msg += "low range thres: " + std::to_string(param.retro_low_range_thres) + "\n";
-		msg += "high range thres: " + std::to_string(param.retro_high_range_thres) + "\n";
+		if (tp != zvision::DeviceType::LidarMl30SA1Plus) {
+			msg += "low range thres: " + std::to_string(param.retro_low_range_thres) + "\n";
+			msg += "high range thres: " + std::to_string(param.retro_high_range_thres) + "\n";
+		}
 		msg += "del gray thres: " + std::to_string(param.retro_del_gray_thres) + "\n";
 		msg += "del ratio gray low thres: " + std::to_string(param.retro_del_ratio_gray_low_thres) + "\n";
 		msg += "del ratio gray high thres: " + std::to_string(param.retro_del_ratio_gray_high_thres) + "\n";
@@ -592,10 +834,18 @@ int sample_get_lidar_algorithm_parameters(std::string lidar_ip) {
 }
 
 //Sample code 26 : Config lidar delete close points enable
-int sample_config_lidar_delete_points(std::string lidar_ip, bool en) {
+int sample_config_lidar_delete_points(std::string lidar_ip, bool en, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown) {
 	int ret = 0;
 	zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
-	if (ret = config.SetDeviceAlgorithmEnable(zvision::AlgoType::AlgoDeleteClosePoints,en))
+	if (tp == zvision::DeviceType::LidarMl30SA1Plus) {
+		zvision::JsonConfigFileParam param_30sp;
+		param_30sp.switch_near_point_delete = en;
+		ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::set_near_point_delete_switch, &param_30sp);
+	}
+	else {
+		ret = config.SetDeviceAlgorithmEnable(zvision::AlgoType::AlgoDeleteClosePoints, en);
+	}
+	if (ret)
 		LOG_ERROR("Set device [%s]'s delete close points enable to [%d] failed, ret = %d.\n", lidar_ip.c_str(), en, ret);
 	else
 		LOG_INFO("Set device [%s]'s delete close points enable to [%d] ok.\n", lidar_ip.c_str(), en);
@@ -603,10 +853,18 @@ int sample_config_lidar_delete_points(std::string lidar_ip, bool en) {
 }
 
 //Sample code 27 : Config lidar adhesion enable
-int sample_config_lidar_adhesion(std::string lidar_ip, bool en) {
+int sample_config_lidar_adhesion(std::string lidar_ip, bool en, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown) {
 	int ret = 0;
 	zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
-	if (ret = config.SetDeviceAlgorithmEnable(zvision::AlgoType::AlgoAdhesion, en))
+	if (tp == zvision::DeviceType::LidarMl30SA1Plus) {
+		zvision::JsonConfigFileParam param_30sp;
+		param_30sp.switch_adhesion = en;
+		ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::set_near_point_delete_switch, &param_30sp);
+	}
+	else {
+		ret = config.SetDeviceAlgorithmEnable(zvision::AlgoType::AlgoAdhesion, en);
+	}
+	if (ret)
 		LOG_ERROR("Set device [%s]'s adhesion enable to [%d] failed, ret = %d.\n", lidar_ip.c_str(), en, ret);
 	else
 		LOG_INFO("Set device [%s]'s adhesion enable to [%d] ok.\n", lidar_ip.c_str(), en);
@@ -615,14 +873,14 @@ int sample_config_lidar_adhesion(std::string lidar_ip, bool en) {
 
 /* Handling multiple lidars */
 //Sample code 28 : Muitiple lidars Firmware update.
-int sample_firmware_update_multi(std::vector<std::string> lidars_ip, std::string filename)
+int sample_firmware_update_multi(std::vector<std::string> lidars_ip, std::string filename, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown)
 {
 	// start task
 	int devs = lidars_ip.size();
 	std::vector<std::shared_ptr<std::thread>> thr_vec;
 	thr_vec.resize(devs);
 	for (int i = 0; i < devs; i++) {
-		thr_vec[i].reset(new std::thread(std::bind(&sample_firmware_update, lidars_ip[i], filename)));
+		thr_vec[i].reset(new std::thread(std::bind(&sample_firmware_update, lidars_ip[i], filename, tp)));
 	}
 	// wait for finish
 	for (int i = 0; i < devs; i++) {
@@ -632,62 +890,62 @@ int sample_firmware_update_multi(std::vector<std::string> lidars_ip, std::string
 	return 0;
 }
 //Sample code 29 : Config muitiple lidars adhesion enable.
-int sample_config_lidar_adhesion_multi(std::vector<std::string> lidars_ip, bool en) {
+int sample_config_lidar_adhesion_multi(std::vector<std::string> lidars_ip, bool en, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown) {
 
 	// start task
 	for (auto ip : lidars_ip)
-		sample_config_lidar_adhesion(ip, en);
+		sample_config_lidar_adhesion(ip, en, tp);
 
 	return 0;
 }
 //Sample code 30 : Config muitiple lidars delete_points enable.
-int sample_config_lidar_delete_points_multi(std::vector<std::string> lidars_ip, bool en) {
+int sample_config_lidar_delete_points_multi(std::vector<std::string> lidars_ip, bool en, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown) {
 
 	// start task
 	for (auto ip : lidars_ip)
-		sample_config_lidar_delete_points(ip, en);
+		sample_config_lidar_delete_points(ip, en, tp);
 
 	return 0;
 }
 //Sample code 31 : Config muitiple lidars retro enable.
-int sample_config_lidar_retro_multi(std::vector<std::string> lidars_ip, bool en) {
+int sample_config_lidar_retro_multi(std::vector<std::string> lidars_ip, bool en, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown) {
 
 	// start task
 	for (auto ip: lidars_ip)
-		sample_config_lidar_retro_enable(ip, en);
+		sample_config_lidar_retro_enable(ip, en, tp);
 
 	return 0;
 }
 //Sample code 32 : Config muitiple lidars phase offset enable.
-int sample_config_lidar_phase_offset_multi(std::vector<std::string> lidars_ip, bool en) {
+int sample_config_lidar_phase_offset_multi(std::vector<std::string> lidars_ip, bool en, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown) {
 
 	// start task
 	for (auto ip : lidars_ip)
-		sample_config_lidar_phase_offset_enable(ip, en);
+		sample_config_lidar_phase_offset_enable(ip, en, tp);
 
 	return 0;
 }
 //Sample code 33 : Config muitiple lidars phase offset enable.
-int sample_query_lidar_configuration_multi(std::vector<std::string> lidars_ip) {
+int sample_query_lidar_configuration_multi(std::vector<std::string> lidars_ip, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown) {
 
 	// start task
 	for (auto ip: lidars_ip)
-		sample_query_lidar_configuration(ip);
+		sample_query_lidar_configuration(ip, tp);
 
 	return 0;
 }
 //Sample code 34 : Reboot lidars by tcp connection.
-int sample_reboot_lidar_multi(std::vector<std::string> lidars_ip) {
+int sample_reboot_lidar_multi(std::vector<std::string> lidars_ip, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown) {
 
 	// start task
 	for (auto ip: lidars_ip)
-		sample_reboot_lidar(ip);
+		sample_reboot_lidar(ip, tp);
 
 	return 0;
 }
 
 //Sample code 35 : Set lidar's calibration file by tcp connection.
-int sample_config_lidar_calibration(std::string lidar_ip, std::string filename) {
+int sample_config_lidar_calibration(std::string lidar_ip, std::string filename, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown) {
 	int ret = 0;
 	zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
 	if (ret = config.SetDeviceCalibrationData(filename))
@@ -698,6 +956,7 @@ int sample_config_lidar_calibration(std::string lidar_ip, std::string filename) 
 	}
 	return ret;
 }
+
 
 int main(int argc, char** argv)
 {
@@ -773,12 +1032,12 @@ int main(int argc, char** argv)
             << "Demo:   -scan_device 5\n\n"
 
             << "Sample 15 : retro param 1(min ref[0,100])\n"
-            << "Format: -retro_p1 lidar_ip value\n"
-            << "Demo:   -retro_p1 192.168.10.108 5\n\n"
+            << "Format: -retro_p1 value\n"
+            << "Demo:   -retro_p1 5\n\n"
 
             << "Sample 16 : retro param 2(point percentage[0,100])\n"
-            << "Format: -retro_p2 lidar_ip value\n"
-            << "Demo:   -retro_p2 192.168.10.108 5\n\n"
+            << "Format: -retro_p2 value\n"
+            << "Demo:   -retro_p2 5\n\n"
 
             << "Sample 17 : phase offset enable(0 for disable, 1 for enable)\n"
             << "Format: -phase_offset_enable lidar_ip mode\n"
@@ -787,16 +1046,16 @@ int main(int argc, char** argv)
 			<< "Demo:   -phase_offset_enable_multi 192.168.10.108 192.168.10.109 0\n\n"
 
             << "Sample 18 : phase offset value\n"
-            << "Format: -phase_offset_value lidar_ip value(x5ns)\n"
-            << "Demo:   -phase_offset_value 192.168.10.108 0\n\n"
+            << "Format: -phase_offset_value value(x5ns)\n"
+            << "Demo:   -phase_offset_value 0\n\n"
 
             << "Sample 19 : config ptp configuration\n"
-            << "Format: -set_ptp_cfg lidar_ip filename\n"
-            << "Demo:   -set_ptp_cfg 192.168.10.108 test.txt\n\n"
+            << "Format: -set_ptp_cfg filename\n"
+            << "Demo:   -set_ptp_cfg test.txt\n\n"
 
             << "Sample 20 : get ptp configuration to file\n"
-            << "Format: -get_ptp_cfg lidar_ip filename\n"
-            << "Demo:   -get_ptp_cfg 192.168.10.108 test.txt\n\n"
+            << "Format: -get_ptp_cfg filename\n"
+            << "Demo:   -get_ptp_cfg test.txt\n\n"
 
 			<< "Sample 21 : calibration file broadcast enabale\n"
 			<< "Format: -cali_file_broadcast_enable lidar_ip enable(0 for disable, 1 for enable) \n"
@@ -876,151 +1135,164 @@ int main(int argc, char** argv)
 			lidars_ip = std::vector<std::string>{ std::begin(lidars_ip),std::begin(lidars_ip) + 3 };
 	}
 
-	if (0 == std::string(argv[1]).compare("-config_mac") && argc == 4)
+	std::string opt = std::string(argv[1]);
+	zvision::DeviceType tp = zvision::DeviceType::LidarUnknown;
+	using Param = std::map<std::string, std::string>;
+	std::map<std::string, std::string> paras;
+	std::string appname = "";
+	ParamResolver::GetParameters(argc, argv, paras, appname);
+
+	int argc_offset = 0;
+	if (paras.find("-30sp") != paras.end()) {
+		tp = zvision::DeviceType::LidarMl30SA1Plus;
+		argc_offset = 1;
+	}
+
+	if (0 == std::string(argv[1]).compare("-config_mac") && argc == (4 + argc_offset))
 		//Sample code 0 : Set lidar's mac address
-		sample_config_lidar_mac_address(lidar_ip, std::string(argv[3]));
+		sample_config_lidar_mac_address(lidar_ip, std::string(argv[3]), tp);
 
-	else if (0 == std::string(argv[1]).compare("-config_static_ip") && argc == 4)
+	else if (0 == std::string(argv[1]).compare("-config_static_ip") && argc == (4 + argc_offset))
 		//Sample code 1 : Set lidar's static ip address
-		sample_config_lidar_ip(lidar_ip, std::string(argv[3]));
+		sample_config_lidar_ip(lidar_ip, std::string(argv[3]), tp);
 
-	else if (0 == std::string(argv[1]).compare("-config_subnet_mask") && argc == 4)
+	else if (0 == std::string(argv[1]).compare("-config_subnet_mask") && argc == (4 + argc_offset))
 		//Sample code 2 : Set lidar's subnet mask
-		sample_config_lidar_subnet_mask(lidar_ip, std::string(argv[3]));
+		sample_config_lidar_subnet_mask(lidar_ip, std::string(argv[3]), tp);
 
-	else if (0 == std::string(argv[1]).compare("-config_dst_ip") && argc == 4)
+	else if (0 == std::string(argv[1]).compare("-config_dst_ip") && argc == (4 + argc_offset))
 		//Sample code 3 : Set lidar's udp destination ip address
-		sample_config_lidar_udp_destination_ip(lidar_ip, std::string(argv[3]));
+		sample_config_lidar_udp_destination_ip(lidar_ip, std::string(argv[3]), tp);
 
-	else if (0 == std::string(argv[1]).compare("-config_dst_port") && argc == 4)
+	else if (0 == std::string(argv[1]).compare("-config_dst_port") && argc == (4 + argc_offset))
 		//Sample code 4 : Set lidar's udp destination port
-		sample_config_lidar_udp_destination_port(lidar_ip, std::atoi(argv[3]));
+		sample_config_lidar_udp_destination_port(lidar_ip, std::atoi(argv[3]), tp);
 
-	else if (0 == std::string(argv[1]).compare("-config_retro") && argc == 4)
+	else if (0 == std::string(argv[1]).compare("-config_retro") && argc == (4 + argc_offset))
 		//Sample code 5 : Set lidar's retro function
-		sample_config_lidar_retro_enable(lidar_ip, std::atoi(argv[3]));
+		sample_config_lidar_retro_enable(lidar_ip, std::atoi(argv[3]), tp);
 
-	else if (0 == std::string(argv[1]).compare("-config_time_sync") && argc == 4)
+	else if (0 == std::string(argv[1]).compare("-config_time_sync") && argc == (4 + argc_offset))
 		//Sample code 6 : Set lidar's time sync mode
 		sample_config_lidar_time_sync(lidar_ip, zvision::TimestampType(std::atoi(argv[3])));
 
-	else if (0 == std::string(argv[1]).compare("-query_version") && argc == 3)
+	else if (0 == std::string(argv[1]).compare("-query_version") && argc == (3 + argc_offset))
 		//Sample code 7 : Query lidar's firmware version
-		sample_query_lidar_firmware_version(lidar_ip);
+		sample_query_lidar_firmware_version(lidar_ip, tp);
 
-	else if (0 == std::string(argv[1]).compare("-query_sn") && argc == 3)
+	else if (0 == std::string(argv[1]).compare("-query_sn") && argc == (3 + argc_offset))
 		//Sample code 8 : Query lidar's serial number
-		sample_query_lidar_serial_number(lidar_ip);
+		sample_query_lidar_serial_number(lidar_ip, tp);
 
-	else if (0 == std::string(argv[1]).compare("-query_temp") && argc == 3)
+	else if (0 == std::string(argv[1]).compare("-query_temp") && argc == (3 + argc_offset))
 		//Sample code 9 : Query lidar's hardware temperature
 		sample_query_lidar_hardware_temperature(lidar_ip);
 
-	else if (0 == std::string(argv[1]).compare("-query_cfg") && argc == 3)
+	else if (0 == std::string(argv[1]).compare("-query_cfg") && argc == (3 + argc_offset))
 		//Sample code 10 : Query lidar's configurature
-		sample_query_lidar_configuration(lidar_ip);
+		sample_query_lidar_configuration(lidar_ip, tp);
 
-	else if (0 == std::string(argv[1]).compare("-get_cal") && argc == 4)
+	else if (0 == std::string(argv[1]).compare("-get_cal") && argc == (4 + argc_offset))
 		//Sample code 11 : Get lidar's calibration file by tcp connection.
-		sample_get_lidar_calibration(lidar_ip, std::string(argv[3]));
+		sample_get_lidar_calibration(lidar_ip, std::string(argv[3]), tp);
 
-	else if (0 == std::string(argv[1]).compare("-firmware_update") && argc == 4)
+	else if (0 == std::string(argv[1]).compare("-firmware_update") && argc == (4 + argc_offset))
 		//Sample code 12 : Firmware update.
-		sample_firmware_update(lidar_ip, std::string(argv[3]));
+		sample_firmware_update(lidar_ip, std::string(argv[3]), tp);
 
-	else if (0 == std::string(argv[1]).compare("-reboot") && argc == 3)
+	else if (0 == std::string(argv[1]).compare("-reboot") && argc == (3 + argc_offset))
 		//Sample code 13 : Reboot lidar by tcp connection.
-		sample_reboot_lidar(lidar_ip);
+		sample_reboot_lidar(lidar_ip, tp);
 
-	else if (0 == std::string(argv[1]).compare("-scan_device") && argc == 3)
+	else if (0 == std::string(argv[1]).compare("-scan_device") && argc == (3 + argc_offset))
 		//Sample code 14 : Scan lidar on the heart beat port
 		//Notice, this function is supported by the lidar's new firmware kernel version, at least 0.1.20
 		sample_scan_lidar_on_heat_beat_port(std::atoi(argv[2]));
 
-	else if (0 == std::string(argv[1]).compare("-retro_p1") && argc == 4)
+	else if (0 == std::string(argv[1]).compare("-retro_p1") && argc == (4 + argc_offset))
 		//Sample code 15 : Config lidar retro parameter 1(min ref, [0,100])
 		sample_config_lidar_retro_param_min_ref(lidar_ip, std::atoi(argv[3]));
 
-	else if (0 == std::string(argv[1]).compare("-retro_p2") && argc == 4)
+	else if (0 == std::string(argv[1]).compare("-retro_p2") && argc == (4 + argc_offset))
 		//Sample code 16 : Config lidar retro parameter 2(point percentage, [0,100])
 		sample_config_lidar_retro_param_point_percentage(lidar_ip, std::atoi(argv[3]));
 
-	else if (0 == std::string(argv[1]).compare("-phase_offset_enable") && argc == 4)
+	else if (0 == std::string(argv[1]).compare("-phase_offset_enable") && argc == (4 + argc_offset))
 		//Sample code 17 : Config lidar phaseoffset enable
-		sample_config_lidar_phase_offset_enable(lidar_ip, std::atoi(argv[3]));
+		sample_config_lidar_phase_offset_enable(lidar_ip, std::atoi(argv[3]), tp);
 
-	else if (0 == std::string(argv[1]).compare("-phase_offset_value") && argc == 4)
+	else if (0 == std::string(argv[1]).compare("-phase_offset_value") && argc == (4 + argc_offset))
 		//Sample code 18 : Config lidar phaseoffset value
-		sample_config_lidar_phase_offset_value(lidar_ip, std::atoi(argv[3]));
+		sample_config_lidar_phase_offset_value(lidar_ip, std::atoi(argv[3]), tp);
 
-	else if (0 == std::string(argv[1]).compare("-set_ptp_cfg") && argc == 4)
+	else if (0 == std::string(argv[1]).compare("-set_ptp_cfg") && argc == (4 + argc_offset))
 		//Sample code 19 : Config lidar ptp configuration file
-		sample_config_lidar_ptp_configuration_file(lidar_ip, std::string(argv[3]));
+		sample_config_lidar_ptp_configuration_file(lidar_ip, std::string(argv[3]), tp);
 
-	else if (0 == std::string(argv[1]).compare("-get_ptp_cfg") && argc == 4)
+	else if (0 == std::string(argv[1]).compare("-get_ptp_cfg") && argc == (4 + argc_offset))
 		//Sample code 20 : Get lidar ptp configuration file
-		sample_get_lidar_ptp_configuration_to_file(lidar_ip, std::string(argv[3]));
+		sample_get_lidar_ptp_configuration_to_file(lidar_ip, std::string(argv[3]), tp);
 
-	else if (0 == std::string(argv[1]).compare("-cali_file_broadcast_enable") && argc == 4)
+	else if (0 == std::string(argv[1]).compare("-cali_file_broadcast_enable") && argc == (4 + argc_offset))
 		//Sample code 21 : onfig lidar calibration file broadcast enable
-		sample_config_lidar_cali_file_broadcast_mode(lidar_ip, std::atoi(argv[3]));
+		sample_config_lidar_cali_file_broadcast_mode(lidar_ip, std::atoi(argv[3]), tp);
 
-	else if (0 == std::string(argv[1]).compare("-downsample_mode") && argc == 4)
+	else if (0 == std::string(argv[1]).compare("-downsample_mode") && argc == (4 + argc_offset))
 		//Sample code 22 : Config lidar downsample mode
 		sample_config_lidar_downsample_mode(lidar_ip, std::string(argv[3]));
 
-	else if (0 == std::string(argv[1]).compare("-set_retro_param") && argc == 5)
+	else if (0 == std::string(argv[1]).compare("-set_retro_param") && argc == (5 + argc_offset))
 		//Sample code 23 : Set lidar retro parameter
-		sample_set_lidar_retro_parameters(lidar_ip, std::atoi(argv[3]), std::string(argv[4]));
+		sample_set_lidar_retro_parameters(lidar_ip, std::atoi(argv[3]), std::string(argv[4]), tp);
 
-	else if (0 == std::string(argv[1]).compare("-set_adhesion_param") && argc == 5)
+	else if (0 == std::string(argv[1]).compare("-set_adhesion_param") && argc == (5 + argc_offset))
 		//Sample code 24 : Set lidar adhesion parameter
-		sample_set_lidar_adhesion_parameters(lidar_ip, std::atoi(argv[3]), std::string(argv[4]));
+		sample_set_lidar_adhesion_parameters(lidar_ip, std::atoi(argv[3]), std::string(argv[4]), tp);
 
-	else if (0 == std::string(argv[1]).compare("-get_algo_param") && argc == 3)
+	else if (0 == std::string(argv[1]).compare("-get_algo_param") && argc == (3 + argc_offset))
 		//Sample code 25 : Get lidar algorithm parameter(retro and adhesion)
-		sample_get_lidar_algorithm_parameters(lidar_ip);
+		sample_get_lidar_algorithm_parameters(lidar_ip, tp);
 
-	else if (0 == std::string(argv[1]).compare("-config_delete_points") && argc == 4)
+	else if (0 == std::string(argv[1]).compare("-config_delete_points") && argc == (4 + argc_offset))
 		//Sample code 26 : Config lidar delete close points enable
-		sample_config_lidar_delete_points(lidar_ip, std::atoi(argv[3]));
+		sample_config_lidar_delete_points(lidar_ip, std::atoi(argv[3]), tp);
 
-	else if (0 == std::string(argv[1]).compare("-config_adhesion") && argc == 4)
+	else if (0 == std::string(argv[1]).compare("-config_adhesion") && argc == (4 + argc_offset))
 		//Sample code 27 : Config lidar adhesion mode
-		sample_config_lidar_adhesion(lidar_ip, std::atoi(argv[3]));
+		sample_config_lidar_adhesion(lidar_ip, std::atoi(argv[3]), tp);
 
 	// Handling multiple lidars
 	else if (0 == std::string(argv[1]).compare("-config_retro_multi"))
 		//Sample code 28 : Set lidars` retro function
-		sample_config_lidar_retro_multi(lidars_ip, std::atoi(argv[argc-1]));
+		sample_config_lidar_retro_multi(lidars_ip, std::atoi(argv[argc-1]), tp);
 
 	else if (0 == std::string(argv[1]).compare("-query_cfg_multi"))
 		//Sample code 29 : Query lidars` configurature
-		sample_query_lidar_configuration_multi(lidars_ip);
+		sample_query_lidar_configuration_multi(lidars_ip, tp);
 
 	else if (0 == std::string(argv[1]).compare("-firmware_update_multi"))
 		//Sample code 30 : Firmwares update
-		sample_firmware_update_multi(lidars_ip, std::string(argv[argc-1]));
+		sample_firmware_update_multi(lidars_ip, std::string(argv[argc-1]), tp);
 
 	else if (0 == std::string(argv[1]).compare("-reboot_multi"))
 		//Sample code 31 : Reboot lidars by tcp connection.
-		sample_reboot_lidar_multi(lidars_ip);
+		sample_reboot_lidar_multi(lidars_ip, tp);
 
 	else if (0 == std::string(argv[1]).compare("-phase_offset_enable_multi"))
-		//Sample code 32 : Config lidars` phaseoffset enable
-		sample_config_lidar_phase_offset_multi(lidars_ip, std::atoi(argv[argc-1]));
+		//Sample code 32 : Config lidars` phaseoffset enable.
+		sample_config_lidar_phase_offset_multi(lidars_ip, std::atoi(argv[argc-1]), tp);
 
 	else if (0 == std::string(argv[1]).compare("-config_delete_points_multi"))
-		//Sample code 33 : Config lidars` delete close points enable
-		sample_config_lidar_delete_points_multi(lidars_ip, std::atoi(argv[argc-1]));
+		//Sample code 33 : Config lidars` delete close points enable.
+		sample_config_lidar_delete_points_multi(lidars_ip, std::atoi(argv[argc-1]), tp);
 
 	else if (0 == std::string(argv[1]).compare("-config_adhesion_multi"))
-		//Sample code 34 : Config lidars` adhesion mode
-		sample_config_lidar_adhesion_multi(lidars_ip, std::atoi(argv[argc-1]));
+		//Sample code 34 : Config lidars` adhesion mode.
+		sample_config_lidar_adhesion_multi(lidars_ip, std::atoi(argv[argc-1]), tp);
 
-	else if (0 == std::string(argv[1]).compare("-set_cali") && argc == 4)
-		//Sample code 28 : Set lidar's calibration file by tcp connection.
-		sample_config_lidar_calibration(lidar_ip, std::string(argv[3]));
+	else if(0 == std::string(argv[1]).compare("-set_cali") && argc == (4 + argc_offset))
+		//Sample code 35 : Set lidar's calibration file by tcp connection.
+		sample_config_lidar_calibration(lidar_ip, std::string(argv[3]), tp);
 
     else
     {

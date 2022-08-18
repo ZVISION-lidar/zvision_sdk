@@ -26,6 +26,12 @@
 
 namespace zvision
 {
+
+    std::string get_sdk_version_string() {
+        std::string ver = "v0.1.11";
+        return ver;
+    }
+
     std::string get_device_type_string(DeviceType tp)
     {
         std::string str = "Unknown";
@@ -241,6 +247,27 @@ namespace zvision
         return str;
     }
 
+	std::string get_ml30splus_echo_mode_string(EchoMode mode)
+	{
+		std::string str = "Unknown";
+		switch (mode)
+		{
+		case EchoMode::EchoSingleFirst:
+		case EchoMode::EchoSingleStrongest:
+		case EchoMode::EchoSingleLast:
+			str = "Singe";
+			break;
+		case EchoMode::EchoDoubleFirstStrongest:
+		case EchoMode::EchoDoubleFirstLast:
+		case EchoMode::EchoDoubleStrongestLast:
+			str = "Double";
+			break;
+		default:
+			break;
+		}
+		return str;
+	}
+
     std::string get_cfg_info_string(DeviceConfigurationInfo& info)
     {
         const int buffer_len = 4096;
@@ -276,6 +303,42 @@ namespace zvision
         //pos += snprintf(ptr + pos, buffer_len - pos, "Lidar type: %s\n", zvision::get_device_type_string(info.device).c_str());
         return std::string(ptr);
     }
+
+	std::string get_ml30splus_cfg_info_string(DeviceConfigurationInfo& info)
+	{
+		const int buffer_len = 4096;
+		std::shared_ptr<char> buffer(new char[buffer_len]);
+		char* ptr = buffer.get();
+		int pos = 0;
+
+		pos += snprintf(ptr + pos, buffer_len - pos, "Factory mac: %s\n", info.factory_mac.c_str());
+		pos += snprintf(ptr + pos, buffer_len - pos, "Serial number: %s\n", info.serial_number.c_str());
+		pos += snprintf(ptr + pos, buffer_len - pos, "DHCP mode: %s\n", zvision::get_state_mode_string(info.dhcp_enable).c_str());
+		pos += snprintf(ptr + pos, buffer_len - pos, "Lidar ip: %s\n", info.device_ip.c_str());
+		pos += snprintf(ptr + pos, buffer_len - pos, "Lidar subnet mask: %s\n", info.subnet_mask.c_str());
+		pos += snprintf(ptr + pos, buffer_len - pos, "Gateway address: %s\n", info.gateway_addr.c_str());
+		// add Config mac
+		pos += snprintf(ptr + pos, buffer_len - pos, "Current mac: %s\n", info.device_mac.c_str());
+		pos += snprintf(ptr + pos, buffer_len - pos, "Config mac: %s\n", info.config_mac.c_str());
+		pos += snprintf(ptr + pos, buffer_len - pos, "Destination ip: %s\n", info.destination_ip.c_str());
+		pos += snprintf(ptr + pos, buffer_len - pos, "Destination port: %d\n", info.destination_port);
+		pos += snprintf(ptr + pos, buffer_len - pos, "Timestamp sync mode: %s\n", zvision::get_time_sync_type_string(info.time_sync).c_str());
+		pos += snprintf(ptr + pos, buffer_len - pos, "Retro enbale: %s\n", zvision::get_retro_mode_string(info.retro_enable).c_str());
+		///pos += snprintf(ptr + pos, buffer_len - pos, "Retro param: [%d] [%d]\n", info.retro_param_1_ref_min, info.retro_param_2_point_percent);
+		pos += snprintf(ptr + pos, buffer_len - pos, "Adhesion enbale: %s\n", zvision::get_state_mode_string(info.adhesion_enable, true).c_str());
+		pos += snprintf(ptr + pos, buffer_len - pos, "Delete close point enbale: %s\n", zvision::get_state_mode_string(info.delete_point_enable, true).c_str());
+		pos += snprintf(ptr + pos, buffer_len - pos, "Frame offset: %u(x 5ns)\n", info.phase_offset);
+		pos += snprintf(ptr + pos, buffer_len - pos, "Frame offset sync: %s\n", zvision::get_phase_offset_mode_string(info.phase_offset_mode).c_str());
+		pos += snprintf(ptr + pos, buffer_len - pos, "Dual return: %s\n", zvision::get_echo_mode_string(info.echo_mode).c_str());
+		pos += snprintf(ptr + pos, buffer_len - pos, "Calibration File Broadcast: %s\n", zvision::get_cal_send_mode_string(info.cal_send_mode).c_str());
+		pos += snprintf(ptr + pos, buffer_len - pos, "Downsample mode: %s\n", zvision::get_downsample_mode_string(info.downsample_mode).c_str());
+		pos += snprintf(ptr + pos, buffer_len - pos, "FPGA   version: %u.%u.%u.%u\n", info.version.boot_version[0], info.version.boot_version[1], info.version.boot_version[2], info.version.boot_version[3]);
+		pos += snprintf(ptr + pos, buffer_len - pos, "Embedded version: %u.%u.%u.%u\n", info.version.kernel_version[0], info.version.kernel_version[1], info.version.kernel_version[2], info.version.kernel_version[3]);
+		pos += snprintf(ptr + pos, buffer_len - pos, "FPGA   version(backup): %u.%u.%u.%u\n", info.backup_version.boot_version[0], info.backup_version.boot_version[1], info.backup_version.boot_version[2], info.backup_version.boot_version[3]);
+		pos += snprintf(ptr + pos, buffer_len - pos, "Embedded version(backup): %u.%u.%u.%u\n", info.backup_version.kernel_version[0], info.backup_version.kernel_version[1], info.backup_version.kernel_version[2], info.backup_version.kernel_version[3]);
+		//pos += snprintf(ptr + pos, buffer_len - pos, "Lidar type: %s\n", zvision::get_device_type_string(info.device).c_str());
+		return std::string(ptr);
+	}
 
     std::string get_phase_offset_mode_string(PhaseOffsetMode mode)
     {

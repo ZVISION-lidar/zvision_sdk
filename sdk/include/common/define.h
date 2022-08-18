@@ -43,6 +43,7 @@ namespace zvision
 #else
     #define sscanf_s sscanf
     #define sprintf_s sprintf
+    #define Sleep(x) usleep(x * 1000)
 #endif
 
 #ifndef POINT_CLOUD_UDP_LEN
@@ -161,19 +162,24 @@ namespace zvision
         LidarML30SA1_2,
         LidarML30SB1,
         LidarML30SB2,
+		LidarMl30SA1Plus,
+		LidarMl30SB1Plus,
         LidarMLX,
         LidarMLYA,
         LidarMLYB,
         LidarUnknown,
     }DeviceType;
 
-    typedef enum ScanMode
+    typedef enum ScanMode:uint8_t
     {
         ScanML30B1_100,
         ScanML30SA1_160,
         ScanML30SA1_160_1_2,
         ScanML30SA1_160_1_4,
         ScanML30SA1_190,
+		ScanML30SA1Plus_160,
+		ScanML30SA1Plus_160_1_2,
+		ScanML30SA1Plus_160_1_4,
         ScanMLX_160,
         ScanMLX_190,
         ScanMLXS_180,
@@ -385,6 +391,99 @@ namespace zvision
         u_short crc;            // Checksum
     }pcap_packet_header;
 
+	/********************* only for ml30s plus *********************/
+	typedef struct JsonConfigFileParam {
+
+		/* ml30splus json file parameters*/
+		// soft version
+		std::string embedded_version;
+		std::string fpga_version;
+		std::string embedded_version_bak;
+		std::string fpga_version_bak;
+		unsigned char embedded_ver[4];
+		unsigned char fpga_ver[4];
+		unsigned char embedded_ver_bak[4];
+		unsigned char fpga_ver_bak[4];
+		// device net info
+		std::string serial_number;
+		std::string factory_mac;
+		uint8_t dhcp_switch;
+		std::string ip;
+		std::string gateway;
+		std::string netmask;
+		std::string mac;
+		std::string udp_dest_ip;
+		uint32_t udp_dest_port;
+
+		// retro para
+		uint8_t switch_retro;
+		uint8_t target_gray_thre_retro;
+		uint8_t target_point_num_thre_retro;
+		uint32_t critical_point_dis_thre_retro;
+		uint16_t del_point_dis_low_thre_retro;
+		uint16_t del_point_dis_high_thre_retro;
+		uint8_t del_point_gray_thre_retro;
+
+		// adhesion para
+		uint8_t switch_adhesion;
+		int32_t angle_hor_min_adhesion;
+		int32_t angle_hor_max_adhesion;
+        int32_t angle_ver_min_adhesion;
+        int32_t angle_ver_max_adhesion;
+		float angle_hor_res_adhesion;
+		float angle_ver_res_adhesion;
+		float diff_thre_adhesion;
+		float dist_limit_adhesion;
+		float min_diff_adhesion;
+
+		// dirty detect
+		uint8_t switch_dirty_detect;
+		uint8_t switch_dirty_refresh;
+		uint16_t dirty_refresh_cycle;
+		uint16_t dirty_detect_set_thre;
+		uint16_t dirty_detect_reset_thre;
+		uint16_t dirty_detect_inner_thre;
+		uint16_t dirty_detect_outer_thre;
+
+		// delete near point
+		uint8_t switch_near_point_delete;
+		// downsample mode
+		uint8_t down_sample_mode;
+		// echo mode
+		uint8_t echo_mode;
+		// ptp sync
+		uint8_t ptp_sync;
+		// frame sync
+		uint8_t frame_sync;
+		int32_t frame_offset;
+
+		// angle send
+		uint8_t angle_send;
+
+		/* other */
+		uint16_t algo_param_len;
+
+		/* temporary define */
+		std::string temp_filepath;
+		uint32_t temp_send_data_len;
+		std::string temp_send_data;
+		// recv status (n > 0)
+		// -n : Need to receive n bytes of data to confirm the length.
+		//  0 : Read data directly from the receiving buffer.
+		//  n : Read n bytes data.
+		int32_t temp_recv_data_len;
+		std::string temp_recv_data;
+		std::vector<std::string> temp_recv_packets;
+	}*PJsonConfigFileParam;
+
+	/*****************************************************************/
+
+    /** \brief Get sdk version
+    * \param[in] tp      the DeviceType
+    * \return string.
+    */
+    std::string get_sdk_version_string();
+
     /** \brief DeviceType to string
     * \param[in] tp      the DeviceType
     * \return string.
@@ -427,11 +526,23 @@ namespace zvision
     */
     std::string get_echo_mode_string(EchoMode mode);
 
+	/** \brief ml30s plus echo mode to string
+	* \param[in] mode    the EchoMode
+	* \return string.
+	*/
+	std::string get_ml30splus_echo_mode_string(EchoMode mode);
+
     /** \brief config info to string
     * \param[in] info    the DeviceConfigurationInfo
     * \return string.
     */
     std::string get_cfg_info_string(DeviceConfigurationInfo& info);
+
+	/** \brief ml30s plus config info to string
+	* \param[in] info    the DeviceConfigurationInfo
+	* \return string.
+	*/
+	std::string get_ml30splus_cfg_info_string(DeviceConfigurationInfo& info);
 
     /** \brief phase offset mode to string
     * \param[in] mode    the PhaseOffsetMode

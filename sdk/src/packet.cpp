@@ -69,6 +69,18 @@ namespace zvision
         {
             return ScanMode::ScanMLXS_180;
         }
+		else if (0 == dev_code.compare("30S+A1"))
+		{
+			//unsigned char downsample_flag = packet[13];
+			//if (0x00 == downsample_flag)
+			//	return ScanMode::ScanML30SA1Plus_160;
+			//else if (0x01 == downsample_flag)
+			//	return ScanMode::ScanML30SA1Plus_160_1_2;
+			//else if (0x02 == downsample_flag)
+			//	return ScanMode::ScanML30SA1Plus_160_1_4;
+			//else
+				return ScanMode::ScanML30SA1Plus_160;
+		}
         else
         {
             return ScanMode::ScanUnknown;
@@ -91,12 +103,15 @@ namespace zvision
             packets = 235;// 10000 * 3 * 2 * 4 / 1024
             break;
         case ScanMode::ScanML30SA1_160:
+		case ScanMode::ScanML30SA1Plus_160:
             packets = 400;// 6400 * 8 * 2 * 4 / 1024
             break;
         case ScanMode::ScanML30SA1_160_1_2:
+		case ScanMode::ScanML30SA1Plus_160_1_2:
             packets = 200;// 3200 * 8 * 2 * 4 / 1024
             break;
         case ScanMode::ScanML30SA1_160_1_4:
+		case ScanMode::ScanML30SA1Plus_160_1_4:
             packets = 100;// 1600 * 8 * 2 * 4 / 1024
             break;
         case ScanMode::ScanML30SA1_190:
@@ -214,7 +229,18 @@ namespace zvision
         else if ((0x09 == type_field) || (0x0a == type_field))
         {
             return ScanMode::ScanML30SA1_190;
-        }
+		}
+		else if ((0x0b == type_field) || (0x0c == type_field)) {
+			//unsigned char downsample_flag = packet[POINT_CLOUD_UDP_LEN - 2];
+			//if (0x00 == downsample_flag)
+			//	return ScanMode::ScanML30SA1Plus_160;
+			//else if (0x01 == downsample_flag)
+			//	return ScanMode::ScanML30SA1Plus_160_1_2;
+			//else if (0x02 == downsample_flag)
+			//	return ScanMode::ScanML30SA1Plus_160_1_4;
+			//else
+				return ScanMode::ScanML30SA1Plus_160;
+		}
         else if (0x05 == type_field)
         {
             //return ScanMode::ScanMLX_190;
@@ -422,6 +448,10 @@ namespace zvision
         int fov_index_ml30sa1_dual_echo[16] = { 0, 6, 0, 6, 1, 7, 1, 7, 2, 4, 2, 4, 3, 5, 3, 5 };
         int fov_index_mlx_single_echo[3] = { 2, 1, 0 };
         int fov_index_mlx_dual_echo[3] = { 2, 1, 0 };
+		int fov_index_ml30sa1_plus_H_single_echo[4] = { 0, 1, 2, 3 };
+		int fov_index_ml30sa1_plus_L_single_echo[4] = { 4, 5, 6, 7 };
+		int fov_index_ml30sa1_plus_H_dual_echo[8] = { 0, 0, 1, 1, 2, 2, 3, 3 };
+		int fov_index_ml30sa1_plus_L_dual_echo[8] = { 4, 4, 5, 5, 6, 6, 7, 7 };
         int *fov_index = fov_index_ml30sa1_single_echo;
 
         // fire index in one group
@@ -431,6 +461,8 @@ namespace zvision
         int fire_index_ml30sa1_dual_echo[16] = { 0, 1, 0, 1, 2, 3, 2, 3, 4, 5, 4, 5, 6, 7, 6, 7 };
         int fire_index_mlx_single_echo[3] = { 0, 1, 2 };
         int fire_index_mlx_dual_echo[3] = { 0, 1, 2 };
+		int fire_index_ml30sa1_plus_single_echo[4] = { 0, 1, 2, 3 };
+		int fire_index_ml30sa1_plus_dual_echo[8] = { 0, 0, 1, 1, 2, 2, 3, 3 };
         int *fire_index = fire_index_ml30sa1_single_echo;
 
         // point number index in one group
@@ -440,6 +472,8 @@ namespace zvision
         int number_index_ml30sa1_dual_echo[16] = { 0, 2, 1, 3, 4, 6, 5, 7, 8, 10, 9, 11, 12, 14, 13, 15 };
         int number_index_mlx_single_echo[3] = { 0, 1, 2 };
         int number_index_mlx_dual_echo[3] = { 0, 1, 2 };
+		int number_index_ml30sa1_plus_single_echo[4] = { 0, 1, 2, 3 };
+		int number_index_ml30sa1_plus_dual_echo[8] = { 0, 1, 2, 3, 4, 5, 6, 7 };
         int *number_index = number_index_ml30sa1_single_echo;
 
         //fire interval
@@ -582,6 +616,56 @@ namespace zvision
                 number_index = number_index_ml30b1_dual_echo;
             }
         }
+		else if (ScanML30SA1Plus_160 == scan_mode || ScanML30SA1Plus_160_1_2 == scan_mode || ScanML30SA1Plus_160_1_4 == scan_mode) {
+			fires = 51200;
+			fire_interval_us = 1.5625;
+			if (ScanML30SA1Plus_160 == scan_mode)
+			{
+				fires = 51200;
+				fire_interval_us = 1.5625 / 2.0;
+			}
+			else if (ScanML30SA1Plus_160_1_2 == scan_mode)
+			{
+				fires = 51200 / 2;
+				fire_interval_us = 1.5625 / 2.0 / 2.0;
+			}
+			else if (ScanML30SA1Plus_160_1_4 == scan_mode)
+			{
+				fires = 51200 / 4;
+				fire_interval_us = 1.5625 / 2.0;
+			}
+
+			if (1 == echo_cnt)
+			{
+				groups_in_one_udp = 80;
+				points_in_one_group = 4;
+				point_position_in_group = 0;
+				group_len = 16;
+				int udp_cnt = fires / points_in_one_group / groups_in_one_udp;
+				if (seq < udp_cnt / 2)
+					fov_index = fov_index_ml30sa1_plus_H_single_echo;
+				else
+					fov_index = fov_index_ml30sa1_plus_L_single_echo;
+
+				fire_index = fire_index_ml30sa1_plus_single_echo;
+				number_index = number_index_ml30sa1_plus_single_echo;
+			}
+			else
+			{
+				groups_in_one_udp = 40;
+				points_in_one_group = 8;
+				point_position_in_group = 0;
+				group_len = 32;
+				int udp_cnt = fires / points_in_one_group / groups_in_one_udp * 2;
+				if (seq < udp_cnt / 2)
+					fov_index = fov_index_ml30sa1_plus_H_dual_echo;
+				else
+					fov_index = fov_index_ml30sa1_plus_L_dual_echo;
+
+				fire_index = fire_index_ml30sa1_plus_dual_echo;
+				number_index = number_index_ml30sa1_plus_dual_echo;
+			}
+		}
         else
         {
             return NotSupport;
