@@ -379,7 +379,7 @@ int sample_get_lidar_calibration(std::string lidar_ip, std::string savefilename,
 {
     int ret = 0;
     zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
-    if (ret = config.GetDeviceCalibrationDataToFile(savefilename))
+    if (ret = config.GetDeviceCalibrationDataToFile(savefilename, tp))
         LOG_ERROR("Get device [%s]'s calibration data failed, ret = %d.\n", lidar_ip.c_str(), ret);
     else
     {
@@ -948,7 +948,7 @@ int sample_reboot_lidar_multi(std::vector<std::string> lidars_ip, zvision::Devic
 int sample_config_lidar_calibration(std::string lidar_ip, std::string filename, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown) {
 	int ret = 0;
 	zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
-	if (ret = config.SetDeviceCalibrationData(filename))
+	if (ret = config.SetDeviceCalibrationData(filename, tp))
 		LOG_ERROR("Set device [%s]`s calibration data failed, ret = %d.\n", lidar_ip.c_str(), ret);
 	else
 	{
@@ -963,31 +963,49 @@ int main(int argc, char** argv)
     if (argc <= 2)
     {
         std::cout << "############################# USER GUIDE ################################\n\n"
+
+			<< "Note: For ML30S+ device, you can add \"-30sp\" follow the command flag\n\n"
+
             << "Sample 0 : config mac address\n"
             << "Format: -config_mac lidar_ip mac_address\n"
-            << "Demo:   -config_mac 192.168.10.108 66-66-66-66-66-66\n\n"
+			<< "Format: -config_mac -30sp lidar_ip mac_address\n"
+            << "Demo:   -config_mac 192.168.10.108 66-66-66-66-66-66\n"
+			<< "Demo:   -config_mac -30sp 192.168.10.108 66-66-66-66-66-66\n\n"
 
             << "Sample 1 : config static ip address\n"
             << "Format: -config_static_ip old_ip new_ip\n"
-            << "Demo:   -config_static_ip 192.168.10.108 192.168.10.107\n\n"
+			<< "Format: -config_static_ip -30sp old_ip new_ip\n"
+            << "Demo:   -config_static_ip 192.168.10.108 192.168.10.107\n"
+			<< "Demo:   -config_static_ip -30sp 192.168.10.108 192.168.10.107\n\n"
 
             << "Sample 2 : config subnet mask\n"
             << "Format: -config_subnet_mask lidar_ip subnet_mask\n"
-            << "Demo:   -config_subnet_mask 192.168.10.108 255.255.255.0\n\n"
+			<< "Format: -config_subnet_mask -30sp lidar_ip subnet_mask\n"
+            << "Demo:   -config_subnet_mask 192.168.10.108 255.255.255.0\n"
+			<< "Demo:   -config_subnet_mask -30sp 192.168.10.108 255.255.255.0\n\n"
+
 
             << "Sample 3 : config udp destination ip address\n"
             << "Format: -config_dst_ip lidar_ip dst_ip\n"
-            << "Demo:   -config_dst_ip 192.168.10.108 192.168.10.255\n\n"
+			<< "Format: -config_dst_ip -30sp lidar_ip dst_ip\n"
+			<< "Demo:   -config_dst_ip 192.168.10.108 192.168.10.255\n"
+            << "Demo:   -config_dst_ip -30sp 192.168.10.108 192.168.10.255\n\n"
 
             << "Sample 4 : config udp destination port\n"
             << "Format: -config_dst_port lidar_ip port\n"
-            << "Demo:   -config_dst_port 192.168.10.108 2368\n\n"
+			<< "Format: -config_dst_port -30sp lidar_ip port\n"
+			<< "Demo:   -config_dst_port 192.168.10.108 2368\n"
+            << "Demo:   -config_dst_port -30sp 192.168.10.108 2368\n\n"
 
             << "Sample 5 : config retro mode\n"
             << "Format: -config_retro lidar_ip mode(0 for disable, 1 for enable)\n"
 			<< "Format: -config_retro_multi lidar1_ip lidar2_ip (MaxLidarCount:4) mode\n"
+			<< "Format: -config_retro -30sp lidar_ip mode(0 for disable, 1 for enable)\n"
+			<< "Format: -config_retro_multi -30sp lidar1_ip lidar2_ip (MaxLidarCount:4) mode\n"
             << "Demo:   -config_retro 192.168.10.108 0\n"
-			<< "Demo:   -config_retro_multi 192.168.10.108 192.168.10.109 0\n\n"
+			<< "Demo:   -config_retro_multi 192.168.10.108 192.168.10.109 0\n"
+			<< "Demo:   -config_retro -30sp 192.168.10.108 0\n"
+			<< "Demo:   -config_retro_multi -30sp 192.168.10.108 192.168.10.109 0\n\n"
 
             << "Sample 6 : config time sync mode\n"
             << "Format: -config_time_sync lidar_ip mode(0 for ptp, 1 for gpspps)\n"
@@ -995,11 +1013,15 @@ int main(int argc, char** argv)
 
             << "Sample 7 : query firmware version\n"
             << "Format: -query_version lidar_ip\n"
-            << "Demo:   -query_version 192.168.10.108\n\n"
+			<< "Format: -query_version -30sp lidar_ip\n"
+			<< "Demo:   -query_version 192.168.10.108\n"
+            << "Demo:   -query_version -30sp 192.168.10.108\n\n"
 
             << "Sample 8 : query serial number\n"
             << "Format: -query_sn lidar_ip\n"
-            << "Demo:   -query_sn 192.168.10.108\n\n"
+			<< "Format: -query_sn -30sp lidar_ip\n"
+			<< "Demo:   -query_sn 192.168.10.108\n"
+            << "Demo:   -query_sn -30sp 192.168.10.108\n\n"
 
             << "Sample 9 : query hardware temperature\n"
             << "Format: -query_temp lidar_ip\n"
@@ -1008,24 +1030,38 @@ int main(int argc, char** argv)
             << "Sample 10 : query configuration\n"
             << "Format: -query_cfg lidar_ip\n"
 			<< "Format: -query_cfg_multi lidar1_ip lidar2_ip(MaxLidarCount:4)\n"
+			<< "Format: -query_cfg -30sp lidar_ip\n"
+			<< "Format: -query_cfg_multi -30sp lidar1_ip lidar2_ip(MaxLidarCount:4)\n"
             << "Demo:   -query_cfg 192.168.10.108\n"
-			<< "Demo:   -query_cfg_multi 192.168.10.108 192.168.10.109\n\n"
+			<< "Demo:   -query_cfg_multi 192.168.10.108 192.168.10.109\n"
+			<< "Demo:   -query_cfg -30sp 192.168.10.108\n"
+			<< "Demo:   -query_cfg_multi -30sp 192.168.10.108 192.168.10.109\n\n"
 
             << "Sample 11 : get calibration data to file\n"
             << "Format: -get_cal lidar_ip savefilename\n"
-            << "Demo:   -get_cal 192.168.10.108 device.cal\n\n"
+			<< "Format: -get_cal -30sp lidar_ip savefilename\n"
+			<< "Demo:   -get_cal 192.168.10.108 device.cal\n"
+            << "Demo:   -get_cal -30sp 192.168.10.108 device.cal\n\n"
 
             << "Sample 12 : firmware update\n"
             << "Format: -firmware_update lidar_ip filename\n"
 			<< "Format: -firmware_update_multi lidar1_ip lidar2_ip(MaxLidarCount:4) filename\n"
-            << "Demo:   -firmware_update 192.168.10.108 firmware_name.pack\n"
-			<< "Demo:   -firmware_update_multi 192.168.10.108 192.168.10.109 firmware_name.pack\n\n"
+			<< "Format: -firmware_update -30sp lidar_ip filename\n"
+			<< "Format: -firmware_update_multi -30sp lidar1_ip lidar2_ip(MaxLidarCount:4) filename\n"
+			<< "Demo:   -firmware_update 192.168.10.108 firmware_name.pack\n"
+			<< "Demo:   -firmware_update_multi 192.168.10.108 192.168.10.109 firmware_name.pack\n"
+            << "Demo:   -firmware_update -30sp 192.168.10.108 firmware_name.pack\n"
+			<< "Demo:   -firmware_update_multi -30sp 192.168.10.108 192.168.10.109 firmware_name.pack\n\n"
 
             << "Sample 13 : reboot\n"
             << "Format: -reboot lidar_ip\n"
 			<< "Format: -reboot_multi lidar1_ip lidar2_ip(MaxLidarCount:4) \n"
-            << "Demo:   -reboot 192.168.10.108\n"
-			<< "Demo:   -reboot_multi 192.168.10.108 192.168.10.109\n\n"
+			<< "Format: -reboot -30sp lidar_ip\n"
+			<< "Format: -reboot_multi -30sp lidar1_ip lidar2_ip(MaxLidarCount:4) \n"
+			<< "Demo:   -reboot 192.168.10.108\n"
+			<< "Demo:   -reboot_multi 192.168.10.108 192.168.10.109\n"
+            << "Demo:   -reboot -30sp 192.168.10.108\n"
+			<< "Demo:   -reboot_multi -30sp 192.168.10.108 192.168.10.109\n\n"
 
             << "Sample 14 : scan device\n"
             << "Format: -scan_device scan_time(s)\n"
@@ -1042,24 +1078,36 @@ int main(int argc, char** argv)
             << "Sample 17 : phase offset enable(0 for disable, 1 for enable)\n"
             << "Format: -phase_offset_enable lidar_ip mode\n"
 			<< "Format: -phase_offset_enable_multi lidar1_ip lidar2_ip(MaxLidarCount:4)\n"
-            << "Demo:   -phase_offset_enable 192.168.10.108 0\n"
-			<< "Demo:   -phase_offset_enable_multi 192.168.10.108 192.168.10.109 0\n\n"
+			<< "Format: -phase_offset_enable -30sp lidar_ip mode\n"
+			<< "Format: -phase_offset_enable_multi -30sp lidar1_ip lidar2_ip(MaxLidarCount:4)\n"
+			<< "Demo:   -phase_offset_enable 192.168.10.108 0\n"
+			<< "Demo:   -phase_offset_enable_multi 192.168.10.108 192.168.10.109 0\n"
+            << "Demo:   -phase_offset_enable -30sp 192.168.10.108 0\n"
+			<< "Demo:   -phase_offset_enable_multi -30sp 192.168.10.108 192.168.10.109 0\n\n"
 
             << "Sample 18 : phase offset value\n"
-            << "Format: -phase_offset_value value(x5ns)\n"
-            << "Demo:   -phase_offset_value 0\n\n"
+            << "Format: -phase_offset_value lidar_ip value(x5ns)\n"
+			<< "Format: -phase_offset_value -30sp lidar_ip value(x5ns)\n"
+			<< "Demo:   -phase_offset_value 192.168.10.108 0\n"
+            << "Demo:   -phase_offset_value -30sp 192.168.10.108 0\n\n"
 
             << "Sample 19 : config ptp configuration\n"
-            << "Format: -set_ptp_cfg filename\n"
-            << "Demo:   -set_ptp_cfg test.txt\n\n"
+            << "Format: -set_ptp_cfg lidar_ip filename\n"
+			<< "Format: -set_ptp_cfg -30sp lidar_ip filename\n"
+			<< "Demo:   -set_ptp_cfg 192.168.10.108 test.txt\n"
+            << "Demo:   -set_ptp_cfg -30sp 192.168.10.108 test.txt\n\n"
 
             << "Sample 20 : get ptp configuration to file\n"
-            << "Format: -get_ptp_cfg filename\n"
-            << "Demo:   -get_ptp_cfg test.txt\n\n"
+            << "Format: -get_ptp_cfg lidar_ip filename\n"
+			<< "Format: -get_ptp_cfg -30sp lidar_ip filename\n"
+			<< "Demo:   -get_ptp_cfg 192.168.10.108 test.txt\n"
+            << "Demo:   -get_ptp_cfg -30sp 192.168.10.108 test.txt\n\n"
 
 			<< "Sample 21 : calibration file broadcast enabale\n"
 			<< "Format: -cali_file_broadcast_enable lidar_ip enable(0 for disable, 1 for enable) \n"
-			<< "Demo:   -cali_file_broadcast_enable 192.168.10.108 0\n\n"
+			<< "Format: -cali_file_broadcast_enable -30sp lidar_ip enable(0 for disable, 1 for enable) \n"
+			<< "Demo:   -cali_file_broadcast_enable 192.168.10.108 0\n"
+			<< "Demo:   -cali_file_broadcast_enable -30sp 192.168.10.108 0\n\n"
 
 			<< "Sample 22 : config downsample mode\n"
 			<< "Format: -downsample_mode lidar_ip mode( none: no downsample, 1/2: 50% downsample, 1/4: 25% downsample)\n"
@@ -1068,14 +1116,16 @@ int main(int argc, char** argv)
 			<< "Sample 23 : set Retro parameters\n"
 			<< "1. min gray num:              High gray value num threshold  (int8)\n"
 			<< "2. dis thres:                 Lock critical point distance   (uint32)\n"
-			<< "3. low range thres:           Delete point range low threshold distance  (uint16)\n"
-			<< "4. high range thres:          Delete point range high threshold distance (uint16)\n"
+			<< "3. low range thres:           Delete point range low threshold distance(not support ML30S+ device)  (uint16)\n"
+			<< "4. high range thres:          Delete point range high threshold distance(not support ML30S+ device) (uint16)\n"
 			<< "5. del gray thres::           Delete point grayscale threshold   (uint8)\n"
 			<< "6. del ratio gray low thres:  The gray value low threshold of the deleted point ratio  (uint8)\n"
 			<< "7. del ratio gray high thres: The gray value high threshold of the deleted point ratio (uint8)\n"
 			<< "8. min gray:                  Minimum gray value  (uint8)\n"
 			<< "Format: -set_retro_param lidar_ip patameter_id value\n"
-			<< "Demo:   -set_retro_param 192.168.10.108 4 3\n\n"
+			<< "Format: -set_retro_param -30sp lidar_ip patameter_id value\n"
+			<< "Demo:   -set_retro_param 192.168.10.108 4 3\n"
+			<< "Demo:   -set_retro_param -30sp 192.168.10.108 4 3\n\n"
 
 			<< "Sample 24 : set Adhesion parameters\n"
 			<< "1. angle hor min:  Minimum horizontal angle range (int32)\n"
@@ -1088,34 +1138,65 @@ int main(int argc, char** argv)
 			<< "8. dis limit:      Maximum processing distance  (float)\n"
 			<< "9. min diff:       Distance difference between nearest and farthest points (float)\n"
 			<< "Format: -set_adhesion_param lidar_ip patameter_id value\n"
-			<< "Demo:   -set_adhesion_param 192.168.10.108 3 -40\n\n"
+			<< "Format: -set_adhesion_param -30sp lidar_ip patameter_id value\n"
+			<< "Demo:   -set_adhesion_param 192.168.10.108 3 -40\n"
+			<< "Demo:   -set_adhesion_param -30sp 192.168.10.108 3 -40\n\n"
 
 			<< "Sample 25 : get algorithm parameters\n"
 			<< "Format: -get_algo_param lidar_ip\n"
-			<< "Demo:   -get_algo_param 192.168.10.108\n\n"
+			<< "Format: -get_algo_param -30sp lidar_ip\n"
+			<< "Demo:   -get_algo_param 192.168.10.108\n"
+			<< "Demo:   -get_algo_param -30sp 192.168.10.108\n\n"
 
 			<< "Sample 26 : config delete close points mode\n"
 			<< "Format: -config_delete_points lidar_ip mode(0 for disable, 1 for enable)\n"
 			<< "Format: -config_delete_points_multi lidar1_ip lidar2_ip(MaxLidarCount:4) mode\n"
+			<< "Format: -config_delete_points -30sp lidar_ip mode(0 for disable, 1 for enable)\n"
+			<< "Format: -config_delete_points_multi -30sp lidar1_ip lidar2_ip(MaxLidarCount:4) mode\n"
 			<< "Demo:   -config_delete_points 192.168.10.108 0\n"
-			<< "Demo:   -config_delete_points_multi 192.168.10.108 192.168.10.109 0\n\n"
+			<< "Demo:   -config_delete_points_multi 192.168.10.108 192.168.10.109 0\n"
+			<< "Demo:   -config_delete_points -30sp 192.168.10.108 0\n"
+			<< "Demo:   -config_delete_points_multi -30sp 192.168.10.108 192.168.10.109 0\n\n"
 
 			<< "Sample 27 : config adhesion mode\n"
 			<< "Format: -config_adhesion lidar_ip mode(0 for disable, 1 for enable)\n"
 			<< "Format: -config_adhesion_multi lidar1_ip lidar2_ip(MaxLidarCount:4) mode\n"
+			<< "Format: -config_adhesion -30sp lidar_ip mode(0 for disable, 1 for enable)\n"
+			<< "Format: -config_adhesion_multi -30sp lidar1_ip lidar2_ip(MaxLidarCount:4) mode\n"
 			<< "Demo:   -config_adhesion 192.168.10.108 0\n"
-			<< "Demo:   -config_adhesion_multi 192.168.10.108 192.168.10.109 0\n\n"
+			<< "Demo:   -config_adhesion_multi 192.168.10.108 192.168.10.109 0\n"
+			<< "Demo:   -config_adhesion -30sp 192.168.10.108 0\n"
+			<< "Demo:   -config_adhesion_multi -30sp 192.168.10.108 192.168.10.109 0\n\n"
 
 			<< "Sample 28 : set calibration data from file\n"
-			<< "Format: -set_cali lidar_ip savefilename\n"
-			<< "Demo:   -set_cali 192.168.10.108 device.cal\n\n"
+			<< "Format: -set_cal lidar_ip savefilename\n"
+			<< "Format: -set_cal -30sp lidar_ip savefilename\n"
+			<< "Demo:   -set_cal 192.168.10.108 device.cal\n"
+			<< "Demo:   -set_cal -30sp 192.168.10.108 device.cal\n\n"
 
 			<< "############################# END  GUIDE ################################\n\n"
             ;
         getchar();
         return 0;
     }
-    std::string lidar_ip = std::string(argv[2]);
+
+	std::string opt = std::string(argv[1]);
+	zvision::DeviceType tp = zvision::DeviceType::LidarUnknown;
+	std::string appname = "";
+	int argc_offset = 0;
+	std::string lidar_ip = "";
+
+	using Param = std::map<std::string, std::string>;
+	std::map<std::string, std::string> paras;
+	ParamResolver::GetParameters(argc, argv, paras, appname);
+	if (paras.find("-30sp") != paras.end()) {
+		tp = zvision::DeviceType::LidarMl30SA1Plus;
+		argc_offset = 1;
+		lidar_ip = std::string(argv[3]);
+	}
+	else {
+		lidar_ip = std::string(argv[2]);
+	}
 
 	// Get lidar list
 	std::vector<std::string> lidars_ip;
@@ -1129,52 +1210,38 @@ int main(int argc, char** argv)
 					lidars_ip.push_back(ip);
 			}
 		}
-
 		// check
 		if (lidars_ip.size() > 4)
-			lidars_ip = std::vector<std::string>{ std::begin(lidars_ip),std::begin(lidars_ip) + 3 };
-	}
-
-	std::string opt = std::string(argv[1]);
-	zvision::DeviceType tp = zvision::DeviceType::LidarUnknown;
-	using Param = std::map<std::string, std::string>;
-	std::map<std::string, std::string> paras;
-	std::string appname = "";
-	ParamResolver::GetParameters(argc, argv, paras, appname);
-
-	int argc_offset = 0;
-	if (paras.find("-30sp") != paras.end()) {
-		tp = zvision::DeviceType::LidarMl30SA1Plus;
-		argc_offset = 1;
+			lidars_ip = std::vector<std::string>{ std::begin(lidars_ip),std::begin(lidars_ip) + 4 };
 	}
 
 	if (0 == std::string(argv[1]).compare("-config_mac") && argc == (4 + argc_offset))
 		//Sample code 0 : Set lidar's mac address
-		sample_config_lidar_mac_address(lidar_ip, std::string(argv[3]), tp);
+		sample_config_lidar_mac_address(lidar_ip, std::string(argv[3 + argc_offset]), tp);
 
 	else if (0 == std::string(argv[1]).compare("-config_static_ip") && argc == (4 + argc_offset))
 		//Sample code 1 : Set lidar's static ip address
-		sample_config_lidar_ip(lidar_ip, std::string(argv[3]), tp);
+		sample_config_lidar_ip(lidar_ip, std::string(argv[3 + argc_offset]), tp);
 
 	else if (0 == std::string(argv[1]).compare("-config_subnet_mask") && argc == (4 + argc_offset))
 		//Sample code 2 : Set lidar's subnet mask
-		sample_config_lidar_subnet_mask(lidar_ip, std::string(argv[3]), tp);
+		sample_config_lidar_subnet_mask(lidar_ip, std::string(argv[3 + argc_offset]), tp);
 
 	else if (0 == std::string(argv[1]).compare("-config_dst_ip") && argc == (4 + argc_offset))
 		//Sample code 3 : Set lidar's udp destination ip address
-		sample_config_lidar_udp_destination_ip(lidar_ip, std::string(argv[3]), tp);
+		sample_config_lidar_udp_destination_ip(lidar_ip, std::string(argv[3 + argc_offset]), tp);
 
 	else if (0 == std::string(argv[1]).compare("-config_dst_port") && argc == (4 + argc_offset))
 		//Sample code 4 : Set lidar's udp destination port
-		sample_config_lidar_udp_destination_port(lidar_ip, std::atoi(argv[3]), tp);
+		sample_config_lidar_udp_destination_port(lidar_ip, std::atoi(argv[3 + argc_offset]), tp);
 
 	else if (0 == std::string(argv[1]).compare("-config_retro") && argc == (4 + argc_offset))
 		//Sample code 5 : Set lidar's retro function
-		sample_config_lidar_retro_enable(lidar_ip, std::atoi(argv[3]), tp);
+		sample_config_lidar_retro_enable(lidar_ip, std::atoi(argv[3 + argc_offset]), tp);
 
 	else if (0 == std::string(argv[1]).compare("-config_time_sync") && argc == (4 + argc_offset))
 		//Sample code 6 : Set lidar's time sync mode
-		sample_config_lidar_time_sync(lidar_ip, zvision::TimestampType(std::atoi(argv[3])));
+		sample_config_lidar_time_sync(lidar_ip, zvision::TimestampType(std::atoi(argv[3 + argc_offset])));
 
 	else if (0 == std::string(argv[1]).compare("-query_version") && argc == (3 + argc_offset))
 		//Sample code 7 : Query lidar's firmware version
@@ -1194,11 +1261,11 @@ int main(int argc, char** argv)
 
 	else if (0 == std::string(argv[1]).compare("-get_cal") && argc == (4 + argc_offset))
 		//Sample code 11 : Get lidar's calibration file by tcp connection.
-		sample_get_lidar_calibration(lidar_ip, std::string(argv[3]), tp);
+		sample_get_lidar_calibration(lidar_ip, std::string(argv[3 + argc_offset]), tp);
 
 	else if (0 == std::string(argv[1]).compare("-firmware_update") && argc == (4 + argc_offset))
 		//Sample code 12 : Firmware update.
-		sample_firmware_update(lidar_ip, std::string(argv[3]), tp);
+		sample_firmware_update(lidar_ip, std::string(argv[3 + argc_offset]), tp);
 
 	else if (0 == std::string(argv[1]).compare("-reboot") && argc == (3 + argc_offset))
 		//Sample code 13 : Reboot lidar by tcp connection.
@@ -1207,47 +1274,47 @@ int main(int argc, char** argv)
 	else if (0 == std::string(argv[1]).compare("-scan_device") && argc == (3 + argc_offset))
 		//Sample code 14 : Scan lidar on the heart beat port
 		//Notice, this function is supported by the lidar's new firmware kernel version, at least 0.1.20
-		sample_scan_lidar_on_heat_beat_port(std::atoi(argv[2]));
+		sample_scan_lidar_on_heat_beat_port(std::atoi(argv[2 + argc_offset]));
 
 	else if (0 == std::string(argv[1]).compare("-retro_p1") && argc == (4 + argc_offset))
 		//Sample code 15 : Config lidar retro parameter 1(min ref, [0,100])
-		sample_config_lidar_retro_param_min_ref(lidar_ip, std::atoi(argv[3]));
+		sample_config_lidar_retro_param_min_ref(lidar_ip, std::atoi(argv[3 + argc_offset]));
 
 	else if (0 == std::string(argv[1]).compare("-retro_p2") && argc == (4 + argc_offset))
 		//Sample code 16 : Config lidar retro parameter 2(point percentage, [0,100])
-		sample_config_lidar_retro_param_point_percentage(lidar_ip, std::atoi(argv[3]));
+		sample_config_lidar_retro_param_point_percentage(lidar_ip, std::atoi(argv[3 + argc_offset]));
 
 	else if (0 == std::string(argv[1]).compare("-phase_offset_enable") && argc == (4 + argc_offset))
 		//Sample code 17 : Config lidar phaseoffset enable
-		sample_config_lidar_phase_offset_enable(lidar_ip, std::atoi(argv[3]), tp);
+		sample_config_lidar_phase_offset_enable(lidar_ip, std::atoi(argv[3 + argc_offset]), tp);
 
 	else if (0 == std::string(argv[1]).compare("-phase_offset_value") && argc == (4 + argc_offset))
 		//Sample code 18 : Config lidar phaseoffset value
-		sample_config_lidar_phase_offset_value(lidar_ip, std::atoi(argv[3]), tp);
+		sample_config_lidar_phase_offset_value(lidar_ip, std::atoi(argv[3 + argc_offset]), tp);
 
 	else if (0 == std::string(argv[1]).compare("-set_ptp_cfg") && argc == (4 + argc_offset))
 		//Sample code 19 : Config lidar ptp configuration file
-		sample_config_lidar_ptp_configuration_file(lidar_ip, std::string(argv[3]), tp);
+		sample_config_lidar_ptp_configuration_file(lidar_ip, std::string(argv[3 + argc_offset]), tp);
 
 	else if (0 == std::string(argv[1]).compare("-get_ptp_cfg") && argc == (4 + argc_offset))
 		//Sample code 20 : Get lidar ptp configuration file
-		sample_get_lidar_ptp_configuration_to_file(lidar_ip, std::string(argv[3]), tp);
+		sample_get_lidar_ptp_configuration_to_file(lidar_ip, std::string(argv[3 + argc_offset]), tp);
 
 	else if (0 == std::string(argv[1]).compare("-cali_file_broadcast_enable") && argc == (4 + argc_offset))
 		//Sample code 21 : onfig lidar calibration file broadcast enable
-		sample_config_lidar_cali_file_broadcast_mode(lidar_ip, std::atoi(argv[3]), tp);
+		sample_config_lidar_cali_file_broadcast_mode(lidar_ip, std::atoi(argv[3 + argc_offset]), tp);
 
 	else if (0 == std::string(argv[1]).compare("-downsample_mode") && argc == (4 + argc_offset))
 		//Sample code 22 : Config lidar downsample mode
-		sample_config_lidar_downsample_mode(lidar_ip, std::string(argv[3]));
+		sample_config_lidar_downsample_mode(lidar_ip, std::string(argv[3 + argc_offset]));
 
 	else if (0 == std::string(argv[1]).compare("-set_retro_param") && argc == (5 + argc_offset))
 		//Sample code 23 : Set lidar retro parameter
-		sample_set_lidar_retro_parameters(lidar_ip, std::atoi(argv[3]), std::string(argv[4]), tp);
+		sample_set_lidar_retro_parameters(lidar_ip, std::atoi(argv[3 + argc_offset]), std::string(argv[4 + argc_offset]), tp);
 
 	else if (0 == std::string(argv[1]).compare("-set_adhesion_param") && argc == (5 + argc_offset))
 		//Sample code 24 : Set lidar adhesion parameter
-		sample_set_lidar_adhesion_parameters(lidar_ip, std::atoi(argv[3]), std::string(argv[4]), tp);
+		sample_set_lidar_adhesion_parameters(lidar_ip, std::atoi(argv[3 + argc_offset]), std::string(argv[4 + argc_offset]), tp);
 
 	else if (0 == std::string(argv[1]).compare("-get_algo_param") && argc == (3 + argc_offset))
 		//Sample code 25 : Get lidar algorithm parameter(retro and adhesion)
@@ -1255,11 +1322,11 @@ int main(int argc, char** argv)
 
 	else if (0 == std::string(argv[1]).compare("-config_delete_points") && argc == (4 + argc_offset))
 		//Sample code 26 : Config lidar delete close points enable
-		sample_config_lidar_delete_points(lidar_ip, std::atoi(argv[3]), tp);
+		sample_config_lidar_delete_points(lidar_ip, std::atoi(argv[3 + argc_offset]), tp);
 
 	else if (0 == std::string(argv[1]).compare("-config_adhesion") && argc == (4 + argc_offset))
 		//Sample code 27 : Config lidar adhesion mode
-		sample_config_lidar_adhesion(lidar_ip, std::atoi(argv[3]), tp);
+		sample_config_lidar_adhesion(lidar_ip, std::atoi(argv[3 + argc_offset]), tp);
 
 	// Handling multiple lidars
 	else if (0 == std::string(argv[1]).compare("-config_retro_multi"))
@@ -1290,9 +1357,9 @@ int main(int argc, char** argv)
 		//Sample code 34 : Config lidars` adhesion mode.
 		sample_config_lidar_adhesion_multi(lidars_ip, std::atoi(argv[argc-1]), tp);
 
-	else if(0 == std::string(argv[1]).compare("-set_cali") && argc == (4 + argc_offset))
+	else if(0 == std::string(argv[1]).compare("-set_cal") && argc == (4 + argc_offset))
 		//Sample code 35 : Set lidar's calibration file by tcp connection.
-		sample_config_lidar_calibration(lidar_ip, std::string(argv[3]), tp);
+		sample_config_lidar_calibration(lidar_ip, std::string(argv[3 + argc_offset]), tp);
 
     else
     {

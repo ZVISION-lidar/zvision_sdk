@@ -35,6 +35,8 @@ namespace zvision
 {
     class PointCloud;
 
+    class LidarPointsFilter;
+
     class CalibrationPacket
     {
     public:
@@ -139,7 +141,7 @@ namespace zvision
         * \param[in] cloud           to store the pointcloud
         * \return 0 for ok, others for failure.
         */
-        static int ProcessPacket(std::string& packet, CalibrationDataSinCosTable& cal_lut, PointCloud& cloud);
+        static int ProcessPacket(std::string& packet, CalibrationDataSinCosTable& cal_lut, PointCloud& cloud, LidarPointsFilter* filter = nullptr);
 
         /** \brief Process a pointcloud udp packet to points.
         * \param[in] packet          class PointCloudPacket

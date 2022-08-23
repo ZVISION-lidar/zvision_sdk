@@ -49,6 +49,52 @@ namespace zvision
         
     };
 
+    //////////////////////////////////////////////////////////////////////////////////////////////
+    /** \brief filter lidar's pointcloud data.
+    */
+    class LidarPointsFilter
+    {
+    public:
+        LidarPointsFilter();
+        ~LidarPointsFilter();
+
+        /** \brief init filter parameter(only for ml30s device).
+        */
+        void Init(zvision::DownSampleMode mode, std::string cfg_path = "");
+
+        /** \brief get filter downsample mode.
+        * \return downsample mode
+        */
+        zvision::DownSampleMode GetDownsampleMode();
+        /** \brief get filter scan mode.
+        * \return scan mode
+        */
+        zvision::ScanMode GetScanMode();
+
+        /** \brief get filtered points count.
+        * \return points count
+        */
+        int GetPointsCoutFromCfgFile(int& cnt);
+
+        /** \brief query covered point by id.
+        * \return cover state
+        */
+        bool IsLidarPointCovered(uint32_t id);
+
+        /** \brief func hexstring to uint8_t.
+        * \return uint8_t
+        */
+        uint8_t hex2uint8(char h);
+
+    private:
+
+        zvision::DownSampleMode downsample_;
+        zvision::ScanMode scan_mode_;
+        std::string cfg_file_path_;
+        bool init_;
+        std::vector<uint8_t> cover_table_;
+        int uncover_cnt_;
+    };
 
     //////////////////////////////////////////////////////////////////////////////////////////////
     /** \brief PointCloudProducer for get lidar's pointcloud data.
@@ -82,6 +128,12 @@ namespace zvision
         * \param[in] cb              callback function
         */
         void RegisterPointCloudCallback(PointCloudCallback cb);
+
+        /** \brief set pointcloud downsample mode.
+        * \param[in] mode              downsample mode
+        * \param[in] cfg_path          user defined config file path
+        */
+        void setDownsampleMode(zvision::DownSampleMode mode, std::string cfg_path);
 
         /*start the udp handler(ThreadLoop) thread, pop up udp data in queue and process*/
         int Start();
@@ -153,6 +205,8 @@ namespace zvision
 
         /** \brief end of a full pointcloud's udp seq. It depends on lidar type*/
         ///int end_seq_;
+
+        LidarPointsFilter points_filter_;
 
         unsigned int filter_ip_;
         int data_port_;

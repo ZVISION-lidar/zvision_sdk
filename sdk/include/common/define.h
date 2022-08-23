@@ -152,6 +152,7 @@ namespace zvision
         DownsampleNone = 0, // No downsample
         Downsample_1_2 = 1, // 1/2 downsample
         Downsample_1_4 = 2, // 1/4 downsample
+        Downsample_cfg_file = 3, // downsample from config file
         DownsampleUnknown,
     }DownSampleMode;
 

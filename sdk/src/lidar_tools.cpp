@@ -1676,19 +1676,29 @@ namespace zvision
         return 0;
     }
 
-    int LidarTools::GetDeviceCalibrationDataToFile(std::string filename)
+    int LidarTools::GetDeviceCalibrationDataToFile(std::string filename, zvision::DeviceType tp)
     {
         CalibrationData cal;
-        int ret = GetDeviceCalibrationData(cal);
+        int ret = 0;
+        if (tp == zvision::DeviceType::LidarMl30SA1Plus) {
+            CalibrationPackets pkts;
+            char cmd[4] = { (char)0xBA, (char)0x0D, (char)0x0A, (char)0x00 };
+            ret = LidarTools::GetDeviceCalibrationPackets(pkts, std::string(cmd, 4));
+            if (ret)
+                return ret;
+            ret = LidarTools::GetDeviceCalibrationData(pkts, cal);
+        }
+        else {
+            ret = GetDeviceCalibrationData(cal);
+        }
 
         if (ret)
             return ret;
         else
             return LidarTools::ExportCalibrationData(cal, filename);
-
     }
 
-	int LidarTools::SetDeviceCalibrationData(std::string filename) {
+	int LidarTools::SetDeviceCalibrationData(std::string filename, zvision::DeviceType tp) {
 
 		// 1. read cali data from file
 		CalibrationData cal;
@@ -1699,6 +1709,28 @@ namespace zvision
 		// only support for ml30sa1
 		if (cal.scan_mode != ScanML30SA1_160 && cal.scan_mode != ScanML30SA1Plus_160)
 			return -1;
+
+        // we need trans cali data
+        if (cal.scan_mode == ScanML30SA1Plus_160) {
+            int lpos = cal.data.size() / 2;
+            std::vector<float> cal_tmp;
+            std::vector<float> cal_fov0_3 = std::vector<float>{ std::begin(cal.data), std::begin(cal.data) + lpos };
+            std::vector<float> cal_fov4_7 = std::vector<float>{ std::begin(cal.data) + lpos, std::begin(cal.data) + cal.data.size() };
+            int groups = cal.data.size() / 16;
+            for (int g = 0; g < groups;g++) {
+                float val = .0f;
+                for (int col = 0; col < 16;col++) {
+                    int id = g * 16 + col;
+                    if (col < 8) {
+                        val = cal_fov0_3.at(g*8 +col);
+                    }
+                    else {
+                        val = cal_fov4_7.at(g * 8 + col%8);
+                    }
+                    cal.data.at(id) = val;
+                }
+            }
+        }
 
 		const int cali_pkt_len = 1024;
 		size_t cali_data_len = cal.data.size();
@@ -4263,6 +4295,18 @@ namespace zvision
 		case zvision::read_full_log:
         {
 
+        }break;
+        case zvision::read_ptp_file: {
+            std::fstream outfile;
+            outfile.open(param->temp_filepath, std::ios::out);
+            if (outfile.is_open() && param->temp_recv_data.size())
+            {
+                outfile << param->temp_recv_data;
+                outfile.close();
+            }
+            else {
+                return -1;
+            }
         }break;
 		default:
 			break;

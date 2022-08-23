@@ -395,7 +395,7 @@ namespace zvision
     }
 
 
-    int PointCloudPacket::ProcessPacket(std::string& packet, CalibrationDataSinCosTable& cal_lut, PointCloud& cloud)
+    int PointCloudPacket::ProcessPacket(std::string& packet, CalibrationDataSinCosTable& cal_lut, PointCloud& cloud, LidarPointsFilter* filter)
     {
         unsigned char* data = const_cast<unsigned char*>((unsigned char*)packet.c_str());
 
@@ -679,20 +679,60 @@ namespace zvision
             cloud.points.resize(points);
         }
 
+        // downsample
+        DownsampleMode downsample = DownsampleMode::DownsampleUnknown;
+        if (filter) {
+            if ((ScanML30SA1_160 == scan_mode) && (fires == 51200) && (filter->GetScanMode() == scan_mode))
+            {
+                downsample = filter->GetDownsampleMode();
+            }
+        }
+
         for (uint32_t gp = 0; gp < groups_in_one_udp; ++gp)/*every groups*/
         {
+            // 1/2 or 1/4 downsample mode
+            if (downsample == DownsampleMode::Downsample_1_2) {
+                if (gp % 2 != 0) {
+                    for (uint32_t pt = 0; pt < points_in_one_group; ++pt)
+                    {
+                        int point_number = seq * points_in_one_group * groups_in_one_udp + gp * points_in_one_group + number_index[pt];
+                        if (point_number > ((int)cloud.points.size()) - 1) return -1;
+                        cloud.points[point_number].valid = 0;
+                    }
+                    continue;
+                }
+            }
+            else if (downsample == DownsampleMode::Downsample_1_4) {
+                int pre_group[8] = { 0,0,1,1,1,1,0,0 };
+                if ((gp % 4) != pre_group[seq % 8]) {
+                    for (uint32_t pt = 0; pt < points_in_one_group; ++pt)
+                    {
+                        int point_number = seq * points_in_one_group * groups_in_one_udp + gp * points_in_one_group + number_index[pt];
+                        if (point_number > ((int)cloud.points.size()) - 1) return -1;
+                        cloud.points[point_number].valid = 0;
+                    }
+                    continue;
+                }
+            }
+
             unsigned char* first_point_pos_in_group = data + group_position_in_packet + group_len * gp + point_position_in_group;
             ReturnType return_type = ReturnType::UnknownReturn;
             float distance = 0.0;
             int reflectivity = 0;
             for (uint32_t pt = 0; pt < points_in_one_group; ++pt)
             {
-                unsigned char* point_pos = first_point_pos_in_group + point_len * pt;
+                int fire_number = (seq * points_in_one_group * groups_in_one_udp + gp * points_in_one_group) / echo_cnt + fire_index[pt];
+                // manu downsample mode
+                if (downsample == DownsampleMode::Downsample_cfg_file) {
+                    if (filter->IsLidarPointCovered(fire_number)) {
+                        continue;
+                    }
+                }
 
                 int point_number = seq * points_in_one_group * groups_in_one_udp + gp * points_in_one_group + number_index[pt];
-                int fire_number = (seq * points_in_one_group * groups_in_one_udp + gp * points_in_one_group) / echo_cnt + fire_index[pt];
                 int fov_number = fov_index[pt];
 
+                unsigned char* point_pos = first_point_pos_in_group + point_len * pt;
                 PointCloudPacket::ResolvePoint(point_pos, return_type, distance, reflectivity, distance_bit, reflectivity_bit);
 
                 int echo = 0;//first echo

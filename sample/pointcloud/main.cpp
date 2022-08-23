@@ -100,6 +100,48 @@ pcl::PointCloud<pcl::PointXYZRGBA>::Ptr point_cloud_convert(zvision::PointCloud&
 
 #endif
 
+struct PlayParam {
+    /** bref
+    param: ip                       lidar ipaddress
+    param: port                     lidar pointcloud udp destination port
+    param: calibration              (optional) calibration filename, if pcapfilename is empty, online cal will be used.
+    param: mc_enable                enable to join multicast group, if enable, mc_ip will be used.
+    param: mcg_ip                   multicast group ip address.If you dont't known the mc_ip, set to "" , we get the mc_ip by tcp connection.
+    param: tp                       lidar type
+    param: mode                     none, 1 / 2 or 1 / 4, optional, only valid for ScanML30SA1_160.
+    param: downsample_cfg_file      downsample config file path, optional, only valid for ScanML30SA1_160.
+    */
+    PlayParam(std::string ip, int port, std::string calibration, bool mc_enable, std::string mcg_ip, zvision::DeviceType tp, zvision::DownSampleMode mode, std::string downsample_cfg_file)
+        :lidar_ip_(ip),
+        port_(port),
+        calfilename_(calibration),
+        mc_en_(mc_enable),
+        mc_ip_(mcg_ip),
+        tp_(tp),
+        downsample_(mode),
+        downsample_cfg_file_(downsample_cfg_file)
+    {}
+
+    PlayParam() {
+        lidar_ip_ = "192.168.10.108";
+        port_ = 2368;
+        calfilename_ = "";
+        mc_en_ = false;
+        mc_ip_ = "";
+        tp_ = zvision::DeviceType::LidarUnknown;
+        downsample_ = zvision::DownSampleMode::DownsampleUnknown;
+        downsample_cfg_file_ = "";
+    }
+
+    std::string lidar_ip_;
+    int port_;
+    std::string calfilename_;
+    bool mc_en_;
+    std::string mc_ip_;
+    zvision::DeviceType tp_;
+    zvision::DownSampleMode downsample_;
+    std::string downsample_cfg_file_;
+};
 
 //Pointcloud callback function.
 void sample_pointcloud_callback(zvision::PointCloud& pc, int& status)
@@ -108,17 +150,16 @@ void sample_pointcloud_callback(zvision::PointCloud& pc, int& status)
 }
 
 //sample 0 : get online pointcloud. You can get poincloud from online device.
-//parameter lidar_ip              lidar ipaddress
-//parameter port                  lidar pointcloud udp destination port
-//parameter calfilename(optional) calibration filename, if pcapfilename is empty, online cal will be used.
-//parameter mc_en                 enable to join multicast group, if enable, mc_ip will be used.
-//parameter mc_ip                 multicast group ip address. If you dont't known the mc_ip, set to "" , we get the mc_ip by tcp connection.
-void sample_online_pointcloud(std::string lidar_ip = "192.168.10.108", int port = 2368, std::string calfilename = "", bool mc_en = false, std::string mc_ip = "", zvision::DeviceType tp = zvision::DeviceType::LidarUnknown)
+//parameter param   lidar play parameters
+void sample_online_pointcloud(const PlayParam& param)
 {
     //Step 1 : Init a online player.
     //If you want to specify the calibration file for the pointcloud, cal_filename is used to load the calibtation data.
     //Otherwise, the PointCloudProducer will connect to lidar and get the calibtation data by tcp connection.
-    zvision::PointCloudProducer player(port, lidar_ip, calfilename, mc_en, mc_ip, tp);
+    zvision::PointCloudProducer player(param.port_, param.lidar_ip_, param.calfilename_, param.mc_en_, param.mc_ip_, param.tp_);
+
+    // manu set downsample mode if necessary
+    player.setDownsampleMode(param.downsample_, param.downsample_cfg_file_);
 
     //Step 2 (Optioncal): Regist a callback function.
     //If a callback function registered, the callback function will be called when a new pointcloud is ready.
@@ -371,6 +412,8 @@ int main(int argc, char** argv)
             std::string calibration = "";
             bool mc_enable = false;
             std::string mcg_ip = "";
+            std::string downsample_str = "none";
+            std::string downsample_cfg_file = "";
             int port = -1;
 			zvision::DeviceType tp = zvision::DeviceType::LidarUnknown;
             if (paras.end() != (find = paras.find("-p")))// pointcloud udp port
@@ -392,7 +435,26 @@ int main(int argc, char** argv)
 			if (paras.end() != (find = paras.find("-30sp"))) {
 				tp = zvision::DeviceType::LidarMl30SA1Plus;
 			}
-            sample_online_pointcloud(ip, port, calibration, mc_enable, mcg_ip, tp);
+            if (paras.end() != (find = paras.find("-d")))// downsample mode
+            {
+                downsample_str = find->second;
+            }
+            if (paras.end() != (find = paras.find("-dcfg")))// downsample config file path
+            {
+                downsample_cfg_file = find->second;
+            }
+
+            zvision::DownsampleMode mode = zvision::DownsampleMode::DownsampleNone;
+            if (downsample_str.compare("1/2") == 0)
+                mode = zvision::DownsampleMode::Downsample_1_2;
+            else if (downsample_str.compare("1/4") == 0)
+                mode = zvision::DownsampleMode::Downsample_1_4;
+            else if (!downsample_cfg_file.empty())
+                mode = zvision::DownsampleMode::Downsample_cfg_file;
+
+            PlayParam param(ip, port, calibration, mc_enable, mcg_ip, tp, mode, downsample_cfg_file);
+
+            sample_online_pointcloud(param);
             return 0;
         }
         else
@@ -468,7 +530,9 @@ int main(int argc, char** argv)
         << "        -c  calibration_file_name(optional)\n"
         << "        -j  (optional for online)\n"
         << "        -g  multicast_group_ip_address(optional, valid when -j is set)\n"
-		<< "		-30sp (optional, special for ML30S+ lidar)"
+		<< "        -30sp (optional, special for ML30S+ lidar)\n"
+        << "        -d  downsample mode(none, 1/2 or 1/4, optional,only valid for ScanML30SA1_160)\n"
+        << "        -dcfg  downsample mode(downsample config file path, optional, only valid for ScanML30SA1_160)\n"
         << "\n"
         << "Online sample 1 : -online -ip 192.168.10.108\n"
 		<< "Online sample 2 : -online -ip 192.168.10.108 -30sp\n"
@@ -477,6 +541,8 @@ int main(int argc, char** argv)
         << "Online sample 5 : -online -ip 192.168.10.108 -p 2368 -c xxxx.cal\n"
         << "Online sample 6 : -online -ip 192.168.10.108 -j\n"
         << "Online sample 7 : -online -ip 192.168.10.108 -j 239.0.0.1\n"
+        << "Online sample 8 : -online -ip 192.168.10.108 -d 1/2\n"
+        << "Online sample 9 : -online -ip 192.168.10.108 -dcfg xxxx.txt\n"
         << "\n"
 
         << "Offline sample param:\n"
@@ -489,6 +555,7 @@ int main(int argc, char** argv)
         << "Offline sample 1 : -offline -ip 192.168.10.108 -p 2368 -f xxxx.pcap -c xxxx.cal\n"
 
 #ifdef USING_PCL_VISUALIZATION
+        << "\n"
 		<< "Offline pcap to pcd sample param:\n"
 		<< "        -offline2pcd (required)\n"
 		<< "        -ip lidar_ip_address(required)\n"

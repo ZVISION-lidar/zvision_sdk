@@ -148,13 +148,15 @@ namespace zvision
 
         /** \brief Get calibration data from lidar and save to file.
           * \param[in] filename       the file to store the calibration data
+          * \param[in] tp             lidar type
           */
-        int GetDeviceCalibrationDataToFile(std::string filename);
+        int GetDeviceCalibrationDataToFile(std::string filename, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown);
 
 		/** \brief Set calibration data to lidar.
 		* \param[in] filename       calibration file path
+        * \param[in] tp             lidar type
 		*/
-		int SetDeviceCalibrationData(std::string filename);
+		int SetDeviceCalibrationData(std::string filename, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown);
 
         /** \brief Set lidar static ip address.
           * \param[in] ip             ip to configure

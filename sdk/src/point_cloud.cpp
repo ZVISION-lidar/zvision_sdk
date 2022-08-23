@@ -124,6 +124,128 @@ namespace zvision
         bool enqueue_data_;
     };
 
+    LidarPointsFilter::LidarPointsFilter()
+        :downsample_(zvision::DownSampleMode::DownsampleUnknown)
+        , scan_mode_(zvision::ScanMode::ScanUnknown)
+        , cfg_file_path_("")
+        , init_(false)
+        , uncover_cnt_(-1)
+    {}
+
+    LidarPointsFilter::~LidarPointsFilter()
+    {}
+
+    zvision::DownSampleMode LidarPointsFilter::GetDownsampleMode() {
+        return downsample_;
+    }
+
+    void LidarPointsFilter::Init(zvision::DownSampleMode mode, std::string cfg_path) {
+
+        init_ = true;
+        if (mode != zvision::DownSampleMode::Downsample_cfg_file) {
+            downsample_ = mode;
+            scan_mode_ = zvision::ScanML30SA1_160;
+            return;
+        }
+
+        if (cfg_path.empty())
+            return;
+
+        // load cfg file data
+        try {
+            // for ml30s device, update cover table
+            cover_table_.resize(51200, 1);
+            uncover_cnt_ = 51200;
+            std::ifstream in(cfg_path.c_str(), std::ios::in);
+            if (!in.is_open())
+                return;
+
+            uint8_t flg = 0x80;
+            uint8_t fov_in_group[8] = { 0, 2, 4, 6, 5, 7, 1, 3 };
+            int total_cnt = 640;
+            std::string line;
+            int id = 0;
+            while (std::getline(in, line))
+            {
+                // check
+                if (line.size() == 0)
+                    continue;
+
+                if (line.size() != 20)
+                    break;
+
+                // get value
+                uint8_t masks[10] = { 0xFF };
+                for (int b = 0; b < 10; b++) {
+                    char h = line.at(b * 2);
+                    char l = line.at(b * 2 + 1);
+                    masks[b] = hex2uint8(h) << 4 | hex2uint8(l);
+                }
+
+                // update
+                for (int j = 0; j < 10; j++) {
+                    for (int k = 0; k < 8; k++) {
+                        flg = 0x80 >> k;
+                        if ((flg & masks[j]) != flg) {
+                            int fov = id / 80;
+                            int group = (id * 10 * 8 + j * 8 + k) % 6400;
+                            int point_id = group * 8 + fov_in_group[fov];
+                            cover_table_.at(point_id) = 0;
+                            uncover_cnt_--;
+                        }
+                    }
+                }
+                id++;
+            }
+
+            in.close();
+            if (id != total_cnt) {
+                cover_table_.resize(51200, 1);
+                uncover_cnt_ = 51200;
+            }
+        }
+        catch (std::exception e)
+        {
+            cover_table_.resize(51200, 1);
+            uncover_cnt_ = 51200;
+            return;
+        }
+
+        downsample_ = mode;
+        cfg_file_path_ = cfg_path;
+        scan_mode_ = zvision::ScanML30SA1_160;
+    }
+
+    zvision::ScanMode LidarPointsFilter::GetScanMode() {
+        return scan_mode_;
+    }
+
+    int LidarPointsFilter::GetPointsCoutFromCfgFile(int& cnt) {
+        if (init_ && uncover_cnt_ > 0)
+            cnt = uncover_cnt_;
+        return 0;
+    }
+
+    bool LidarPointsFilter::IsLidarPointCovered(uint32_t id) {
+        if (!init_ || id >= cover_table_.size())
+            return false;
+
+        // get point cover state
+        return cover_table_.at(id) == 0;
+    }
+
+    uint8_t LidarPointsFilter::hex2uint8(char c) {
+
+        uint8_t val = 0x0F;
+        if (c >= 'A' && c <= 'Z')
+            val = c - 'A' + 10;
+        else if (c >= 'a' && c <= 'z')
+            val = c - 'a' + 10;
+        else if (c >= '0' && c <= '9')
+            val = c - '0';
+        return val;
+    }
+
     PointCloudProducer::PointCloudProducer(int data_port, std::string lidar_ip, std::string cal_filename, bool multicast_en, std::string mc_group_ip, DeviceType tp) :
         cal_(new CalibrationData()),
         points_(new PointCloud()),
@@ -299,7 +421,7 @@ namespace zvision
             this->ProcessOneSweep();
         }
 
-        int ret = PointCloudPacket::ProcessPacket(packet, *(this->cal_lut_), *points_);
+        int ret = PointCloudPacket::ProcessPacket(packet, *(this->cal_lut_), *points_, &points_filter_);
         if(0 != ret)
             LOG_WARN("ProcessPacket error, %d.\n", ret);
 
@@ -308,11 +430,44 @@ namespace zvision
 
     void PointCloudProducer::ProcessOneSweep()
     {
+        // manu downsample
+        std::shared_ptr<PointCloud> ds_points;
+        if ((points_filter_.GetDownsampleMode() == Downsample_1_2 || \
+            points_filter_.GetDownsampleMode() == Downsample_1_4 || \
+            points_filter_.GetDownsampleMode() == Downsample_cfg_file) && \
+            ((ScanML30SA1_160 == this->scan_mode_) && (this->points_->points.size() == 51200)))
+        {
+            ds_points.reset(new PointCloud());
+            if (points_filter_.GetDownsampleMode() == Downsample_1_2)
+                ds_points->points.resize(51200 / 2);
+            else if (points_filter_.GetDownsampleMode() == Downsample_1_4)
+                ds_points->points.resize(51200 / 4);
+            else if (points_filter_.GetDownsampleMode() == Downsample_cfg_file) {
+                int cnt = 51200;
+                points_filter_.GetPointsCoutFromCfgFile(cnt);
+                ds_points->points.resize(cnt);
+            }
+
+            int id = 0;
+            for (int i = 0; i < this->points_->points.size(); i++) {
+                if (this->points_->points[i].valid == 1) {
+                    if (id >= ds_points->points.size())
+                        break;
+
+                    ds_points->points[id] = this->points_->points[i];
+                    id++;
+                }
+            }
+        }
+        else {
+            ds_points = points_;
+        }
+
         //If a new pointcloud processed done, call the callback function.
         int ret = 0;
         if (pointcloud_cb_)
         {
-            (pointcloud_cb_)(*(this->points_), ret);
+            (pointcloud_cb_)(*ds_points, ret);
         }
 
         //If a new pointcloud processed done, push back the deque.
@@ -325,7 +480,7 @@ namespace zvision
                     this->pointclouds_.pop_front();
                 }
             }
-            this->pointclouds_.push_back(this->points_);
+            this->pointclouds_.push_back(ds_points);
         }
 
         //Allocate a new pointcloud for next one.
@@ -411,6 +566,10 @@ namespace zvision
             this->pointclouds_.pop_front();
         }
         return 0;
+    }
+
+    void PointCloudProducer::setDownsampleMode(zvision::DownSampleMode mode, std::string cfg_path) {
+        points_filter_.Init(mode, cfg_path);
     }
 
     int  PointCloudProducer::Start()/*start the thread which will handle the udp packet one by one*/
