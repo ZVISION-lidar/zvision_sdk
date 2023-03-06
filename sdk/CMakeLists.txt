@@ -5,7 +5,7 @@ add_library(${ZVISION_SDK_LIBRARY} STATIC "")
 
 set(ZVISION_SDK_MAJOR_VERSION "0")
 set(ZVISION_SDK_MINOR_VERSION "1")
-set(ZVISION_SDK_PATCH_VERSION "11")
+set(ZVISION_SDK_PATCH_VERSION "12")
 set(ZVISION_SDK_VERSION_STRING "${ZVISION_SDK_MAJOR_VERSION}.${ZVISION_SDK_MINOR_VERSION}.${ZVISION_SDK_PATCH_VERSION}")
 
 target_include_directories(${ZVISION_SDK_LIBRARY}
@@ -15,7 +15,6 @@ target_include_directories(${ZVISION_SDK_LIBRARY}
         PRIVATE
         include/commu
         include/protocol
-        include/crypto
         include/json)
 
 set_target_properties(${ZVISION_SDK_LIBRARY} PROPERTIES PUBLIC_HEADER "include/lidar_tools.h;include/point_cloud.h;include/common/define.h;include/common/print.h")
@@ -33,9 +32,7 @@ target_sources(${ZVISION_SDK_LIBRARY}
         src/point_cloud.cpp
         src/print.cpp
         src/client.cpp
-        src/define.cpp
-        src/crypto/md5.cpp
-        src/json/json_ml30s_plus.cpp)
+        src/define.cpp)
 
 install(TARGETS ${ZVISION_SDK_LIBRARY}
         PUBLIC_HEADER DESTINATION include

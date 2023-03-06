@@ -46,7 +46,6 @@ namespace zvision
     {
     public:
         std::vector<Point> points;
-        
     };
 
     //////////////////////////////////////////////////////////////////////////////////////////////
@@ -60,12 +59,12 @@ namespace zvision
 
         /** \brief init filter parameter(only for ml30s device).
         */
-        void Init(zvision::DownSampleMode mode, std::string cfg_path = "");
+        void Init(zvision::DownSampleMode mode, std::string cfg_path = "", bool is_ml30sp_b1_ep = false);
 
         /** \brief get filter downsample mode.
         * \return downsample mode
         */
-        zvision::DownSampleMode GetDownsampleMode();
+        zvision::DownSampleMode GetDownsampleMode(zvision::ScanMode mode);
         /** \brief get filter scan mode.
         * \return scan mode
         */
@@ -180,7 +179,7 @@ namespace zvision
         std::shared_ptr<CalibrationDataSinCosTable> cal_lut_;
 
         /** \brief store the lidar udp pcaket*/
-        std::shared_ptr<SynchronizedQueue<std::string*> > packets_;
+        std::shared_ptr<SynchronizedQueue<std::string> > packets_;
 
         /** \brief store the lidar pointcoud data*/
         std::shared_ptr<PointCloud> points_;

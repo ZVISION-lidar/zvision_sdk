@@ -37,6 +37,12 @@ namespace zvision
 
     class LidarPointsFilter;
 
+    class MarkedPacket
+    {
+    public:
+        static bool IsValidMarkedPacket(std::string& pkt);
+    };
+
     class CalibrationPacket
     {
     public:
@@ -166,6 +172,107 @@ namespace zvision
         char data_[1304];
 
     };
+
+    // New architecture protocol
+    struct InternalFrameResolveInfo
+    {
+        //bool is_dual = false;
+        int echo = 0;
+        int fovs = 0;
+        int lines = 0;
+        int points_per_line = 0;
+
+        int npoints = 0;
+        int udp_count = 0;
+        int groups_per_udp = 0;
+        int points_per_group = 0;
+        std::vector<int> points_offset_bytes_in_group;
+        int point_size = 0;
+        std::vector<int> fov_id_in_group;
+    };
+    typedef std::vector<BloomingPoint> BloomingPoints;
+    typedef std::shared_ptr<BloomingPoints> BloomingPointsPtr;
+    struct InternalPacketHeader
+    {
+        bool valid = false;
+        ScanMode scan_mode = ScanUnknown;
+        PacketType packet_type = Tp_PacketUnknown;
+        uint16_t product_version = 0;
+        std::string serial_number;
+        int seq = -1;
+        // resolve info
+        InternalFrameResolveInfo resolve_info;
+    };
+
+    class InternalPacket
+    {
+    public:
+
+        /** \brief packet header.
+        *   Product Id:       2 bytes   (uint16_t)
+        *   Product Version:  2 bytes   (uint16_t)
+        *   Product SN:      18 bytes   (string)
+        *   Content Type:     2 bytes   (uint16_t)
+        *   Block Id:         2 bytes   (uint16_t)
+        *   PayLoad Length:   4 bytes   (uint32_t)
+        */
+        static const int PACKET_HEADER_LEN = 30;
+
+        /** \brief packet tail.
+        *   timestamp: 10 bytes
+        *   reserved:   2 bytes
+        *   check sum:  2 bytes   (uint32_t)
+        */
+        static const int PACKET_TAIL_LEN = 14;
+
+        static const int DISTANCE_BITS = 19;
+
+        /** distance units 0.0015m (10ps). */
+        static const float DISTANCE_UNITS;
+
+        /** \brief Get packet type.
+        * \param[in] packet    udp data packet
+        * \param[out] type   return packet type
+        * \param[out] mode   return lidar scan mode
+        */
+        static void GetPacketType(const std::string& packet, PacketType& type, ScanMode& mode);
+
+        /** \brief Get the udp sequence number from the udp packet.
+        * \return udp sequence number, -1 for invalid.
+        */
+        static int GetPacketSeq(const std::string& packet);
+
+       /** \brief Get the timestamp from the blooming packet.
+        * \return timestamp in second.
+        */
+        static double GetTimestamp(const std::string& packet);
+
+        /** \brief Get the timestamp from the blooming packet.
+        * \return timestamp in nano second.
+        */
+        static uint64_t GetTimestampNS(const std::string& packet);
+
+
+        static bool GetFrameResolveInfo(const std::string& packet, InternalPacketHeader& header);
+
+    };
+
+    class BloomingPacket :public InternalPacket
+    {
+
+    public:
+        static const int PACKET_LEN = 1304;
+        /** \brief Process a blooming udp packet to points.
+        * \param[in] packet          udp data packet
+        * \param[in] cal_lut         calibration data
+        * \param[out] cloud          to store the pointcloud
+        * \return 0 for ok, others for failure.
+        */
+        static int ProcessPacket(const std::string& packet, const zvision::CalibrationDataSinCosTable& cal_lut, BloomingPoints& cloud, InternalPacketHeader* header);
+
+        uint8_t data[PACKET_LEN];
+    };
+
 }
 
 #endif //end PACKET_H_

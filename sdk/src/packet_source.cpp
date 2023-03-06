@@ -299,6 +299,11 @@ namespace zvision
                     this->info_map_[ip].cal_headers_.push_back(pos);
                 }
             }
+            else if (MarkedPacket::IsValidMarkedPacket(packet))
+            {
+                if(this->info_map_[ip].sweep_headers_.size())
+                    this->info_map_[ip].frames_marked_.push_back(this->info_map_[ip].sweep_headers_.size()-1);
+            }
             else
             {
                 continue;

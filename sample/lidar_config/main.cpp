@@ -27,96 +27,16 @@
 #include <stdio.h>
 #include <fstream>
 #include <iostream>
-#include <map>
+#include <sstream>
 #include <set>
 #include <thread>
 #include <memory>
-#include <string.h>
+#include "convert.hpp"
 /* Progress bar defination */
 #define PBSTR "||||||||||||||||||||||||||||||||||||||||||||||||||"
 #define PBWIDTH 50
 /* Progress information */
 static std::map<std::string, int> g_lidars_percent;
-
-class ParamResolver
-{
-public:
-
-    static int GetParameters(int argc, char* argv[], std::map<std::string, std::string>& paras, std::string& appname)
-    {
-        paras.clear();
-        if (argc >= 1)
-            appname = std::string(argv[0]);
-
-        std::string key;
-        std::string value;
-        for (int i = 1; i < argc; i++)
-        {
-            std::string str(argv[i]);
-            if ((str.size() > 1) && ('-' == str[0]))
-            {
-                key = str;
-                if (i == (argc - 1))
-                    value = "";
-                else
-                {
-                    value = std::string(argv[i + 1]);
-                    if ('-' == value[0])
-                    {
-                        value = "";
-                    }
-                    else
-                    {
-                        i++;
-                    }
-                }
-                paras[key] = value;
-            }
-        }
-        return 0;
-    }
-
-};
-
-/* String split */
-void strSplit(const std::string& s, std::vector<std::string>& tokens, const std::string& delimiters = " ") {
-	std::string::size_type lastPos = s.find_first_not_of(delimiters, 0);
-	std::string::size_type pos = s.find_first_of(delimiters, lastPos);
-	while (std::string::npos != pos || std::string::npos != lastPos) {
-		tokens.push_back(s.substr(lastPos, pos - lastPos));
-		//use emplace_back after C++11
-		lastPos = s.find_first_not_of(delimiters, pos);
-		pos = s.find_first_of(delimiters, lastPos);
-	}
-}
-
-/* Verify ip */
-bool AssembleIpString(const std::string& ip)
-{
-	try
-	{
-		/* ip format: xxx.xxx.xxx.xxx */
-		if (ip.size() > 15)
-			return false;
-
-		std::vector<std::string> vals;
-		strSplit(ip, vals, ".");
-		if (vals.size() != 4)
-			return false;
-
-		for (auto s : vals) {
-			for (auto c : s) {
-				if (c<'0' || c>'9')
-					return false;
-			}
-		}
-	}
-	catch (const std::exception& e)
-	{
-		return false;
-	}
-	return true;
-}
 
 //Callback function for progress notify
 void print_current_progress(std::string ip, int percent)
@@ -957,6 +877,399 @@ int sample_config_lidar_calibration(std::string lidar_ip, std::string filename, 
 	return ret;
 }
 
+// Sample code 36 : Get lidar's channel file by tcp connection.
+int sample_get_lidar_channel_file(std::string lidar_ip, std::string savefilename, bool curr = true)
+{
+	int ret = 0;
+	zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
+	if (ret = config.GetDeviceChannelDataToFile(savefilename, curr))
+		LOG_ERROR("Get device [%s]'s channel data failed, ret = %d.\n", lidar_ip.c_str(), ret);
+	else
+	{
+		LOG_INFO("Get device [%s]'s channel data ok.\n", lidar_ip.c_str());
+		LOG_INFO("Channel data save to file %s.\n", savefilename.c_str());
+	}
+	return ret;
+}
+
+// Sample code 37 : Get lidar's channel list file by tcp connection.
+int sample_get_lidar_channel_list_file(std::string lidar_ip, std::string savefilename)
+{
+	int ret = 0;
+	zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
+	if (ret = config.GetDeviceChannelListDataToFile(savefilename))
+		LOG_ERROR("Get device [%s]'s channel list data failed, ret = %d.\n", lidar_ip.c_str(), ret);
+	else
+	{
+		LOG_INFO("Get device [%s]'s channel list data ok.\n", lidar_ip.c_str());
+		LOG_INFO("Channel list data save to file %s.\n", savefilename.c_str());
+	}
+	return ret;
+}
+
+// Sample code 38 : Set lidar's echo mode.
+int sample_config_lidar_echo_mode(std::string lidar_ip, int id, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown)
+{
+	zvision::EchoMode mode = zvision::EchoMode::EchoUnknown;
+	if (id == 1)
+		mode = zvision::EchoSingleFirst;
+	else if (id == 2)
+		mode = zvision::EchoSingleStrongest;
+	else if (id == 3)
+		mode = zvision::EchoSingleLast;
+	else if (id == 4)
+		mode = zvision::EchoDoubleFirstStrongest;
+	else if (id == 5)
+		mode = zvision::EchoDoubleFirstLast;
+	else if (id == 6)
+		mode = zvision::EchoDoubleStrongestLast;
+	else {
+		LOG_ERROR("Invalid echo mode parameters [%d] ,set lidat echo mode failed.\n.", id);
+		return zvision::InvalidParameter;
+	}
+
+	zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
+	int ret = 0;
+	if (tp == zvision::DeviceType::LidarMl30SA1Plus) {
+		zvision::JsonConfigFileParam param_30sp;
+		param_30sp.echo_mode = mode;
+		ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::set_echo_mode, &param_30sp);
+	}
+	else {
+		ret = config.SetDeviceEchoMode(mode);
+	}
+
+	if (ret == zvision::NotSupport)
+		LOG_INFO("Set device [%s]'s echo mode to [%s] ignored, not support.\n", lidar_ip.c_str(), zvision::get_echo_mode_string(mode).c_str(), ret);
+	else if(ret)
+		LOG_ERROR("Set device [%s]'s echo mode to [%s] failed, ret = %d.\n", lidar_ip.c_str(), zvision::get_echo_mode_string(mode).c_str(), ret);
+	else
+	{
+		LOG_INFO("Set device [%s]'s echo mode to [%s] ok.\n", lidar_ip.c_str(), zvision::get_echo_mode_string(mode).c_str());
+	}
+	return ret;
+}
+
+// Sample code 39 : Get lidar's train log.
+int sample_get_lidar_train_log(std::string lidar_ip, std::string path) {
+	int ret = 0;
+	zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
+	std::string context;
+	ret = config.GetDeviceLog(context);
+	if (ret)
+	{
+		LOG_ERROR("Get device [%s]`s log failed, ret = %d.\n", lidar_ip.c_str(), ret);
+		return -1;
+	}
+	else
+	{
+		LOG_INFO("Get device [%s]`s log ok.\n", lidar_ip.c_str());
+	}
+
+	// get log line data
+	std::vector<std::string> lines;
+	strSplit(context, lines,"\n");
+
+	// open file
+	std::fstream outfile;
+	outfile.open(path, std::ios::out);
+	if (!outfile.is_open()) {
+		LOG_ERROR("Can not open log file [%s].\n", path.c_str());
+		return -1;
+	}
+
+	// save to file
+	std::string tag = "[TRAIN]WRITE FLASH";
+	for (auto& line:lines) {
+		size_t pos = line.find(tag);
+		if (pos == line.npos)
+			continue;
+
+		outfile << line.substr(pos, line.size() - pos) << std::endl;
+	}
+	outfile.close();
+	LOG_INFO("Save device [%s]`s train log file to [%s].\n", lidar_ip.c_str(), path.c_str());
+
+	return 0;
+}
+
+// Sample code 40 : Get lidar's log file.
+int sample_get_lidar_log(std::string lidar_ip, std::string path, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown)
+{
+	zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
+	std::string context;
+	int ret = 0;
+	if (tp == zvision::DeviceType::LidarMl30SA1Plus) {
+		zvision::JsonConfigFileParam param_30sp;
+		ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::read_full_log, &param_30sp);
+		if (ret == 0)
+		{
+			context = param_30sp.temp_recv_data;
+		}
+	}
+	else
+	{
+		ret = config.GetDeviceLog(context);
+	}
+
+	if (ret)
+	{
+		LOG_ERROR("Get device [%s]`s log failed, ret = %d.\n", lidar_ip.c_str(), ret);
+		return -1;
+	}
+	else
+	{
+		LOG_INFO("Get device [%s]`s log ok.\n", lidar_ip.c_str());
+	}
+
+	// open file
+	std::fstream outfile;
+	outfile.open(path, std::ios::out);
+	if (!outfile.is_open()) {
+		LOG_ERROR("Can not open log file [%s].\n", path.c_str());
+		return -1;
+	}
+	// save to file
+	outfile << context;
+	outfile.close();
+	LOG_INFO("Save device [%s]`s log file to [%s].\n", lidar_ip.c_str(), path.c_str());
+
+	return 0;
+}
+
+// Sample code 41 : Set lidar's cover file.
+int sample_set_lidar_cover_file(std::string lidar_ip, std::string path, int itp = 1)
+{
+	zvision::DeviceType tp = zvision::DeviceType::LidarML30SB2;
+	if (itp == 0) {
+		tp = zvision::DeviceType::LidarML30B1;
+	}
+
+	int ret = 0;
+	zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
+	if (tp == zvision::DeviceType::LidarMl30SA1Plus || tp == zvision::DeviceType::LidarMl30SB1Plus)
+	{
+		LOG_ERROR("ML30S+ series lidar is not supported temporarily.\n");
+		return -1;
+	}
+
+	ret = config.SetDevicePointFireEnConfiguration(path, tp);
+	if (ret)
+	{
+		LOG_ERROR("Set lidar [%s]'s cover file failed, return code %d.\n", lidar_ip.c_str(), ret);
+		return -1;
+	}
+	else
+	{
+		LOG_INFO("Set lidar [%s]'s cover file ok.\n", lidar_ip.c_str());
+	}
+
+	return 0;
+}
+
+// Sample code 42 :  update lidar  adc algorithm parameter
+	/** \brief update lidar  adc algorithm parameter.
+	* \param[in] lidar_ip           the device ip address.
+	* \param[in] input_dir       input files directory.
+	* \param[in] reset              if reset is true download origion parameter file or regenerate parameter file.
+	* \param[in] output_dir   if reset is false and output_dir is not empty, the new parameter file will be saved into output_dir.
+	* \return 0 for ok, others for failure.
+	*/
+int sample_adc_algo_param_update(std::string lidar_ip, std::string input_dir, bool reset, std::string output_dir = "")
+{
+	// initialize connection
+	int ret = 0;
+	zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
+
+	// 1. get lidar serial number
+	std::string serial_number;
+	ret = config.QueryDeviceSnCode(serial_number);
+	if (ret)
+	{
+		LOG_ERROR("Query device [%s]'s serial number failed, ret = %d.\n", lidar_ip.c_str(), ret);
+		return ret;
+	}
+	else
+	{
+		LOG_INFO("Query device [%s]'s serial number[%s] ok.\n", lidar_ip.c_str(), serial_number.c_str());
+	}
+
+	// 2. get local adc algorithm parameter filepaths
+	std::string root_dir = input_dir;
+	if (root_dir.back() == '\\' || root_dir.back() == '/')
+		root_dir = root_dir.substr(0, root_dir.size() - 1);
+
+	// set default path`s sub directory name
+	std::string file_dir;
+	if (!reset)
+		file_dir = root_dir + "/30S" + serial_number + "/Parameter/";
+	else
+		file_dir = root_dir + "/" + serial_number + "/";
+
+	std::vector<std::string> files_name;
+	getFileListInDir(file_dir, files_name);
+	if (files_name.size() == 0)
+	{
+		LOG_ERROR("Get device [%s]'s adc algorithm parameter files from[%s] failed.\n", lidar_ip.c_str(), file_dir.c_str());
+		return -1;
+	}
+
+	// 3. check files name
+	if (ret = checkAdcAlgoParamFilesName(files_name, serial_number, reset))
+	{
+		LOG_ERROR("Check device [%s]'s adc algorithm parameter files from[%s] failed.\n", lidar_ip.c_str(), file_dir.c_str());
+		return ret;
+	}
+
+	// 4. get adc algorithm parameter flash data
+	std::string flash_data;
+	if (!reset)
+	{
+		//  4.1 get lidar adc algorithm parameter flash data
+		ret = config.GetDeviceFlashConfiguration(flash_data, zvision::FlashParamType::ADC_Algo);
+		if (ret)
+		{
+			LOG_ERROR("Get device [%s]'s adc algorithm parameter data failed.\n", lidar_ip.c_str());
+			return ret;
+		}
+		else
+			LOG_INFO("Get device [%s]'s adc algorithm parameter data ok.\n", lidar_ip.c_str());
+
+		//  4.2 regenerate new adc algorithm parameter flash data
+		ret = regenerateAdcAlgoParamFlashData(file_dir, files_name, flash_data);
+		if (ret)
+		{
+			LOG_ERROR("Regenerate device [%s]'s adc algorithm parameter data failed.\n", lidar_ip.c_str());
+			return ret;
+		}
+		else
+			LOG_INFO("Regenerate device [%s]'s adc algorithm parameter data ok.\n", lidar_ip.c_str());
+
+		// 4.3 save adc algorithm parameter flash data to file
+		if (!output_dir.empty())
+		{
+			// adc algorithm parameter file save path
+			std::string file_path = output_dir;
+			if (file_path.back() == '\\' || file_path.back() == '/')
+				file_path = file_path.substr(0, file_path.size() - 1);
+
+			file_path = file_path + "/" + serial_number + "_output.adc_all";
+			ret = saveAdcAlgoParamFlashDataToLocal(flash_data, file_path);
+			if (ret)
+				LOG_WARN("Save [%s]'s new adc algorithm parameter data to[%s] failed.\n", lidar_ip.c_str(), file_path.c_str());
+			else
+				LOG_INFO("Save [%s]'s new adc algorithm parameter data to[%s] ok.\n", lidar_ip.c_str(), file_path.c_str());
+		}
+	}
+	else
+	{
+		// 4.1 read adc algorithm parameter flash data from file
+		std::string file_path = file_dir + files_name[0];
+		ret = readAdcDataFromFile(file_path, flash_data);
+		if (ret)
+		{
+			LOG_ERROR("Load device [%s]'s adc algorithm parameter file from[%s] failed.\n", lidar_ip.c_str(), file_path.c_str());
+			return ret;
+		}
+	}
+
+	// 5. download flash data to lidar
+	ret = config.SetDeviceFlashConfiguration(flash_data, zvision::FlashParamType::ADC_Algo);
+	if (ret)
+	{
+		LOG_ERROR("Update device [%s]'s adc algorithm parameter data failed.\n", lidar_ip.c_str());
+		return ret;
+	}
+	else
+		LOG_INFO("Update device [%s]'s adc algorithm parameter data ok.\n", lidar_ip.c_str());
+
+	//  6. reboot lidar
+	ret = config.RebootDevice();
+	if (ret)
+	{
+		LOG_ERROR("Reboot device [%s] failed, ret = %d.\n", lidar_ip.c_str(), ret);
+		return ret;
+	}
+	else
+		LOG_INFO("Reboot device [%s] ok.\n", lidar_ip.c_str());
+
+	// 7. Log adc algorithm parameter  information.
+	std::stringstream ss;
+	ss << "Summary:\n";
+	ss << "  sn:" << serial_number << "\n";
+	ss << "  file directory:" << file_dir << "\n";
+	ss << "  files name:  " << files_name[0] << "\n";
+	for (int i = 1; i < files_name.size(); ++i)
+		ss << "              " << files_name[i] << "\n";
+
+	LOG_INFO(ss.str().c_str());
+	return ret;
+}
+
+//Sample code 43 : update lidars  adc algorithm parameter
+int sample_adc_algo_param_update_multi(std::vector<std::string> lidars_ip, std::string input_dir, bool reset, std::string output_dir = "") {
+
+	for (auto ip : lidars_ip)
+		sample_adc_algo_param_update(ip, input_dir, reset, output_dir);
+
+	return 0;
+}
+
+// Sample code 44 :  read lidar  adc algorithm parameter
+	/** \brief read lidar  adc algorithm parameter.
+	* \param[in] lidar_ip           the device ip address.
+	* \param[in] filepath           adc algorithm parameter file path.
+	* \return 0 for ok, others for failure.
+	*/
+int sample_get_adc_algo_param(std::string lidar_ip, std::string filepath)
+{
+	int ret = 0;
+	zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
+	std::string flash_data;
+	ret = config.GetDeviceFlashConfiguration(flash_data, zvision::FlashParamType::ADC_Algo);
+	if (ret)
+	{
+		LOG_ERROR("Get device [%s]'s  adc algorithm parameter data failed.\n", lidar_ip.c_str());
+		return ret;
+	}
+
+	ret = saveAdcAlgoParamFlashDataToLocal(flash_data, filepath);
+	if (ret)
+	{
+		LOG_ERROR("Save [%s]'s adc algorithm parameter data to[%s] failed.\n", lidar_ip.c_str(), filepath.c_str());
+	}
+	else
+		LOG_INFO("Save [%s]'s adc algorithm parameter data to[%s] ok.\n", lidar_ip.c_str(), filepath.c_str());
+
+	return ret;
+}
+
+// Sample code 45 :  config lidar layer detection
+int sample_config_lidar_layer_detection(std::string lidar_ip, bool en)
+{
+	int ret = 0;
+	zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
+	ret = config.SetDeviceLayerDetectionEnable(en);
+	if (ret)
+		LOG_ERROR("Set device [%s]'s layer detection enable to [%d] failed, ret = %d.\n", lidar_ip.c_str(), en, ret);
+	else
+		LOG_INFO("Set device [%s]'s layer detection enable to [%d] ok.\n", lidar_ip.c_str(), en);
+	return ret;
+}
+
+// Sample code 46 :  config lidar PL delete near point level
+int sample_config_lidar_pl_delete_near_point_level(std::string lidar_ip, int mode)
+{
+	int ret = 0;
+	zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
+	ret = config.SetDeviceDeleteNearPointLevel(mode);
+	if (ret)
+		LOG_ERROR("Set device [%s]'s delete near point level to [%d] failed, ret = %d.\n", lidar_ip.c_str(), mode, ret);
+	else
+		LOG_INFO("Set device [%s]'s delete near point level to [%d] ok.\n", lidar_ip.c_str(), mode);
+	return ret;
+}
+
 
 int main(int argc, char** argv)
 {
@@ -1174,6 +1487,67 @@ int main(int argc, char** argv)
 			<< "Demo:   -set_cal 192.168.10.108 device.cal\n"
 			<< "Demo:   -set_cal -30sp 192.168.10.108 device.cal\n\n"
 
+			<< "Sample 29 : get channel data to file\n"
+			<< "Format: -get_channel lidar_ip savefilename mode(0 for origin, 1 for currently in use)\n"
+			<< "Demo:   -get_channel 192.168.10.108 channel.coe 0\n\n"
+
+			<< "Sample 30 : get channel list data to file\n"
+			<< "Format: -get_channel_list lidar_ip savefilename\n"
+			<< "Demo:   -get_channel_list 192.168.10.108 channel_list.coe\n\n"
+
+			<< "Sample 31 : config echo mode\n"
+			<< "1. Single first return\n"
+			<< "2. Singe strongest return\n"
+			<< "3. Singe last return\n"
+			<< "4. Double(first and strongest return)\n"
+			<< "5. Double(first and last return)\n"
+			<< "6. Double(strongest and last return)\n"
+			<< "Format: -set_echo lidar_ip mode(1 - 6)\n"
+			<< "Format: -set_echo -30sp lidar_ip mode\n"
+			<< "Demo:   -set_echo 192.168.10.108 1\n"
+			<< "Demo:   -set_echo -30sp 192.168.10.108 1\n\n"
+
+			<< "Sample 32 : get train log\n"
+			<< "Format: -get_train_log lidar_ip savefilename\n"
+			<< "Demo:   -get_train_log 192.168.10.108 train_log.txt\n\n"
+
+			<< "Sample 33 : get lidar log file\n"
+			<< "Format: -get_log lidar_ip savefilename\n"
+			<< "Format: -get_log -30sp lidar_ip savefilename\n"
+			<< "Demo:   -get_log 192.168.10.108 log.txt\n"
+			<< "Demo:   -get_log -30sp 192.168.10.108 log.txt\n\n"
+
+			<< "Sample 34 : set lidar cover file\n"
+			<< "Format: -set_cover_file lidar_ip filename mode(0:for ML30B1/ML30SB1 , 1:for ML30SB2)\n"
+			<< "Demo:   -set_cover_file 192.168.10.108 cover.txt 0\n"
+			<< "Demo:   -set_cover_file 192.168.10.108 cover.txt 1\n\n"
+
+			<< "Sample 35 : set lidar adc_algorithm parameter file\n"
+			<< "Format: -set_adc_algo_param_file lidar_ip input_dir mode output_dir(Optional)\n"
+			<< "    input_dir: The input_dir should contain a folder that the name is the lidar`s serial number.\n"
+			<< "         mode: 0 - First read the parameter configuration file from input_dir, then get the adc_algorithm_parameter flash \n                   data from the lidar, update the adc_algorithm_parameter flash data through the parameter configuration file,\n                   finally download the updated adc_algorithm_parameter flash data to the lidar\n"
+			<< "               1 - Download adc_algorithm_parameter file to lidar directly from input_dir.\n"
+			<< "   output_dir: If mode is set to 0 and output_dir is not empty, save new adc_algorithm_parameter file in output_dir.\n"
+			<< "Format: -set_adc_algo_param_file_multi lidar1_ip lidar2_ip(MaxLidarCount:4) input_dir mode output_dir(Optional)\n"
+			<< "Demo:   -set_adc_algo_param_file 192.168.10.108 /path-to-sn-folder 0\n"
+			<< "Demo:   -set_adc_algo_param_file 192.168.10.108 /path-to-sn-folder 0 /path-to-save-folder\n"
+			<< "Demo:   -set_adc_algo_param_file 192.168.10.108 /path-to-sn-folder 1\n"
+			<< "Demo:   -set_adc_algo_param_file_multi 192.168.10.108 192.168.10.109 /path-to-sn-folder 0\n"
+			<< "Demo:   -set_adc_algo_param_file_multi 192.168.10.108 192.168.10.109 /path-to-sn-folder 0 /path-to-save-folder\n"
+			<< "Demo:   -set_adc_algo_param_file_multi 192.168.10.108 192.168.10.109 /path-to-sn-folder 1\n\n"
+
+			<< "Sample 36 : get lidar adc_algorithm parameter file\n"
+			<< "Format:  -get_adc_algo_param_file lidar_ip savefilename\n"
+			<< "Demo:    -get_adc_algo_param_file 192.168.10.108 adc_algo_param.adc_all\n\n"
+
+			<< "Sample 37 : config layer detection enabale\n"
+			<< "Format: -config_layer_detect_enable lidar_ip enable(0 for disable, 1 for enable) \n"
+			<< "Demo:   -config_layer_detect_enable 192.168.10.108 0\n\n"
+
+			<< "Sample 38 : config PL delete near point level\n"
+			<< "Format: -config_pl_dnpl lidar_ip mode(0 for forced deletion, 1 for weak deletion) \n"
+			<< "Demo:   -config_pl_dnpl 192.168.10.108 0\n\n"
+
 			<< "############################# END  GUIDE ################################\n\n"
             ;
         getchar();
@@ -1357,9 +1731,65 @@ int main(int argc, char** argv)
 		//Sample code 34 : Config lidars` adhesion mode.
 		sample_config_lidar_adhesion_multi(lidars_ip, std::atoi(argv[argc-1]), tp);
 
+
 	else if(0 == std::string(argv[1]).compare("-set_cal") && argc == (4 + argc_offset))
 		//Sample code 35 : Set lidar's calibration file by tcp connection.
 		sample_config_lidar_calibration(lidar_ip, std::string(argv[3 + argc_offset]), tp);
+
+	else if (0 == std::string(argv[1]).compare("-get_channel") && argc == (5 + argc_offset))
+		//Sample code 36 : Get lidar's channel file.
+		sample_get_lidar_channel_file(lidar_ip, std::string(argv[3 + argc_offset]), std::atoi(argv[4 + argc_offset]));
+
+	else if (0 == std::string(argv[1]).compare("-get_channel_list") && argc == (4 + argc_offset))
+		//Sample code 37 : Get lidar's channel list file.
+		sample_get_lidar_channel_list_file(lidar_ip, std::string(argv[3 + argc_offset]));
+
+	else if (0 == std::string(argv[1]).compare("-set_echo") && argc == (4 + argc_offset))
+		//Sample code 38 : Set lidar's echo mode.
+		sample_config_lidar_echo_mode(lidar_ip, std::atoi(argv[3 + argc_offset]), tp);
+
+	else if (0 == std::string(argv[1]).compare("-get_train_log") && argc == (4 + argc_offset))
+		//Sample code 39 : Get lidar's train log.
+		sample_get_lidar_train_log(lidar_ip, std::string(argv[3 + argc_offset]));
+
+	else if (0 == std::string(argv[1]).compare("-get_log") && argc == (4 + argc_offset))
+		//Sample code 40 : Get lidar's log.
+		sample_get_lidar_log(lidar_ip, std::string(argv[3 + argc_offset]));
+
+	else if (0 == std::string(argv[1]).compare("-set_cover_file") && argc == (5 + argc_offset))
+		//Sample code 41 : Set lidar's cover file.
+		sample_set_lidar_cover_file(lidar_ip, std::string(argv[3 + argc_offset]), std::atoi(argv[4 + argc_offset]));
+
+	else if (0 == std::string(argv[1]).compare("-set_adc_algo_param_file") && (argc == (5 + argc_offset) || argc == (6 + argc_offset)))
+	{
+		//Sample code 42: Set lidar's adc_algo_param file.
+		if (argc == (5 + argc_offset))
+			sample_adc_algo_param_update(lidar_ip, std::string(argv[3 + argc_offset]), std::atoi(argv[4 + argc_offset]));
+		else
+			sample_adc_algo_param_update(lidar_ip, std::string(argv[3 + argc_offset]), std::atoi(argv[4 + argc_offset]), std::string(argv[5 + argc_offset]));
+	}
+
+	else if (0 == std::string(argv[1]).compare("-get_adc_algo_param_file") && argc == (4 + argc_offset))
+		//Sample code 43: Set lidar's adc_algo_param file.
+		sample_get_adc_algo_param(lidar_ip, std::string(argv[3 + argc_offset]));
+
+	else if (0 == std::string(argv[1]).compare("-set_adc_algo_param_file_multi") && (argc == (lidars_ip.size() + 4 + argc_offset) || argc == (lidars_ip.size() + 5 + argc_offset)))
+		//Sample code 44: Set multi lidar adc_algo_param file.
+		if (argc == (lidars_ip.size() + 4 + argc_offset))
+			sample_adc_algo_param_update_multi(lidars_ip, std::string(argv[lidars_ip.size() + 2 + argc_offset]) \
+				, std::atoi(argv[lidars_ip.size() + 3 + argc_offset]));
+		else
+			sample_adc_algo_param_update_multi(lidars_ip, std::string(argv[lidars_ip.size() + 2 + argc_offset]) \
+				, std::atoi(argv[lidars_ip.size() + 3 + argc_offset]) \
+				, std::string(argv[lidars_ip.size() + 4 + argc_offset]));
+
+	else if (0 == std::string(argv[1]).compare("-config_layer_detect_enable") && argc == (4 + argc_offset))
+		//Sample code 45 : Config lidar layer detection enable
+		sample_config_lidar_layer_detection(lidar_ip, std::atoi(argv[3 + argc_offset]));
+
+	else if (0 == std::string(argv[1]).compare("-config_pl_dnpl") && argc == (4 + argc_offset))
+		//Sample code 46 : Config lidar PL delete near point level
+		sample_config_lidar_pl_delete_near_point_level(lidar_ip, std::atoi(argv[3 + argc_offset]));
 
     else
     {

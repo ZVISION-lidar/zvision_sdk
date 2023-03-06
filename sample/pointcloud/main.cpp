@@ -286,6 +286,7 @@ static void export_point_cloud(zvision::PointCloud& points, std::string filename
     }
 }
 
+#ifdef USING_PCL_VISUALIZATION
 // get filepath in dir
 bool GetFiles(std::vector<std::string>& paths, const std::string& root)
 {
@@ -312,7 +313,6 @@ bool GetFiles(std::vector<std::string>& paths, const std::string& root)
 	return false;
 }
 
-#ifdef USING_PCL_VISUALIZATION
 // convert pcap to pcd
 void sample_offline2pcd(std::string lidar_ip = "192.168.10.108", int port = 2368, std::string calidir = "", std::string pcapfilename = "")
 {
@@ -435,6 +435,9 @@ int main(int argc, char** argv)
 			if (paras.end() != (find = paras.find("-30sp"))) {
 				tp = zvision::DeviceType::LidarMl30SA1Plus;
 			}
+            if (paras.end() != (find = paras.find("-30spb1"))) {
+                tp = zvision::DeviceType::LidarMl30SB1Plus;
+            }
             if (paras.end() != (find = paras.find("-d")))// downsample mode
             {
                 downsample_str = find->second;
@@ -531,18 +534,20 @@ int main(int argc, char** argv)
         << "        -j  (optional for online)\n"
         << "        -g  multicast_group_ip_address(optional, valid when -j is set)\n"
 		<< "        -30sp (optional, special for ML30S+ lidar)\n"
+        << "        -30spb1 (optional, special for ML30S+B1 lidar)\n"
         << "        -d  downsample mode(none, 1/2 or 1/4, optional,only valid for ScanML30SA1_160)\n"
         << "        -dcfg  downsample mode(downsample config file path, optional, only valid for ScanML30SA1_160)\n"
         << "\n"
         << "Online sample 1 : -online -ip 192.168.10.108\n"
 		<< "Online sample 2 : -online -ip 192.168.10.108 -30sp\n"
-        << "Online sample 3 : -online -ip 192.168.10.108 -p 2368\n"
-        << "Online sample 4 : -online -ip 192.168.10.108 -c xxxx.cal\n"
-        << "Online sample 5 : -online -ip 192.168.10.108 -p 2368 -c xxxx.cal\n"
-        << "Online sample 6 : -online -ip 192.168.10.108 -j\n"
-        << "Online sample 7 : -online -ip 192.168.10.108 -j 239.0.0.1\n"
-        << "Online sample 8 : -online -ip 192.168.10.108 -d 1/2\n"
-        << "Online sample 9 : -online -ip 192.168.10.108 -dcfg xxxx.txt\n"
+        << "Online sample 3 : -online -ip 192.168.10.108 -30spb1\n"
+        << "Online sample 4 : -online -ip 192.168.10.108 -p 2368\n"
+        << "Online sample 5 : -online -ip 192.168.10.108 -c xxxx.cal\n"
+        << "Online sample 6 : -online -ip 192.168.10.108 -p 2368 -c xxxx.cal\n"
+        << "Online sample 7 : -online -ip 192.168.10.108 -j\n"
+        << "Online sample 8 : -online -ip 192.168.10.108 -j 239.0.0.1\n"
+        << "Online sample 9 : -online -ip 192.168.10.108 -d 1/2\n"
+        << "Online sample 10 : -online -ip 192.168.10.108 -dcfg xxxx.txt\n"
         << "\n"
 
         << "Offline sample param:\n"

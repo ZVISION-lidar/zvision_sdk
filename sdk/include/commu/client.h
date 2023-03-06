@@ -259,7 +259,7 @@ namespace zvision
           * \param[in] port            local port to receive data
           * \param[in] recv_timeout    timeout in ms for SyncRecv function
           */
-        UdpReceiver(int port, int recv_timeout);
+        UdpReceiver(int port, int recv_timeout, int recv_buffer_len = 2048);
 
         /** \brief Empty destructor */
         virtual ~UdpReceiver();
@@ -303,6 +303,9 @@ namespace zvision
 
         /** \brief timeout(ms) for recv. */
         int recv_timeout_ms_;
+
+        /** \brief Manu set receive buffer size. */
+        int recv_buffer_len_;
 
         /** \brief socket which represents the socket resource. */
         int socket_;

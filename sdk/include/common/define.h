@@ -36,6 +36,11 @@
 
 #include <vector>
 
+// For ML30S+B1 EP(40ms) device
+#ifndef ZVISION_ML30sPlus_b1_ep_mode
+// #define ZVISION_ML30sPlus_b1_ep_mode
+#endif
+
 namespace zvision
 {
 #ifdef _WIN32
@@ -109,6 +114,8 @@ namespace zvision
 		AlgoDeleteClosePoints = 1,
 		AlgoAdhesion = 2,
 		AlgoRetro = 3,
+        AlgoDirtyCheck = 4,
+        AlgoIntensitySmooth = 5,
 		AlgoUnknown,
 	}AlgoType;
 
@@ -189,19 +196,51 @@ namespace zvision
         ScanUnknown,
     }ScanMode;
 
+    typedef enum PacketType:uint8_t
+    {
+        Tp_PointCloudPacket = 0,
+        Tp_CalibrationPacket,
+        Tp_BloomingPacket,
+        Tp_ApdChannelPacket,
+        Tp_IntensityDisCaliPacket,
+        Tp_AdcSourcePacket,
+        Tp_SourceDistancePacket,
+        Tp_BlockDebugPacket,
+        Tp_PacketUnknown
+    }PacketType;
+
+    typedef enum FlashParamType
+    {
+        StartDelay1_3 = 0,
+        MEMS_X,
+        MEMS_Y,
+        APD_BestChannel,
+        APD_Delay,
+        ADC_Algo,
+        Cover,
+        DirtyCheck,
+    }FlashParamType;
 
 	typedef struct DeviceAlgoParam {
-		DeviceAlgoParam() :isValid(false) {}
+		DeviceAlgoParam() 
+            :isValid(false)
+        {
+        }
 		bool isValid;
 		// for retro
 		int retro_dis_thres;
+        unsigned char retro_min_gray;
+		unsigned char retro_min_gray_num;
+		unsigned short retro_del_gray_thres;
+        unsigned short retro_del_gray_dis_thres;
+        unsigned char retro_gray_low_threshold;
+        unsigned char retro_gray_high_threshold;
+		unsigned char retro_del_ratio_gray_low_thres = 0;
+		unsigned char retro_del_ratio_gray_high_thres = 0;
 		unsigned short retro_low_range_thres;
 		unsigned short retro_high_range_thres;
-		unsigned char retro_min_gray_num;
-		unsigned char retro_del_gray_thres;
-		unsigned char retro_del_ratio_gray_low_thres;
-		unsigned char retro_del_ratio_gray_high_thres;
-		unsigned char retro_min_gray;
+        unsigned char retro_near_del_gray_thres;
+        unsigned char retro_far_del_gray_thres;
 
 		// for adhesion
 		int adhesion_angle_hor_min;
@@ -214,9 +253,31 @@ namespace zvision
 		float adhesion_dis_limit;
 		float adhesion_min_diff;
 
-		unsigned char preserved[51];
+        // for dirty
+        //uint8_t switch_dirty_detect;
+        //uint8_t switch_dirty_refresh;
+        uint16_t dirty_refresh_cycle;
+        uint16_t dirty_detect_set_thre;
+        uint16_t dirty_detect_reset_thre;
+        uint16_t dirty_detect_inner_thre;
+        uint16_t dirty_detect_outer_thre;
+
+
+		//unsigned char preserved[51];
 
 	}DeviceAlgoParam;
+
+    struct MLXSDeviceNetworkConfigurationInfo
+    {
+        uint8_t sw_dhcp;
+        std::string device_ip;
+        std::string subnet_mask;
+        std::string gateway;
+        std::string config_mac;
+
+        std::string destination_ip;
+        int destination_port;
+    };
 
     typedef struct DeviceConfigurationInfo
     {
@@ -242,6 +303,7 @@ namespace zvision
 
         CalSendMode cal_send_mode;
         DownsampleMode downsample_mode;
+        uint32_t hard_diag_ctrl;
 
         int retro_param_1_ref_min; // 0-255
         int retro_param_2_point_percent; // 0-100
@@ -250,8 +312,12 @@ namespace zvision
 		std::string gateway_addr;
 		StateMode delete_point_enable;
 		StateMode adhesion_enable;
-		unsigned char retro_gray_low_threshold;
-		unsigned char retro_gray_high_threshold;
+        StateMode dirty_check_enable;
+        StateMode dirty_refresh_enable;
+        StateMode intensity_smooth_enable;
+        StateMode diag_enable;
+        uint8_t delete_point_mode;
+        StateMode ptp_sync_enable;
 		// factory mac
 		std::string factory_mac;
 
@@ -311,15 +377,45 @@ namespace zvision
         float x = 0.0;
         float y = 0.0;
         float z = 0.0;
+        float distance = 0.0;
         int reflectivity = -1;       // [0-255]
+        int reflectivity_13bits = -1;// 13bits value
         int fov = -1;                // [0,3) for ML30B1, [0-8) for ML30S(A/B)
         int point_number = -1;       // [0, max fires) for single echo, [0, max fires x 2] for dual echo
         int fire_number = -1;        // [0, max fires)
         int valid = 0;               // if this points is resolved in udp packet, this points is valid
         int echo_num = 0;            // 0 for first, 1 for second
+        float ele = 0;               // ele (rad)
+        float azi = 0;               // azi (rad)
         ReturnType return_type = ReturnType::UnknownReturn;
         uint64_t timestamp_ns = 0;   // nano second. UTC time for GPS mode, others for PTP mode
     }Point;
+
+    typedef struct BloomingPoint
+    {
+        // description
+        int fov_id = -1;
+        int point_id = -1;
+        int group_id = -1;
+        int fire_id = -1;
+        uint8_t echo_id = 0;
+
+        // base
+        float distance = .0f;           // 19 bits value * 0.0015
+        float x = .0f;
+        float y = .0f;
+        float z = .0f;
+        uint8_t peak = 0;
+        float  pulse_width = .0f;
+        uint8_t gain = 0;
+        uint8_t reserved = 0;           // 5 bits
+        uint16_t reflectivity = 0;      // 8 bits
+        float direct_current = .0f;
+        float noisy = .0f;
+        int valid = 0;
+    }BloomingPoint;
+
+
 
     /** \brief Set of return code. */
     typedef enum ReturnCode
@@ -545,6 +641,12 @@ namespace zvision
 	*/
 	std::string get_ml30splus_cfg_info_string(DeviceConfigurationInfo& info);
 
+    /** \brief ml30s plus b1 config info to string
+    * \param[in] info    the DeviceConfigurationInfo
+    * \return string.
+    */
+    std::string get_ml30splus_b1_cfg_info_string(DeviceConfigurationInfo& info);
+
     /** \brief phase offset mode to string
     * \param[in] mode    the PhaseOffsetMode
     * \return string.
@@ -564,11 +666,40 @@ namespace zvision
 	*/
 	std::string get_state_mode_string(StateMode mode, bool onf = false);
 
+    /** \brief delete point mode to string
+    * \param[in] mode    delete point mode value
+    * \return string.
+    */
+    std::string get_delete_point_mode_string(uint8_t mode);
+
+    /** \brief get layer detection switch string by hardware diagnostic control
+    * \param[in] mode    hardware diagnostic control value
+    * \return string.
+    */
+    std::string get_layer_sw_string_by_hard_diag_ctrl(uint32_t flag);
+
     /** \brief downsample mode to string
     * \param[in] mode    the DownsampleMode
     * \return string.
     */
     std::string get_downsample_mode_string(DownsampleMode mode);
+
+    /** \bref check heartbeat packet
+    * \param[in] pkt udp packet
+    * \return 1 for valid 0 for invalid.
+    */
+    bool is_lidar_heartbeat_packet(std::string pkt);
+
+    /** \bref get check sum
+    * \param[in] str string
+    * \return check sum number.
+    */
+    uint16_t get_check_sum(std::string str);
+
+    /** \bref get lidar frame mark string
+    * \return string tag.
+    */
+    std::string get_lidar_frame_mark_string();
 }
 
 #endif //end DEFINE_H_

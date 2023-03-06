@@ -60,6 +60,7 @@ namespace zvision
           */
 		~LidarTools();
 
+        static int CaptureLidarsHeartbeat(std::vector<std::string>& device_list, int scan_time);
 
         /** \brief Scan lidar device on the heartbeat port.
         * \param[out] device_list      the device list
@@ -68,6 +69,12 @@ namespace zvision
         */
         static int ScanDevice(std::vector<DeviceConfigurationInfo>& device_list, int scan_time);
 
+        /** \brief Scan ml30splusb1 lidar device on the heartbeat port.
+        * \param[out] device_list      the device list
+        * \param[in]  scan_time        how long for this operation in second
+        * \return 0 for ok, others for failure.
+        */
+        static int ScanML30sPlusB1Device(std::vector<DeviceConfigurationInfo>& device_list, int scan_time);
 
         /** \brief Get calibration data from calibration file.
           * \param[in]  filename      the file to get the calibration data
@@ -124,6 +131,11 @@ namespace zvision
           */
         int QueryDeviceConfigurationInfo(DeviceConfigurationInfo& info);
 
+        /** \brief Get MLXS device network configuration data from lidar.
+          * \param[out] info          return configuration info
+          */
+        int QueryMLXSDeviceNetworkConfigurationInfo(MLXSDeviceNetworkConfigurationInfo& info);
+
 		/** \brief Get device algorithm parameters from lidar.
 		* \param[out] info          return algorithm parameters
 		*/
@@ -139,6 +151,11 @@ namespace zvision
         */
         int GetDeviceCalibrationPackets(CalibrationPackets& pkts,std::string cmd = "");
 
+        /** \brief Get mlxs calibration data from lidar.
+        * \param[out] cal          return device's calibration data
+        */
+        int GetMLXSDeviceCalibrationData(CalibrationData& cal);
+
         /** \brief Get calibration data from calibration packet.
         * \param[in]  pkts          the whole calibration packets.
         * \param[out] cal           return device's calibration data.
@@ -151,6 +168,21 @@ namespace zvision
           * \param[in] tp             lidar type
           */
         int GetDeviceCalibrationDataToFile(std::string filename, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown);
+
+        /** \brief Get mlxs calibration data from lidar and save to file.
+          * \param[in] filename       the file to store the calibration data
+          */
+        int GetMLXSDeviceCalibrationDataToFile(std::string filename);
+
+        /** \brief Reboot MLXS device.
+        * \return 0 for ok, others for failure.
+        */
+        int RebootMLXSDevice();
+
+        /** \brief shutdown device.
+        * \return 0 for ok, others for failure.
+        */
+        int ShutdownMLXSDevice();
 
 		/** \brief Set calibration data to lidar.
 		* \param[in] filename       calibration file path
@@ -351,6 +383,46 @@ namespace zvision
 		*/
 		int SetDeviceFactoryMac(std::string& mac);
 
+        /** \brief Get lidar's Channel data to file.
+        * \param[in] path            file path
+        * \param[in] origin          origin
+        * \return 0 for ok, others for failure.
+        */
+        int GetDeviceChannelDataToFile(std::string path, bool curr = true);
+
+        /** \brief Get lidar's Channel list data to file.
+        * \param[in] path            file path
+        * \return 0 for ok, others for failure.
+        */
+        int GetDeviceChannelListDataToFile(std::string path);
+
+        /** \brief Get device's point fire enable configuration.
+        * \param[in] fire_en_filename  point fire enable config filename
+        * \return 0 for ok, others for failure.
+        */
+        int GetDeviceFlashConfiguration(std::string& buf, FlashParamType type);
+
+        /** \brief Get device's flash data configuration.
+        * \param[out] buf			flash data
+        * \param[in] tp				flash type
+        * \return 0 for ok, others for failure.
+        */
+        int SetDeviceFlashConfiguration(const std::string& buf, FlashParamType tp, DeviceType devType = DeviceType::LidarUnknown);
+
+        /** \brief Set device's layer detection switch.
+        * \param[out] buf			flash data
+        * \param[in] tp				flash type
+        * \return 0 for ok, others for failure.
+        */
+        int SetDeviceLayerDetectionEnable(bool en);
+
+        /** \brief Set device's layer detection switch.
+        * \param[out] buf			flash data
+        * \param[in] tp				flash type
+        * \return 0 for ok, others for failure.
+        */
+        int SetDeviceDeleteNearPointLevel(int mode);
+
 		/********************* only for ml30s+ *********************/
 		/** \brief get ml30s+ command string.
 		* \param[in] type           command type.
@@ -405,6 +477,90 @@ namespace zvision
 		int QueryML30sPlusDeviceConfigurationInfo(DeviceConfigurationInfo& info);
 
         int ML30sPlusFirmwareUpdate(std::string& filename, ProgressCallback cb, bool isBak = false);
+
+        /* for ml30s+ b1 */
+        ////////////////////////////////      ret format       ///////////////////////////////////////////
+        /////////                                  0xBA 0xAC 0x#1 0x#2 0x#3 |.....data.........| 0x#4 0x#5
+        //   check sum: 0x#4 << 8 | 0x#5   from  ->|                to                      -->|
+        // data length: 0x#1 << 8 | 0x#2             from                 ->|           to            -->|
+        //  error code: 0x#3, 0 for ok, others for failure.
+        int GetML30sPlusB1DeviceRet(std::string& out);
+
+        int CheckML30sPlusB1DeviceRet(std::string ret);
+
+        int GetML30sPlusB1DeviceRetData(std::string& out);
+
+        int GetML30sPlusB1DeviceCalibrationPackets(CalibrationPackets& pkts);
+
+        int GetML30sPlusB1DeviceCalibrationDataToFile(std::string filename);
+
+        int GetML30sPlusB1DeviceQueryString(const std::string& cmd, std::string& str);
+
+        int GetML30sPlusB1DeviceSN(std::string& sn);
+
+        int GetML30sPlusB1DeviceMacAddr(std::string& mac);
+
+        int GetML30sPlusB1DeviceFirmwareVersion(FirmwareVersion& version, FirmwareVersion& ver_bak);
+
+        int GetML30sPlusB1DeviceNetworkConfigurationInfo(DeviceConfigurationInfo& info);
+
+        int GetML30sPlusB1DeviceConfigParamInUse(DeviceConfigurationInfo& info);
+
+        int GetML30sPlusB1DeviceAlgoParamInUse(DeviceConfigurationInfo& info);
+
+        int QueryML30sPlusB1DeviceConfigurationInfo(DeviceConfigurationInfo& info);
+
+        int GetML30sPlusB1DeviceLog(std::string& log);
+
+        int GetML30sPlusB1DevicePtpConfiguration(std::string& ptp_cfg);
+
+        int GenerateML30sPlusB1FilePacket(uint16_t id, const std::string& data, uint8_t cmd_type, uint8_t param_type, std::string& out);
+
+        int ML30sPlusB1FirmwareUpdate(std::string& filename, ProgressCallback cb, bool isBak);
+
+        int SetML30sPlusB1DeviceStaticIpAddress(std::string ip);
+
+        int SetML30sPlusB1DeviceGatewayAddress(std::string addr);
+
+        int SetML30sPlusB1DeviceSubnetMaskAddress(std::string addr);
+
+        int SetML30sPlusB1DeviceMacAddress(std::string mac);
+
+        int SetML30sPlusB1DeviceIntensitySmoothEnable(bool en);
+
+        int SetML30sPlusB1DeviceUdpDestinationIpAddress(std::string ip);
+
+        int SetML30sPlusB1DeviceUdpDestinationPort(int port);
+
+        int SetML30sPlusB1DeviceDHCPEnable(bool en);
+
+        int SetML30sPlusB1DeviceAlgorithmEnable(AlgoType tp, bool en);
+
+        int SetML30sPlusB1DeviceRetroParam(RetroParam tp, int value);
+
+        int SetML30sPlusB1DeviceAdhesionParamParam(AdhesionParam tp, float value);
+
+        int SetML30sPlusB1DeviceDownsampleMode(DownsampleMode mode);
+
+        int SetML30sPlusB1DeviceDirtyEnable(bool en);
+
+        int SetML30sPlusB1DeviceEchoMode(EchoMode mode);
+
+        int SetML30sPlusB1DevicePtpEnable(bool en);
+
+        int SetML30sPlusB1DevicePtpConfiguration(std::string filename);
+
+        int GetML30sPlusB1DevicePtpConfigurationToFile(std::string& save_file_name);
+
+        int SetML30sPlusB1DeviceFrameSyncEnable(bool en);
+
+        int SetML30sPlusB1DeviceFrameSyncOffset(int value);
+
+        int SetML30sPlusB1DeviceCalSendEnable(bool en);
+
+        int SetML30sPlusB1DeviceeCalibrationData(std::string filename);
+
+        int RebootML30sPlusB1Device();
 
 		/*****************************************************************/
 	protected:

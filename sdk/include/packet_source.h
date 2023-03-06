@@ -152,6 +152,7 @@ namespace zvision
         using SweepHeaderPos = std::vector<std::streampos>;
         using CalibrationHeaderPos = std::vector<std::streampos>;
         using CalibrationPacketPos = std::vector<std::streampos>;
+        using MarkedFramePos = std::vector<int>;
 
         class DeviceDataInfo
         {
@@ -161,6 +162,7 @@ namespace zvision
             CalibrationPacketPos cal_;
             CalibrationPackets cal_pkts_;
             DeviceConfigurationInfo dev_cfg_;
+            MarkedFramePos frames_marked_;
         };
 
         using DeviceDataInfoMap = std::map<std::string, DeviceDataInfo>;

@@ -733,9 +733,10 @@ namespace zvision
     }
 
     //////////////////////////////////////////////////////////////////////////////////////////////
-    UdpReceiver::UdpReceiver(int port, int recv_timeout):
+    UdpReceiver::UdpReceiver(int port, int recv_timeout, int recv_buffer_len):
         local_port_(port),
         recv_timeout_ms_(recv_timeout),
+        recv_buffer_len_(recv_buffer_len),
         socket_(INVALID_SOCKET),
         init_ok_(false)
     {
@@ -889,7 +890,14 @@ namespace zvision
         if(init_ok_)
         {
             int flags = 0;
-            const int buffer_len = 2048;
+            //const int buffer_len = 1024*32;//2048
+            int buffer_len = 2048;
+            if (recv_buffer_len_ >= 2048 && recv_buffer_len_ <= (1024*32))
+            {
+                //if (recv_buffer_len_ % 1024 == 0)
+                buffer_len = recv_buffer_len_;
+            }
+
             data = std::string(buffer_len, '0');
             char *buf = const_cast<char*>(data.c_str());
 

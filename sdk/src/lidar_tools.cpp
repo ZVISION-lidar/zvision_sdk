@@ -25,7 +25,6 @@
 #include "packet.h"
 #include "lidar_tools.h"
 #include "print.h"
-#include "json_ml30s_plus.h"
 
 #include <rapidjson/document.h>
 
@@ -56,22 +55,17 @@ namespace zvision
         this->DisConnect();
     }
 
-    int LidarTools::ScanDevice(std::vector<DeviceConfigurationInfo>& device_list, int scan_time)
+    int LidarTools::CaptureLidarsHeartbeat(std::vector<std::string>& lidars, int scan_time)
     {
         const auto before = std::chrono::system_clock::now();
 
         const int heart_beat_port = 55000;
         UdpReceiver recv(heart_beat_port, 100);
         std::string data;
-        const int heart_beat_len = 48;
-
         int len = 0;
         uint32_t ip = 0;
         int ret = 0;
-        std::string packet_header = "ZVSHEARTBEAT";
-		std::string packet_header_30splus = "zvision";
-        std::vector<std::string> lidars;
-        device_list.clear();
+        lidars.clear();
 
         LOG_DEBUG("\nScan device on the heart beat port %d for %d second(s).\n", heart_beat_port, scan_time);
         while (1)
@@ -82,12 +76,8 @@ namespace zvision
                 break;
             }
 
-			if ((len >= heart_beat_len) \
-				&& ((0 == packet_header.compare(0, packet_header.size(), data.substr(0, packet_header.size()))) || \
-				(0 == packet_header_30splus.compare(0, packet_header_30splus.size(), data.substr(0, packet_header_30splus.size())))\
-					)\
-				)
-			{
+            if (is_lidar_heartbeat_packet(data))
+            {
                 std::string ip_string = IpToString(ip);
                 lidars.push_back(ip_string);
             }
@@ -105,11 +95,38 @@ namespace zvision
         for (unsigned i = 0; i < size; ++i) set.insert(lidars[i]);
         lidars.assign(set.begin(), set.end());
 
+        return 0;
+    }
+
+    int LidarTools::ScanDevice(std::vector<DeviceConfigurationInfo>& device_list, int scan_time)
+    {
+        std::vector<std::string> lidars;
+        CaptureLidarsHeartbeat(lidars, scan_time);
+        int ret = 0;
         for (unsigned int i = 0; i < lidars.size(); ++i)
         {
             LidarTools config(lidars[0], 1000);
             DeviceConfigurationInfo info;
             if (0 != (ret = config.QueryDeviceConfigurationInfo(info)))
+            {
+                LOG_ERROR("Scan device error, query device info failed, ret = %d.\n", ret);
+                break;
+            }
+            device_list.push_back(info);
+        }
+        return ret;
+    }
+
+    int LidarTools::ScanML30sPlusB1Device(std::vector<DeviceConfigurationInfo>& device_list, int scan_time)
+    {
+        std::vector<std::string> lidars;
+        CaptureLidarsHeartbeat(lidars, scan_time);
+        int ret = 0;
+        for (unsigned int i = 0; i < lidars.size(); ++i)
+        {
+            LidarTools config(lidars[0], 1000);
+            DeviceConfigurationInfo info;
+            if (0 != (ret = config.QueryML30sPlusB1DeviceConfigurationInfo(info)))
             {
                 LOG_ERROR("Scan device error, query device info failed, ret = %d.\n", ret);
                 break;
@@ -311,6 +328,13 @@ namespace zvision
 						break;
 					}
 
+#ifdef ZVISION_ML30sPlus_b1_ep_mode
+                    // for line with fov 0,1,2,3,4,5,6,7
+                    for (int j = 1; j < column; j++)
+                    {
+                        cal.data[i * 16 + j - 1] = static_cast<float>(std::atof(datas[j].c_str()));
+                    }
+#else
 					// for line with fov 0,1,2,3,4,5,6,7
 					for (int j = 1; j < column; j++)
 					{
@@ -319,6 +343,7 @@ namespace zvision
 						else // for L view
 							cal.data[i * 8 + j - 1 - column / 2 + lpos] = static_cast<float>(std::atof(datas[j].c_str()));
 					}
+#endif
 				}
 
 				for (int i = 0; i < curr; i++)
@@ -584,6 +609,10 @@ namespace zvision
                             outfile << "\n";
                         outfile << i / data_in_line + 1;
                     }
+
+#ifdef ZVISION_ML30sPlus_b1_ep_mode
+                    outfile << " " << cal.data[i];
+#else
                     int idx = i % 16;
                     int grp = i / 16;
                     if (idx < 8) {
@@ -592,6 +621,8 @@ namespace zvision
                     else {
                         outfile << " " << cal.data[(idx - 8) + grp * 8 + lpos];
                     }
+#endif
+
                 }
                 outfile.close();
                 return 0;
@@ -965,9 +996,9 @@ namespace zvision
 		}
 
 		std::string addr = recv.substr(2,6);
-		if (addr[0]!= (char)0xF8 || addr[1] != (char)0xA9 || addr[2] != (char)0x1F) {
-			return -1;
-		}
+		//if (addr[0]!= (char)0xF8 || addr[1] != (char)0xA9 || addr[2] != (char)0x1F) {
+		//	return -1;
+		//}
 		char cmac[256] = "";
 		sprintf_s(cmac, "%02X%02X%02X%02X%02X%02X", (uint8_t)addr[0], (uint8_t)addr[1], (uint8_t)addr[2], (uint8_t)addr[3], (uint8_t)addr[4], (uint8_t)addr[5]);
 		mac = std::string(cmac);
@@ -1266,14 +1297,22 @@ namespace zvision
         else
             info.downsample_mode = DownsampleUnknown;
 
+        // hard diagnostic control
+        NetworkToHost(header + 82, (char*)&info.hard_diag_ctrl);
+
 		// dhcp enable
 		unsigned char value = (*(header + 86));
 		if (value == 0x00)
 			info.dhcp_enable = StateMode::StateDisable;
 		else if (value == 0x01)
 			info.dhcp_enable = StateMode::StateEnable;
-		else
-			info.dhcp_enable = StateMode::StateUnknown;
+        else
+        {
+            //info.dhcp_enable = StateMode::StateUnknown;
+            // Adapt to earlier versions
+            info.dhcp_enable = StateMode::StateDisable;
+        }
+
 
 		// lidar gateway addr
 		ResolveIpString(header + 87, info.gateway_addr);
@@ -1297,8 +1336,9 @@ namespace zvision
 			info.adhesion_enable = StateMode::StateUnknown;
 
 		// retro gray low/ threshold
-		info.retro_gray_low_threshold = (*(header + 93));
-		info.retro_gray_high_threshold = (*(header + 94));
+		info.algo_param.retro_gray_low_threshold = (*(header + 93));
+		info.algo_param.retro_gray_high_threshold = (*(header + 94));
+        info.delete_point_mode = (*(header + 99));
 
 		// clear recv buffer
 		int len = client_->GetAvailableBytesLen();
@@ -1652,6 +1692,7 @@ namespace zvision
 
         }
 
+#ifndef ZVISION_ML30sPlus_b1_ep_mode
 		// now we reorder the cali data   0~15... -> 0~7... + 8~15...
 		if (ScanML30SA1Plus_160 == sm || ScanML30SA1Plus_160_1_2 == sm || ScanML30SA1Plus_160_1_4 == sm) {
 			std::vector<float> dst;
@@ -1670,7 +1711,7 @@ namespace zvision
 			}
 			cal.data = dst;
 		}
-
+#endif
 
         cal.scan_mode = sm;
         return 0;
@@ -1710,6 +1751,7 @@ namespace zvision
 		if (cal.scan_mode != ScanML30SA1_160 && cal.scan_mode != ScanML30SA1Plus_160)
 			return -1;
 
+#ifndef ZVISION_ML30sPlus_b1_ep_mode
         // we need trans cali data
         if (cal.scan_mode == ScanML30SA1Plus_160) {
             int lpos = cal.data.size() / 2;
@@ -1731,6 +1773,7 @@ namespace zvision
                 }
             }
         }
+#endif
 
 		const int cali_pkt_len = 1024;
 		size_t cali_data_len = cal.data.size();
@@ -2124,7 +2167,6 @@ namespace zvision
 
 		return 0;
 	}
-
 
     int LidarTools::SetDeviceRetroEnable(bool en)
     {
@@ -3510,6 +3552,11 @@ namespace zvision
         if (!CheckDeviceRet(recv))//check ret
         {
             DisConnect();
+
+            // check
+            if ((uint8_t)recv[2] == 0xFF && (uint8_t)recv[3] == 0x21) {
+                return NotSupport;
+            }
             return -1;
         }
 
@@ -3723,6 +3770,395 @@ namespace zvision
 		return 0;
 	}
 
+    int LidarTools::GetDeviceChannelDataToFile(std::string path, bool curr)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        // command
+        const int cmd_len = 4;
+        char set_cmd[cmd_len] = { (char)0xAB, (char)0x0C, (char)0x06, (char)0x00 };
+        if (!curr) {
+            set_cmd[2] = (char)0x05;
+        }
+        // send
+        std::string cmd(set_cmd, cmd_len);
+        if (client_->SyncSend(cmd, cmd_len))
+        {
+            DisConnect();
+            return -1;
+        }
+        // receive
+        std::string recv(cmd_len, 'x');
+        if (client_->SyncRecv(recv, cmd_len))
+        {
+            DisConnect();
+            return -1;
+        }
+        //check ret
+        if (!CheckDeviceRet(recv))
+        {
+            DisConnect();
+            return -1;
+        }
+        // get channel data
+        const int recv_len = 102400;
+        int pkt_len = 1024;
+        int pkt_cnt = recv_len / pkt_len;
+        std::string recv_data;
+        for (int i = 0; i < pkt_cnt;i++) {
+            std::this_thread::sleep_for(std::chrono::microseconds(110));
+            std::string tmp(pkt_len, 0);
+            if (client_->SyncRecv(tmp, pkt_len))
+            {
+                DisConnect();
+                return -1;
+            }
+            recv_data += tmp;
+        }
+
+        // open file
+        FILE* pf = NULL;
+        pf = fopen(path.c_str(), "w");
+        if (!pf)
+            return OpenFileError;
+
+        // write header
+        fprintf(pf, "MEMORY_INITIALIZATION_RADIX=16;\nMEMORY_INITIALIZATION_VECTOR = \n");
+        // save to file
+        uint8_t* pdata = (uint8_t*)recv_data.data();
+        for (int i = 0; i < recv_data.size()/4; i++)
+        {
+            int pos = i * 4;
+            fprintf(pf, "%02x%02x%02x%02x,\n", (pdata[pos + 0] & 0xFF), (pdata[pos + 1] & 0xFF), \
+                                              (pdata[pos + 2] & 0xFF), (pdata[pos + 3] & 0xFF));
+        }
+        fclose(pf);
+        pf = NULL;
+        return 0;
+    }
+
+    int LidarTools::GetDeviceChannelListDataToFile(std::string path)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        // command
+        const int cmd_len = 4;
+        char set_cmd[cmd_len] = { (char)0xAB, (char)0x0C, (char)0x04, (char)0x00 };
+        // send
+        std::string cmd(set_cmd, cmd_len);
+        if (client_->SyncSend(cmd, cmd_len))
+        {
+            DisConnect();
+            return -1;
+        }
+        // receive
+        std::string recv(cmd_len, 'x');
+        if (client_->SyncRecv(recv, cmd_len))
+        {
+            DisConnect();
+            return -1;
+        }
+        //check ret
+        if (!CheckDeviceRet(recv))
+        {
+            DisConnect();
+            return -1;
+        }
+        // get channel data
+        const int recv_len = 51200;
+        int pkt_len = 1024;
+        int pkt_cnt = recv_len / pkt_len;
+        std::string recv_data;
+        for (int i = 0; i < pkt_cnt; i++) {
+            std::this_thread::sleep_for(std::chrono::microseconds(110));
+            std::string tmp(pkt_len, 0);
+            if (client_->SyncRecv(tmp, pkt_len))
+            {
+                DisConnect();
+                return -1;
+            }
+            recv_data += tmp;
+        }
+
+        // open file
+        FILE* pf = NULL;
+        pf = fopen(path.c_str(), "w");
+        if (!pf)
+            return OpenFileError;
+
+        // save to file
+        uint8_t* pdata = (uint8_t*)recv_data.data();
+        for (int i = 0; i < recv_data.size(); i++)
+        {
+            fprintf(pf, "%d\n", pdata[i] & 0xFF);
+        }
+        fclose(pf);
+        pf = NULL;
+        return 0;
+    }
+
+    int LidarTools::GetDeviceFlashConfiguration(std::string& buf, FlashParamType type) {
+
+        if (!CheckConnection())
+            return -1;
+
+        // --- send data to device
+        const int send_len = 11;
+        char set_cmd[send_len] = { (char)0xAB, (char)0x02, (char)0x03, (char)0x00, (char)0x00, (char)0x00,\
+            (char)0x00, (char)0x00, (char)0x00, (char)0x00, (char)0x00 };
+
+        uint32_t read_offset_arr[] = { 0,256 * 1024,512 * 1024,768 * 1024,1024 * 1024,1280 * 1024,1536 * 1024,1792 * 1024,0,0,0,0,0,0,0,3840 * 1024 };
+        uint32_t read_size_arr[] = { 32,12000,12000,102400,640,3080,6400,16004,0,0,0,0,0,0,0,19200 };
+
+        uint32_t read_offset = read_offset_arr[type];
+        uint32_t read_size = read_size_arr[type];
+        HostToNetwork((const unsigned char*)&read_offset, set_cmd + 3);
+        HostToNetwork((const unsigned char*)&read_size, set_cmd + 7);
+        std::string cmd(set_cmd, send_len);
+
+        // send cmd
+        if (client_->SyncSend(cmd, send_len))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        const int recv_check = 4;
+        std::string recv(recv_check, 'x');
+        // recv ret
+        if (client_->SyncRecv(recv, recv_check))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        // check ret
+        if (!CheckDeviceRet(recv))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        // recv flash data
+        buf = std::string(read_size, 'x');
+        if (client_->SyncRecv(buf, read_size))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        // rect ret
+        recv = std::string(recv_check, 'x');
+        if (client_->SyncRecv(recv, recv_check))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        // final check
+        if (!CheckDeviceRet(recv))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        return ReturnCode::Success;
+    }
+
+    int LidarTools::SetDeviceFlashConfiguration(const std::string& buf, FlashParamType tp, DeviceType devType) {
+
+        if (!CheckConnection())
+            return -1;
+
+        // 1. generate send command
+        uint32_t read_size_arr[] = { 32,12000,12000,102400,640,3080,6400,16004,0,0,0,0,0,0,0,19200 };
+        const int send_len = 6;
+        char set_cmd[send_len] = { (char)0xAB, (char)0x01, (char)0x00, (char)0x00, (char)0x00, (char)0x00 };
+
+        uint32_t size_len = 2;
+        uint32_t data_len = read_size_arr[tp] + size_len;
+        HostToNetwork((const unsigned char*)&data_len, set_cmd + 2);
+        std::string cmd(set_cmd, send_len);
+        // check valid
+        if ((data_len - 2) != buf.size())
+            return InvalidParameter;
+
+        // 2.1 generate flash data command type
+        std::string content;
+        content.resize(data_len);
+        switch (tp)
+        {
+        case zvision::StartDelay1_3:
+            content[0] = 0x00;
+            content[1] = 0x01;
+            break;
+        case zvision::MEMS_X:
+            content[0] = 0x00;
+            content[1] = 0x02;
+            break;
+        case zvision::MEMS_Y:
+            content[0] = 0x00;
+            content[1] = 0x04;
+            break;
+        case zvision::APD_BestChannel:
+            content[0] = 0x00;
+            content[1] = 0x08;
+            break;
+        case zvision::APD_Delay:
+            content[0] = 0x00;
+            content[1] = 0x10;
+            break;
+        case zvision::ADC_Algo:
+            content[0] = 0x00;
+            content[1] = 0x20;
+            break;
+        case zvision::Cover:
+            if (devType == DeviceType::LidarML30B1 || devType == DeviceType::LidarML30SB1) {
+                content[0] = 0x02;
+                content[1] = 0x00;
+            }
+            else {
+                content[0] = 0x00;
+                content[1] = 0x40;
+            }
+            break;
+        case zvision::DirtyCheck:
+            content[0] = 0x00;
+            content[1] = 0x80;
+            break;
+        default:
+            break;
+        }
+
+        // 2.2 generate flash data
+        char* send = (char*)content.c_str() + 2;
+        memcpy(send, (char*)buf.c_str(), data_len - 2);
+
+        // 3.1 send command
+        const int recv_len = 4;
+        std::string recv(recv_len, 'x');
+        if (client_->SyncSend(cmd, send_len))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (client_->SyncRecv(recv, recv_len))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (!CheckDeviceRet(recv))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        // 3.2 send flash data to device
+        if (client_->SyncSend(content, data_len))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (client_->SyncRecv(recv, recv_len))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (!CheckDeviceRet(recv))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        return ReturnCode::Success;
+    }
+
+    int LidarTools::SetDeviceLayerDetectionEnable(bool en)
+    {
+        int ret = -1;
+        if (!CheckConnection())
+            return ret;
+
+        // 1. read hardware diagnostic control
+        DeviceConfigurationInfo info;
+        if (0 != (ret = QueryDeviceConfigurationInfo(info)))
+            return ret;
+
+        // 2. set layer detection switch
+        const int send_len = 7;
+        char set_cmd[send_len] = { (char)0xBA, (char)0x1B, (char)0x03, (char)0xFF ,(char)0xFF ,(char)0xFF ,(char)0xFF };
+        if(en)
+           info.hard_diag_ctrl |= 0x00080000;
+        else
+           info.hard_diag_ctrl &= 0xFFF7FFFF;
+        HostToNetwork((const unsigned char*)&info.hard_diag_ctrl, set_cmd + 3);
+
+        std::string cmd(set_cmd, send_len);
+        const int recv_len = 4;
+        std::string recv(recv_len, 'x');
+        if (client_->SyncSend(cmd, send_len))//send cmd
+        {
+            DisConnect();
+            return -1;
+        }
+        if (client_->SyncRecv(recv, recv_len))//recv ret
+        {
+            DisConnect();
+            return -1;
+        }
+        if (!CheckDeviceRet(recv))//check ret
+        {
+            DisConnect();
+            return -1;
+        }
+        return 0;
+    }
+
+    int LidarTools::SetDeviceDeleteNearPointLevel(int mode)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        const int send_len = 4;
+        char set_cmd[send_len] = { (char)0xBA, (char)0x25, (char)0x00, (char)0x00 };
+        if (mode == 0)
+            set_cmd[2] = 0x00;
+        else if (mode == 1)
+            set_cmd[2] = 0x01;
+        else
+            return -1;
+
+        std::string cmd(set_cmd, send_len);
+        const int recv_len = 4;
+        std::string recv(recv_len, 'x');
+
+        if (client_->SyncSend(cmd, send_len))//send cmd
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (client_->SyncRecv(recv, recv_len))//recv ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        if (!CheckDeviceRet(recv))//check ret
+        {
+            DisConnect();
+            return -1;
+        }
+
+        return 0;
+    }
+
     bool LidarTools::CheckConnection()
     {
         if (!conn_ok_)
@@ -3753,7 +4189,309 @@ namespace zvision
         return (0x00 == ret[2]) && (0x00 == ret[3]);
     }
 
-	/* for ml30s plus only */
+    /* for mlxs only */
+    int LidarTools::QueryMLXSDeviceNetworkConfigurationInfo(MLXSDeviceNetworkConfigurationInfo& info)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        /*Read configuration info*/
+        const int send_len = 9;
+        char mlxs_cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00 , (char)0x02, (char)0x0D, (char)0x03, (char)0x00, (char)0x00 };
+        uint16_t chk_sum = get_check_sum(std::string(mlxs_cmd, 7));
+        mlxs_cmd[7] = (chk_sum >> 8) & 0xFF;
+        mlxs_cmd[8] = chk_sum & 0xFF;
+        std::string cmd(mlxs_cmd, 9);
+
+        if (client_->SyncSend(cmd, send_len))
+        {
+            DisConnect();
+            return TcpSendTimeout;
+        }
+
+        // recv header
+        int header_len = 5;
+        std::string header_recv(header_len, 'x');
+        if (client_->SyncRecv(header_recv, header_len))
+        {
+            DisConnect();
+            return TcpRecvTimeout;
+        }
+
+        // check ret header
+        uint8_t* pheader = (uint8_t*)header_recv.data();
+        if ((*(pheader + 0) != 0xBA) || (*(pheader + 1) != 0xAC) || (*(pheader + 4) != 0x00))
+        {
+            DisConnect();
+            return DevAckError;
+        }
+
+        // get recv data
+        uint16_t data_len = *(pheader + 2) << 8 | *(pheader + 3);
+        std::string data_recv(data_len, 'x');
+        if (client_->SyncRecv(data_recv, data_len))
+        {
+            DisConnect();
+            return TcpRecvTimeout;
+        }
+
+        if (data_len >= 0x1B)
+        {
+            // parsing
+            uint8_t* pdata = (uint8_t*)data_recv.data();
+            info.sw_dhcp = *(pdata + 0);
+            ResolveIpString(pdata + 1, info.device_ip);
+            ResolveIpString(pdata + 5, info.subnet_mask);
+            ResolveIpString(pdata + 9, info.gateway);
+            ResolveMacAddress(pdata + 13, info.config_mac);
+            ResolveIpString(pdata + 19, info.destination_ip);
+            info.destination_port = *(pdata + 23) << 8 | *(pdata + 24);
+
+            // check ret
+            std::string str_chk = header_recv + data_recv.substr(0, data_recv.size() - 2);
+            uint16_t val = get_check_sum(str_chk);
+            uint16_t chk_sum = *(pdata + data_len - 2) << 8 | *(pdata + data_len - 1);
+            if (val != chk_sum)
+            {
+                DisConnect();
+                return DevAckError;
+            }
+        }
+        else
+        {
+            DisConnect();
+            return NotEnoughData;
+        }
+
+        // clear recv buffer
+        int len = client_->GetAvailableBytesLen();
+        if (len > 0) {
+            std::string temp(len, 'x');
+            client_->SyncRecv(temp, len);
+        }
+
+        return 0;
+    }
+
+    int LidarTools::GetMLXSDeviceCalibrationData(CalibrationData& cal)
+    {
+        // set send cmd
+        const int send_len = 9;
+        char mlxs_cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x00, (char)0x00 , (char)0x02, (char)0x0B, (char)0x02, (char)0x00, (char)0x00 };
+        uint16_t chk_sum = get_check_sum(std::string(mlxs_cmd, 7));
+        mlxs_cmd[7] = (chk_sum >> 8) & 0xFF;
+        mlxs_cmd[8] = chk_sum & 0xFF;
+        std::string cmd(mlxs_cmd, send_len);
+
+        cal.device_type = zvision::DeviceType::LidarUnknown;
+        cal.scan_mode = zvision::ScanMode::ScanUnknown;
+
+        if (!CheckConnection())
+            return TcpConnTimeout;
+
+        if (client_->SyncSend(cmd, send_len))
+        {
+            LOG_ERROR("Send cali cmd error: %d\n", client_->GetSysErrorCode());
+            DisConnect();
+            return TcpSendTimeout;
+        }
+        const int recv_len = 7;
+        std::string recv(recv_len, 'x');
+        if (client_->SyncRecv(recv, recv_len))
+        {
+            LOG_ERROR("Receive cali ret error:  %d\n", client_->GetSysErrorCode());
+            DisConnect();
+            return TcpRecvTimeout;
+        }
+
+        // check ret
+        bool check = true;
+        {
+            // check flg
+            if (recv[4] != 0x00)
+                check = false;
+            // check sum
+            if (check)
+            {
+                uint16_t val = get_check_sum(recv.substr(0, 5));
+                uint16_t chk_sum = recv[5] << 8 | recv[6];
+                check = (val == chk_sum);
+            }
+        }
+
+        if (!check)
+        {
+            LOG_ERROR("Check cali ret error: %d\n", client_->GetSysErrorCode());
+            DisConnect();
+            return DevAckError;
+        }
+
+        // get mlxs cali data
+        uint32_t received_bytes_len = 0;
+        uint32_t total_len = (36000 * 3 * 2);
+        uint32_t total_bytes_len = total_len * 4;
+
+        const int cali_header_len = 5;
+        const int chk_sum_len = 2;
+        std::vector<float>& data = cal.data;
+        data.clear();
+        // cali packet tail
+        std::string cali_recv_left;
+        while (received_bytes_len < total_bytes_len)
+        {
+            // receive calibration header
+            std::string header_recv(cali_header_len, 'x');
+            int ret = client_->SyncRecv(header_recv, cali_header_len);
+            if (ret)
+            {
+                LOG_ERROR("Receive mlxs calibration header error\n");
+                DisConnect();
+                return TcpRecvTimeout;
+            }
+            // chech cali header
+            uint8_t* pheader_recv = (uint8_t*)header_recv.data();
+            if ((*(pheader_recv + 0) != 0xBA) \
+                || (*(pheader_recv + 1) != 0xAC) \
+                || (*(pheader_recv + 4) != 0x00))
+            {
+                LOG_ERROR("Check mlxs calibration header error\n");
+                DisConnect();
+                return DevAckError;
+            }
+
+            // get cali data and checksum
+            uint16_t data_len = 0;
+            NetworkToHostShort((uint8_t*)header_recv.data() + 2, (char*)(&data_len));
+            std::string data_recv(data_len, 'x');
+            ret = client_->SyncRecv(data_recv, data_len);
+            if (ret)
+            {
+                LOG_ERROR("Receive mlxs calibration data error\n");
+                DisConnect();
+                return TcpRecvTimeout;
+            }
+
+            // get packet check sum
+            uint16_t pkt_chk = 0;
+            NetworkToHostShort((uint8_t*)data_recv.data() + data_len - chk_sum_len, (char*)(&pkt_chk));
+            // get packet data
+            std::string cali_recv = data_recv.substr(0, data_len - chk_sum_len);
+            std::string cali_pkt = header_recv + cali_recv;
+            // check
+            uint16_t chk = get_check_sum(cali_pkt);
+            if (chk != pkt_chk)
+            {
+                LOG_ERROR("Check mlxs calibration data error.\n");
+                DisConnect();
+                return DevAckError;
+            }
+
+            // check cali data
+            {
+                unsigned char check_all_00 = 0x00;
+                unsigned char check_all_ff = 0xFF;
+                for (int i = 0; i < cali_recv.size(); i++)
+                {
+                    check_all_00 |= cali_recv[i];
+                    check_all_ff &= cali_recv[i];
+                }
+                if (0x00 == check_all_00)
+                {
+                    LOG_ERROR("Check calibration data error, data is all 0x00.\n");
+                    DisConnect();
+                    return InvalidContent;
+                }
+                if (0xFF == check_all_ff)
+                {
+                    LOG_ERROR("Check calibration data error, data is all 0xFF\n");
+                    DisConnect();
+                    return InvalidContent;
+                }
+            }
+            // add data left over by last cali packet
+            if (cali_recv_left.size())
+            {
+                cali_recv = cali_recv_left + cali_recv;
+                cali_recv_left = std::string();
+            }
+            // get cali packet tail
+            int fcnt = cali_recv.size() / 4;
+            int str_left = cali_recv.size() % 4;
+            if (str_left > 0)
+            {
+                cali_recv_left = cali_recv.substr(fcnt * 4, str_left);
+                cali_recv = cali_recv.substr(0, fcnt * 4);
+            }
+
+            // parsing cali data
+            int network_data = 0;
+            int host_data = 0;
+            float* pfloat_data = reinterpret_cast<float*>(&host_data);
+            unsigned char* pcali = (unsigned char*)cali_recv.c_str();
+            for (int i = 0; i < fcnt; i++)
+            {
+                memcpy(&network_data, pcali + i * 4, 4);
+                host_data = ntohl(network_data);
+                data.push_back(*pfloat_data);
+            }
+            // check
+            received_bytes_len += cali_recv.size();
+            if (received_bytes_len >= total_bytes_len)
+            {
+                break;
+            }
+
+            std::this_thread::sleep_for(std::chrono::microseconds(110));
+        }
+
+        // final check
+        if (data.size() != total_len)
+        {
+            LOG_ERROR("Get mlxs calibration data error\n");
+            return NotEnoughData;
+        }
+
+        cal.device_type = zvision::DeviceType::LidarMLX;
+        cal.scan_mode = zvision::ScanMode::ScanMLXS_180;
+        return 0;
+    }
+
+    int LidarTools::GetMLXSDeviceCalibrationDataToFile(std::string filename)
+    {
+        CalibrationData cal;
+        int ret = GetMLXSDeviceCalibrationData(cal);
+
+        if (ret)
+            return ret;
+        else
+            return LidarTools::ExportCalibrationData(cal, filename);
+    }
+
+    int LidarTools::RebootMLXSDevice()
+    {
+        if (!CheckConnection())
+            return -1;
+
+        const int send_len = 9;
+        char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x00, (char)0x00, (char)0x02, (char)0x0C, (char)0x01, (char)0x00, (char)0x00 };
+        std::string cmd_str(cmd, send_len);
+        std::string out;
+        return GetML30sPlusB1DeviceQueryString(cmd_str, out);
+    }
+
+    int LidarTools::ShutdownMLXSDevice()
+    {
+        if (!CheckConnection())
+            return -1;
+
+        const int send_len = 9;
+        char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x00, (char)0x00, (char)0x02, (char)0x0C, (char)0x02, (char)0x00, (char)0x00 };
+        std::string cmd_str(cmd, send_len);
+        std::string out;
+        return GetML30sPlusB1DeviceQueryString(cmd_str, out);
+    }
+
+	/* for ml30s plus a1 only */
 	int LidarTools::GetML30sPlusLogFile(std::string& log, bool isFull) {
 
 		const int recv_len = 4;
@@ -4778,6 +5516,1570 @@ namespace zvision
 
         return 0;
 
+    }
+
+    /* for ml30s plus b1 only */
+    int LidarTools::GetML30sPlusB1DeviceRet(std::string& out)
+    {
+        const int chk_sum_len = 2;
+        const int recv_header_len = 5;
+        // get ret header
+        std::string recv_header(recv_header_len, 'x');
+        if (client_->SyncRecv(recv_header, recv_header_len))
+        {
+            LOG_ERROR("Receive recv header error:  %d.\n", client_->GetSysErrorCode());
+            DisConnect();
+            return TcpRecvTimeout;
+        }
+        uint16_t recv_data_len = 0;
+        NetworkToHostShort((uint8_t*)recv_header.data() + 2, (char*)(&recv_data_len));
+
+        // recv data error
+        if (recv_data_len < chk_sum_len)
+        {
+            int len = client_->GetAvailableBytesLen();
+            if (len > 0) {
+                std::string temp(len, 'x');
+                client_->SyncRecv(temp, len);
+            }
+            LOG_ERROR("Check recv header error.\n");
+            DisConnect();
+            return DevAckError;
+        }
+
+        // get ret data
+        std::string recv_data(recv_data_len, 'x');
+        if (client_->SyncRecv(recv_data, recv_data_len))
+        {
+            LOG_ERROR("Receive recv data error:  %d.\n", client_->GetSysErrorCode());
+            DisConnect();
+            return TcpRecvTimeout;
+        }
+
+        out = recv_header + recv_data;
+        return 0;
+    }
+
+    int LidarTools::CheckML30sPlusB1DeviceRet(std::string ret)
+    {
+        const int min_ret_len = 7;
+        if (ret.size() < min_ret_len)
+            return -1;
+
+        const int chk_sum_len = 2;
+        // check sum
+        uint8_t* pdata = (uint8_t*)ret.data();
+        uint16_t chk_sum = get_check_sum(ret.substr(0, ret.size() - chk_sum_len));
+        uint16_t chk_val = *(pdata + ret.size() - chk_sum_len) << 8 | *(pdata + ret.size() - chk_sum_len + 1);
+        if (chk_sum != chk_val)
+            return -1;
+
+        // check flag
+        return  *(pdata + 4);
+    }
+
+    int LidarTools::GetML30sPlusB1DeviceRetData(std::string& out)
+    {
+        std::string str_ret;
+        int ret = GetML30sPlusB1DeviceRet(str_ret);
+        if (ret)
+            return ret;
+
+        ret = CheckML30sPlusB1DeviceRet(str_ret);
+        if (ret)
+            return ret;
+
+        const int min_ret_len = 7;
+        const int ret_header_len = 5;
+        const int chk_sum_len = 2;
+        if (str_ret.size() < min_ret_len)
+            return -1;
+
+        out = str_ret.substr(ret_header_len, str_ret.size() - ret_header_len - chk_sum_len);
+        return 0;
+    }
+
+    int LidarTools::GetML30sPlusB1DeviceQueryString(const std::string& cmd, std::string& str)
+    {
+        const int chk_sum_len = 2;
+        if (cmd.size() < chk_sum_len)
+        {
+            DisConnect();
+            return -1;
+        }
+
+        std::string cmd_str = cmd;
+        std::string chk_str = cmd.substr(0, cmd.size() - 2);
+        uint16_t chk_sum = get_check_sum(chk_str);
+        cmd_str.at(cmd_str.size() - chk_sum_len) = char((chk_sum >> 8) & 0xFF);
+        cmd_str.at(cmd_str.size() - chk_sum_len + 1) = char(chk_sum & 0xFF);
+
+        if (client_->SyncSend(cmd_str, cmd_str.size()))
+        {
+            DisConnect();
+            return -1;
+        }
+
+        std::string data_str;
+        int ret = GetML30sPlusB1DeviceRetData(data_str);
+        if (ret)
+            return ret;
+
+        str = data_str;
+        return 0;
+    }
+
+    int LidarTools::GetML30sPlusB1DeviceCalibrationPackets(CalibrationPackets& pkts)
+    {
+        if (!CheckConnection())
+            return TcpConnTimeout;
+
+        // set send cmd
+        const int send_len = 9;
+        char mlxs_cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00 , (char)0x02, (char)0x0B, (char)0x02, (char)0x00, (char)0x00 };
+        uint16_t chk_sum = get_check_sum(std::string(mlxs_cmd, 7));
+        mlxs_cmd[7] = (chk_sum >> 8) & 0xFF;
+        mlxs_cmd[8] = chk_sum & 0xFF;
+        std::string cmd(mlxs_cmd, send_len);
+        // send cmd
+        if (client_->SyncSend(cmd, send_len))
+        {
+            LOG_ERROR("Send cali cmd error: %d\n", client_->GetSysErrorCode());
+            DisConnect();
+            return TcpSendTimeout;
+        }
+        // get ret part 1
+        const int ret_len1 = 5;
+        std::string recv_ret1(ret_len1, 'x');
+        if (client_->SyncRecv(recv_ret1, ret_len1))
+        {
+            LOG_ERROR("Receive cali ret1 error:  %d\n", client_->GetSysErrorCode());
+            DisConnect();
+            return TcpRecvTimeout;
+        }
+        // get ret part 2 len
+        uint16_t ret_len2 = 0;
+        zvision:NetworkToHostShort((uint8_t*)(recv_ret1.c_str() +2), (char*)(&ret_len2));
+        if (ret_len2 != 0x02 && ret_len2 != 0x06)
+        {
+            int len = client_->GetAvailableBytesLen();
+            if (len > 0) {
+                std::string temp(len, 'x');
+                client_->SyncRecv(temp, len);
+            }
+            LOG_ERROR("Get cali ret error, data len not valid:[%d]\n", ret_len2);
+            DisConnect();
+            return DevAckError;
+        }
+        // get ret part 2
+        std::string recv_ret2(ret_len2, 'x');
+        if (client_->SyncRecv(recv_ret2, ret_len2))
+        {
+            LOG_ERROR("Receive cali ret2 error:  %d\n", client_->GetSysErrorCode());
+            DisConnect();
+            return TcpRecvTimeout;
+        }
+        // recv ret data
+        std::string recv_ret = recv_ret1 + recv_ret2;
+        // check ret
+        bool check = true;
+        {
+            int recv_ret_len = recv_ret.size();
+            // check flg
+            if (recv_ret[4] != 0x00)
+                check = false;
+            // check sum
+            if (check)
+            {
+                uint16_t val = get_check_sum(recv_ret.substr(0, recv_ret_len - 2));
+                uint16_t chk_sum = uint8_t(recv_ret[recv_ret_len-2]) << 8 | uint8_t(recv_ret[recv_ret_len-1]);
+                check = (val == chk_sum);
+            }
+        }
+
+        if (!check)
+        {
+            LOG_ERROR("Check cali ret error: %d\n", client_->GetSysErrorCode());
+            DisConnect();
+            return DevAckError;
+        }
+
+        // get cali data total len
+        int total_bytes_len = 0;
+        zvision::NetworkToHost((uint8_t*)(recv_ret.c_str() + 5), (char*)(&total_bytes_len));
+
+        const int cali_header_len = 30;
+        const int chk_sum_len = 2;
+        const int new_cali_pkt_data_len = 1024;
+        std::string new_cali_header_str = "CAL30S+A1";
+        int received_bytes_len = 0;
+        std::string cali_recv_buf_left;
+        while (received_bytes_len < total_bytes_len)
+        {
+            // get cali header
+            std::string header_recv(cali_header_len, 'x');
+            int ret = client_->SyncRecv(header_recv, cali_header_len);
+            if (ret)
+            {
+                LOG_ERROR("Receive calibration header error.\n");
+                DisConnect();
+                return TcpRecvTimeout;
+            }
+
+            // get cali data len
+            uint16_t data_len = 0;
+            NetworkToHostShort((uint8_t*)header_recv.data() + (cali_header_len - chk_sum_len), (char*)(&data_len));
+            if (data_len - chk_sum_len < 0 )
+            {
+                LOG_ERROR("Check calibration header error.\n");
+                DisConnect();
+                return InvalidContent;
+            }
+
+            // get cali data and checksum
+            std::string data_recv(data_len, 'x');
+            ret = client_->SyncRecv(data_recv, data_len);
+            if (ret)
+            {
+                LOG_ERROR("Receive calibration data error.\n");
+                DisConnect();
+                return TcpRecvTimeout;
+            }
+
+            // get packet check sum
+            uint16_t pkt_chk = 0;
+            NetworkToHostShort((uint8_t*)data_recv.data() + (data_len - chk_sum_len), (char*)(&pkt_chk));
+            // get packet data
+            std::string cali_data = data_recv.substr(0, data_len - chk_sum_len);
+            std::string cali_pkt = header_recv + cali_data;
+            // check
+            uint16_t chk = get_check_sum(cali_pkt);
+            if (chk != pkt_chk)
+            {
+                LOG_ERROR("Check mlxs calibration data error.\n");
+                DisConnect();
+                return DevAckError;
+            }
+
+            // check cali data
+            {
+                unsigned char check_all_00 = 0x00;
+                unsigned char check_all_ff = 0xFF;
+                for (int i = 0; i < cali_data.size(); i++)
+                {
+                    check_all_00 |= cali_data[i];
+                    check_all_ff &= cali_data[i];
+                }
+                if (0x00 == check_all_00)
+                {
+                    LOG_ERROR("Check calibration data error, data is all 0x00.\n");
+                    DisConnect();
+                    return InvalidContent;
+                }
+                if (0xFF == check_all_ff)
+                {
+                    LOG_ERROR("Check calibration data error, data is all 0xFF\n");
+                    DisConnect();
+                    return InvalidContent;
+                }
+            }
+
+            // get pkt header information
+            char header_info[7] = { (char)0x00, (char)0x00, (char)0x00, (char)0x01 , (char)0x00, (char)0x00, (char)0x00};
+            header_info[4] = header_recv.at(25);
+            // regenerate cali pkts
+            std::string data_buf = cali_recv_buf_left + cali_data;
+            int pkt_cnt = data_buf.size() / new_cali_pkt_data_len;
+            int bytes_left = data_buf.size() % new_cali_pkt_data_len;
+            if (pkt_cnt>0)
+            {
+                for (int i = 0;i< pkt_cnt;i++)
+                {
+                    uint16_t cur_pkt_cnt = pkts.size();
+                    header_info[0] = (cur_pkt_cnt >> 8) & 0xFF;
+                    header_info[1] = cur_pkt_cnt & 0xFF;
+                    std::string new_data = data_buf.substr(new_cali_pkt_data_len*i, new_cali_pkt_data_len);
+                    std::string new_pkt = new_cali_header_str + std::string(header_info, 7) + new_data; // 9 + 7 + 1024
+                    pkts.push_back(new_pkt);
+                }
+            }
+
+            // update bytes buffer left
+            cali_recv_buf_left = std::string();
+            if (bytes_left > 0)
+                cali_recv_buf_left = data_buf.substr(pkt_cnt* new_cali_pkt_data_len, bytes_left);
+
+            // check
+            received_bytes_len += (cali_header_len + data_len);
+            if (received_bytes_len >= total_bytes_len)
+            {
+                break;
+            } 
+        }
+
+        // final check
+        // we should get 100/200/400
+        if (pkts.size() != 100 && pkts.size() != 200 && pkts.size() != 400)
+        {
+            LOG_ERROR("Get calibration data error.\n");
+            DisConnect();
+            return NotEnoughData;
+        }
+
+        return 0;
+    }
+
+    int LidarTools::GetML30sPlusB1DeviceCalibrationDataToFile(std::string filename)
+    {
+        CalibrationPackets pkts;
+        int ret = GetML30sPlusB1DeviceCalibrationPackets(pkts);
+        if (ret)
+            return ret;
+
+        CalibrationData cal;
+        ret = LidarTools::GetDeviceCalibrationData(pkts, cal);
+
+        if (ret)
+            return ret;
+        else
+            return LidarTools::ExportCalibrationData(cal, filename);
+    }
+
+    int LidarTools::GetML30sPlusB1DeviceSN(std::string& sn)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        const int send_len = 9;
+        char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x02, (char)0x0D, (char)0x01, (char)0x00, (char)0x00 };
+        std::string cmd_str(cmd, send_len);
+        std::string out;
+        int ret = GetML30sPlusB1DeviceQueryString(cmd_str, out);
+        if (ret)
+            return ret;
+
+        sn = out;
+        return 0;
+    }
+
+    int LidarTools::GetML30sPlusB1DeviceMacAddr(std::string& mac)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        const int send_len = 9;
+        char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x02, (char)0x0D, (char)0x02, (char)0x00, (char)0x00 };
+        std::string cmd_str(cmd, send_len);
+        std::string out;
+        int ret = GetML30sPlusB1DeviceQueryString(cmd_str, out);
+        if (ret)
+            return ret;
+
+        if (out.size() != 6)
+        {
+            LOG_ERROR("Check recv data len error.\n");
+            DisConnect();
+            return NotMatched;
+        }
+
+        char cmac[256] = "";
+        sprintf_s(cmac, "%02X%02X%02X%02X%02X%02X", (uint8_t)out[0], (uint8_t)out[1], (uint8_t)out[2], (uint8_t)out[3], (uint8_t)out[4], (uint8_t)out[5]);
+        mac = std::string(cmac);
+        return 0;
+    }
+
+    int LidarTools::GetML30sPlusB1DeviceFirmwareVersion(FirmwareVersion& version, FirmwareVersion& ver_bak)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        const int send_len = 9;
+        char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x02, (char)0x0D, (char)0x04, (char)0x00, (char)0x00 };
+        std::string cmd_str(cmd, send_len);
+        std::string out;
+        int ret = GetML30sPlusB1DeviceQueryString(cmd_str, out);
+        if (ret)
+            return ret;
+
+        if (out.size() < 16)
+        {
+            LOG_ERROR("Check recv data len error.\n");
+            DisConnect();
+            return NotMatched;
+        }
+
+        uint8_t* pdata = (uint8_t*)out.data();
+        memcpy(version.kernel_version, pdata + 0, 4);
+        memcpy(version.boot_version, pdata + 4, 4);
+        memcpy(ver_bak.kernel_version, pdata + 8, 4);
+        memcpy(ver_bak.boot_version, pdata + 12, 4);
+        return 0;
+    }
+
+    int LidarTools::GetML30sPlusB1DeviceNetworkConfigurationInfo(DeviceConfigurationInfo& info)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        const int send_len = 9;
+        char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x02, (char)0x0D, (char)0x03, (char)0x00, (char)0x00 };
+        std::string cmd_str(cmd, send_len);
+        std::string out;
+        int ret = GetML30sPlusB1DeviceQueryString(cmd_str, out);
+        if (ret)
+            return ret;
+
+        if (out.size() < 27)
+        {
+            LOG_ERROR("Check recv data len error.\n");
+            DisConnect();
+            return NotMatched;
+        }
+
+        uint8_t* pdata = (uint8_t*)out.data();
+        uint8_t value = (*(pdata + 0));
+        if (value == 0x00)
+            info.dhcp_enable = StateMode::StateDisable;
+        else if (value == 0x01)
+            info.dhcp_enable = StateMode::StateEnable;
+        else
+            info.dhcp_enable = StateMode::StateDisable;
+
+        // ip
+        ResolveIpString(pdata + 1, info.device_ip);
+        // subnet mask
+        ResolveIpString(pdata + 5, info.subnet_mask);
+        // gateway
+        ResolveIpString(pdata + 9, info.gateway_addr);
+        // mac
+        ResolveMacAddress(pdata + 13, info.config_mac);
+        // dst ip
+        ResolveIpString(pdata + 19, info.destination_ip);
+        // dst port
+        NetworkToHost(pdata + 23, (char*)(&info.destination_port));
+        return 0;
+    }
+
+    int LidarTools::GetML30sPlusB1DeviceConfigParamInUse(DeviceConfigurationInfo& info)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        const int send_len = 9;
+        char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x02, (char)0x0D, (char)0x05, (char)0x00, (char)0x00 };
+        std::string cmd_str(cmd, send_len);
+        std::string out;
+        int ret = GetML30sPlusB1DeviceQueryString(cmd_str, out);
+        if (ret)
+            return ret;
+
+        if (out.size() < 0x32)
+        {
+            LOG_ERROR("Check recv data len error.\n");
+            DisConnect();
+            return NotMatched;
+        }
+        uint8_t* pdata = (uint8_t*)out.data();
+        memcpy(info.version.kernel_version, pdata+0, 4);
+        memcpy(info.version.boot_version, pdata + 4, 4);
+        ResolveIpString(pdata + 8, info.device_ip);
+        ResolveIpString(pdata + 12, info.gateway_addr);
+        ResolveIpString(pdata + 16, info.subnet_mask);
+        ResolveMacAddress(pdata + 20, info.device_mac);
+        ResolveIpString(pdata + 26, info.destination_ip);
+        NetworkToHost(pdata + 30, (char*)&info.destination_port);
+
+        uint8_t value = (*(pdata + 34));
+        if (value == 0x00)      info.dhcp_enable = StateMode::StateDisable;
+        else if (value == 0x01) info.dhcp_enable = StateMode::StateEnable;
+        else                    info.dhcp_enable = StateMode::StateDisable;
+
+        value = (*(pdata + 35));
+        if (value == 0x00)      info.retro_enable = RetroMode::RetroDisable;
+        else if (value == 0x01) info.retro_enable = RetroMode::RetroEnable;
+        else                    info.retro_enable = RetroMode::RetroDisable;
+
+        value = (*(pdata + 36));
+        if (value == 0x00)      info.delete_point_enable = StateMode::StateDisable;
+        else if (value == 0x01) info.delete_point_enable = StateMode::StateEnable;
+        else                    info.delete_point_enable = StateMode::StateDisable;
+
+        value = (*(pdata + 37));
+        if (value == 0x00)      info.adhesion_enable = StateMode::StateDisable;
+        else if (value == 0x01) info.adhesion_enable = StateMode::StateEnable;
+        else                    info.adhesion_enable = StateMode::StateDisable;
+
+        value = (*(pdata + 38));
+        if (value == 0)       info.downsample_mode = DownsampleMode::DownsampleNone;
+        else if (value == 1)  info.downsample_mode = DownsampleMode::Downsample_1_2;
+        else if (value == 2)  info.downsample_mode = DownsampleMode::Downsample_1_4;
+        else                  info.downsample_mode = DownsampleMode::DownsampleUnknown;
+
+        value = (*(pdata + 39));
+        if (0x01 == value)
+            info.echo_mode = EchoSingleFirst;
+        else if (0x02 == value)
+            info.echo_mode = EchoSingleStrongest;
+        else if (0x04 == value)
+            info.echo_mode = EchoSingleLast;
+        else if (0x03 == value)
+            info.echo_mode = EchoDoubleFirstStrongest;
+        else if (0x05 == value)
+            info.echo_mode = EchoDoubleFirstLast;
+        else if (0x06 == value)
+            info.echo_mode = EchoDoubleStrongestLast;
+        else
+            info.echo_mode = EchoUnknown;;
+
+        value = (*(pdata + 40));
+        if (0x00 == value)          info.ptp_sync_enable = StateDisable;
+        else if (0x01 == value)     info.ptp_sync_enable = StateEnable;
+        else                        info.ptp_sync_enable = StateDisable;
+
+        value = (*(pdata + 41));
+        if (value == 0x00)      info.dirty_check_enable = StateMode::StateDisable;
+        else if (value == 0x01) info.dirty_check_enable = StateMode::StateEnable;
+        else                    info.dirty_check_enable = StateMode::StateDisable;
+
+        value = (*(pdata + 42));
+        if (0x00 == value)      info.cal_send_mode = CalSendDisable;
+        else if (0x01 == value) info.cal_send_mode = CalSendEnable;
+        else                    info.cal_send_mode = CalSendDisable;
+
+        value = (*(pdata + 43));
+        if (value == 0x00)      info.phase_offset_mode = PhaseOffsetMode::PhaseOffsetDisable;
+        else if (value == 0x01) info.phase_offset_mode = PhaseOffsetMode::PhaseOffsetEnable;
+        else                    info.phase_offset_mode = PhaseOffsetMode::PhaseOffsetDisable;
+
+        NetworkToHost(pdata + 44, (char*)(&info.phase_offset));
+
+        value = (*(pdata + 48));
+        if (value == 0x00)      info.intensity_smooth_enable = StateMode::StateDisable;
+        else if (value == 0x01) info.intensity_smooth_enable = StateMode::StateEnable;
+        else                    info.intensity_smooth_enable = StateMode::StateDisable;
+
+        value = (*(pdata + 49));
+        if (value == 0x00)      info.diag_enable = StateMode::StateDisable;
+        else if (value == 0x01) info.diag_enable = StateMode::StateEnable;
+        else                    info.diag_enable = StateMode::StateDisable;
+
+        return 0;
+    }
+
+    int LidarTools::GetML30sPlusB1DeviceAlgoParamInUse(DeviceConfigurationInfo& info)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        const int send_len = 9;
+        char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x02, (char)0x0D, (char)0x07, (char)0x00, (char)0x00 };
+        std::string cmd_str(cmd, send_len);
+        std::string out;
+        int ret = GetML30sPlusB1DeviceQueryString(cmd_str, out);
+        if (ret)
+            return ret;
+
+        if (out.size() < 85)
+        {
+            LOG_ERROR("Check recv data len error.\n");
+            DisConnect();
+            return NotMatched;
+        }
+        int data_len = out.size();
+        uint8_t* pdata = (uint8_t*)out.data();
+        const unsigned char* param_data = pdata + 24;
+        uint16_t param_len = data_len - 24;
+        uint16_t offset = 0;
+        uint16_t len = 0;
+        // before 24 bytes is header data
+        // near point delete
+        {
+            NetworkToHostShort(pdata, (char*)&offset);
+            NetworkToHostShort(pdata + 2, (char*)&len);
+            if (len >= 1 && ((offset + len) <= param_len)) {
+                const unsigned char* param_del = param_data + offset;
+                if(*(param_del + 0))
+                    info.delete_point_enable = StateMode::StateEnable;
+                else
+                    info.delete_point_enable = StateMode::StateDisable;
+            }
+        }
+        // retro
+        {
+            NetworkToHostShort(pdata + 4, (char*)&offset);
+            NetworkToHostShort(pdata + 6, (char*)&len);
+            if (len >= 9 && ((offset + len) <= param_len)) {
+                const unsigned char* param_retro = param_data + offset;
+                if (*(param_retro + 0))
+                    info.retro_enable = RetroMode::RetroEnable;
+                else
+                    info.retro_enable = RetroMode::RetroDisable;
+                info.algo_param.retro_min_gray = *(param_retro + 1);
+                info.algo_param.retro_min_gray_num = *(param_retro + 2);
+                NetworkToHostShort(param_retro + 3, (char*)(&info.algo_param.retro_del_gray_thres));
+                NetworkToHostShort(param_retro + 5, (char*)&info.algo_param.retro_del_gray_dis_thres);
+                info.algo_param.retro_near_del_gray_thres = *(param_retro + 7);
+                info.algo_param.retro_far_del_gray_thres = *(param_retro + 8);
+            }
+        }
+
+        // adhesion
+        {
+            NetworkToHostShort(pdata + 8, (char*)&offset);
+            NetworkToHostShort(pdata + 10, (char*)&len);
+            if (len >= 37 && ((offset + len) <= param_len)) {
+                const unsigned char* param_adhesion = param_data + offset;
+                if (*(param_adhesion + 0))
+                    info.adhesion_enable = StateMode::StateEnable;
+                else
+                    info.adhesion_enable = StateMode::StateDisable;
+
+                NetworkToHost(param_adhesion + 1, (char*)&info.algo_param.adhesion_angle_hor_min);
+                NetworkToHost(param_adhesion + 5, (char*)&info.algo_param.adhesion_angle_hor_max);
+                NetworkToHost(param_adhesion + 9, (char*)&info.algo_param.adhesion_angle_ver_min);
+                NetworkToHost(param_adhesion + 13, (char*)&info.algo_param.adhesion_angle_ver_max);
+                NetworkToHost(param_adhesion + 17, (char*)&info.algo_param.adhesion_angle_hor_res);
+                NetworkToHost(param_adhesion + 21, (char*)&info.algo_param.adhesion_angle_ver_res);
+                NetworkToHost(param_adhesion + 25, (char*)&info.algo_param.adhesion_diff_thres);
+                NetworkToHost(param_adhesion + 29, (char*)&info.algo_param.adhesion_dis_limit);
+                NetworkToHost(param_adhesion + 33, (char*)&info.algo_param.adhesion_min_diff);
+            }
+        }
+
+        // downsample
+        {
+            NetworkToHostShort(pdata + 12, (char*)&offset);
+            NetworkToHostShort(pdata + 14, (char*)&len);
+            if (len >= 1 && ((offset + len) <= param_len)) {
+                const unsigned char* param_downsample = param_data + offset;
+                unsigned char downsample_flag = (*(param_downsample + 0));
+                if (0x00 == downsample_flag)
+                    info.downsample_mode = DownsampleNone;
+                else if (0x01 == downsample_flag)
+                    info.downsample_mode = Downsample_1_2;
+                else if (0x02 == downsample_flag)
+                    info.downsample_mode = Downsample_1_4;
+                else
+                    info.downsample_mode = DownsampleUnknown;
+            }
+        }
+
+        // dirty detect
+        {
+            NetworkToHostShort(pdata + 16, (char*)&offset);
+            NetworkToHostShort(pdata + 18, (char*)&len);
+            if (len >= 12 && ((offset + len) <= param_len)) {
+                const unsigned char* param_dirty = param_data + offset;
+                if (*(param_dirty + 0))
+                    info.dirty_check_enable = StateEnable;
+                else
+                    info.dirty_check_enable = StateDisable;
+
+                if (*(param_dirty + 1))
+                    info.dirty_refresh_enable = StateEnable;
+                else
+                    info.dirty_refresh_enable = StateDisable;
+
+                NetworkToHostShort(param_dirty + 2, (char*)&info.algo_param.dirty_refresh_cycle);
+                NetworkToHostShort(param_dirty + 4, (char*)&info.algo_param.dirty_detect_set_thre);
+                NetworkToHostShort(param_dirty + 6, (char*)&info.algo_param.dirty_detect_reset_thre);
+                NetworkToHostShort(param_dirty + 8, (char*)&info.algo_param.dirty_detect_inner_thre);
+                NetworkToHostShort(param_dirty + 10, (char*)&info.algo_param.dirty_detect_outer_thre);
+            }
+        }
+
+        // intensity
+        {
+            NetworkToHostShort(pdata + 20, (char*)&offset);
+            NetworkToHostShort(pdata + 22, (char*)&len);
+            if (len >= 1 && ((offset + len) <= param_len))
+            {
+                const unsigned char* param_intensity = param_data + offset;
+                if (*(param_intensity +0)) 
+                    info.intensity_smooth_enable = StateEnable;
+                else
+                    info.intensity_smooth_enable = StateDisable;
+            }
+        }
+
+        return 0;
+    }
+
+    int LidarTools::QueryML30sPlusB1DeviceConfigurationInfo(DeviceConfigurationInfo& info)
+    {
+        int ret = GetML30sPlusB1DeviceSN(info.serial_number);
+        if (ret)  return ret;
+
+        ret = GetML30sPlusB1DeviceMacAddr(info.factory_mac);
+        if (ret)  return ret;
+
+        ret = GetML30sPlusB1DeviceFirmwareVersion(info.version, info.backup_version);
+        if (ret)  return ret;
+
+        ret = GetML30sPlusB1DeviceNetworkConfigurationInfo(info);
+        if (ret)  return ret;
+
+        ret = GetML30sPlusB1DeviceConfigParamInUse(info);
+        if (ret)  return ret;
+
+        ret = GetML30sPlusB1DeviceAlgoParamInUse(info);
+        if (ret)  return ret;
+
+        info.device = DeviceType::LidarMl30SA1Plus;
+        info.algo_param.isValid = true;
+        return 0;
+    }
+
+    int LidarTools::GetML30sPlusB1DeviceLog(std::string& log)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        const int send_len = 9;
+        char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x02, (char)0x0D, (char)0x0C, (char)0x00, (char)0x00 };
+        std::string cmd_str(cmd, send_len);
+        std::string out;
+        int ret = GetML30sPlusB1DeviceQueryString(cmd_str, out);
+        if (ret)
+            return ret;
+
+        // get log file data length
+        if (out.size() != 4)
+            return InvalidContent;
+
+        int total_log_len = 0;
+        int received_log_len = 0;
+        NetworkToHost((uint8_t*)out.data(), (char*)(&total_log_len));
+        // read log file
+        std::string str_file;
+        while (received_log_len < total_log_len)
+        {
+            ret = GetML30sPlusB1DeviceRetData(out);
+            if (ret)
+                return ret;
+
+            str_file += out;
+            received_log_len += out.size();
+        }
+        log = str_file;
+        return 0;
+    }
+
+    int LidarTools::GetML30sPlusB1DevicePtpConfiguration(std::string& ptp_cfg)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        const int send_len = 9;
+        char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x02, (char)0x0D, (char)0x0D, (char)0x00, (char)0x00 };
+        std::string cmd_str(cmd, send_len);
+        std::string out;
+        int ret = GetML30sPlusB1DeviceQueryString(cmd_str, out);
+        if (ret)
+            return ret;
+
+        // get ptp file data length
+        if (out.size() != 4)
+            return InvalidContent;
+
+        int total_ptp_len = 0;
+        int received_ptp_len = 0;
+        NetworkToHost((uint8_t*)out.data(), (char*)(&total_ptp_len));
+        // read log file
+        std::string str_file;
+        while (received_ptp_len < total_ptp_len)
+        {
+            ret = GetML30sPlusB1DeviceRetData(out);
+            if (ret)
+                return ret;
+
+            str_file += out;
+            received_ptp_len += out.size();
+        }
+        ptp_cfg = str_file;
+        return 0;
+    }
+
+    int LidarTools::GetML30sPlusB1DevicePtpConfigurationToFile(std::string& save_file_name)
+    {
+        std::string content = "";
+        int ret = GetML30sPlusB1DevicePtpConfiguration(content);
+        if (ret)
+            return ret;
+        else
+        {
+            std::ofstream out(save_file_name, std::ios::out | std::ios::binary);
+            if (out.is_open())
+            {
+                out.write(content.c_str(), content.size());
+                out.close();
+                return 0;
+            }
+            else
+                return OpenFileError;
+        }
+    }
+
+    int LidarTools::GenerateML30sPlusB1FilePacket(uint16_t id, const std::string& data, uint8_t cmd_type, uint8_t param_type, std::string& out) 
+    {
+        const int chk_sum_len = 2;
+        const int header_len = 7;
+        // generate pkt header
+        char cmd[header_len] = { (char)0xBA, (char)0x00, (char)0x00,(char)0x00, (char)0x00, cmd_type, param_type };
+        cmd[1] = (char)((id >> 8) & 0xFF);
+        cmd[2] = (char)(id & 0xFF);
+        uint16_t len = data.size() + chk_sum_len;
+        cmd[3] = (char)((len >> 8) & 0xFF);
+        cmd[4] = (char)(len & 0xFF);
+        std::string pkt_header(cmd, header_len);
+
+        // get pkt check sum
+        std::string pkt = pkt_header + data;
+        uint16_t chk_sum = get_check_sum(pkt);
+        char chk_str[chk_sum_len] = { (char)((chk_sum  >> 8) & 0xFF) , (char)(chk_sum& 0xFF) };
+        out = pkt + std::string(chk_str, chk_sum_len);
+        return 0;
+    }
+
+    int LidarTools::ML30sPlusB1FirmwareUpdate(std::string& filename, ProgressCallback cb, bool isBak)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        // get file size
+        std::ifstream in(filename, std::ifstream::ate | std::ifstream::binary);
+        if (!in.is_open())
+        {
+            LOG_ERROR("Open file error.\n");
+            return -1;
+        }
+        std::streampos end = in.tellg();
+        int size = static_cast<int>(end);
+        in.close();
+
+        // generate cmd
+        const int send_len = 13;
+        char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x06, (char)0x01, (char)0x01, (char)0x00, (char)0x00, (char)0x00, (char)0x00, (char)0x00, (char)0x00 };
+        if (isBak)
+            cmd[6] = (char)0x02;
+
+        HostToNetwork((const unsigned char*)&size, cmd + 7);
+        std::string cmd_str(cmd, send_len);
+
+        // send cmd and get ret, ignore out(empty)
+        std::string out;
+        int ret = GetML30sPlusB1DeviceQueryString(cmd_str, out);
+        if (ret)
+            return ret;
+
+        // transfer, erase flash, write
+        const int pkt_len = 1024;
+        int start_percent = 10;
+        int block_total = size / pkt_len;
+        if (0 != (size % pkt_len))
+            block_total += 1;
+        int step_per_percent = block_total / 30;
+
+        std::ifstream idata(filename, std::ios::in | std::ios::binary);
+        char fw_data[pkt_len] = { 0x00 };
+        int readed = 0;
+
+        // data transfer
+        if (idata.is_open())
+        {
+            for (readed = 0; readed < block_total; readed++)
+            {
+                int read_len = pkt_len;
+                if ((readed == (block_total - 1)) && (0 != (size % pkt_len)))
+                    read_len = size % pkt_len;
+                idata.read(fw_data, read_len);
+                std::string fw(fw_data, read_len);
+
+                // generate packet
+                std::string packet;
+                GenerateML30sPlusB1FilePacket(readed + 1, fw, 0x01,0x01, packet);
+
+                if (client_->SyncSend(packet, packet.size()))
+                {
+                    break;
+                }
+                if (0 == (readed % step_per_percent))
+                {
+                    cb(start_percent++, this->device_ip_.c_str());
+                }
+            }
+            idata.close();
+        }
+        if (readed != block_total)
+        {
+            client_->Close();
+            return -1;
+        }
+
+        // get ret
+        std::string str_ret;
+        if (GetML30sPlusB1DeviceRet(str_ret) != 0)
+        {
+            DisConnect();
+            return -1;
+        }
+
+        // check ret
+        if (CheckML30sPlusB1DeviceRet(str_ret) != 0)
+        {
+            DisConnect();
+            return -1;
+        }
+        LOG_DEBUG("Data transfer ok...\n");
+
+        // waitting for step 2
+        bool ok = false;
+        while (1)
+        {
+            if (GetML30sPlusB1DeviceRetData(str_ret) != 0 || str_ret.size() != 1)
+            {
+                ok = false;
+                break;
+            }
+            unsigned char step = *((uint8_t*)str_ret.data());
+            cb(40 + int((double)step / 3.3), this->device_ip_.c_str());
+            if (100 <= step)
+            {
+                ok = true;
+                break;
+            }
+        }
+
+        if (!ok)
+        {
+            LOG_ERROR("Waiting for erase flash failed...\n");
+            DisConnect();
+            return -1;
+        }
+        LOG_DEBUG("Waiting for erase flash ok...\n");
+
+        // waitting for step 3
+        while (1)
+        {
+            if (GetML30sPlusB1DeviceRetData(str_ret) != 0 || str_ret.size() != 1)
+            {
+                ok = false;
+                break;
+            }
+            unsigned char step = *((uint8_t*)str_ret.data());
+            cb(70 + int((double)step / 3.3), this->device_ip_.c_str());
+            if (100 <= step)
+            {
+                ok = true;
+                break;
+            }
+        }
+
+        if (!ok)
+        {
+            LOG_ERROR("Waiting for write flash failed...\n");
+            DisConnect();
+            return -1;
+        }
+        LOG_DEBUG("Waiting for write flash ok...\n");
+
+        // recv ret
+        if (GetML30sPlusB1DeviceRet(str_ret) != 0)
+        {
+            DisConnect();
+            return -1;
+        }
+
+        // check ret
+        if (CheckML30sPlusB1DeviceRet(str_ret) != 0)
+        {
+            DisConnect();
+            return -1;
+        }
+
+        return 0;
+    }
+
+    int LidarTools::SetML30sPlusB1DeviceStaticIpAddress(std::string ip)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        const int send_len = 13;
+        char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x06, (char)0x02, (char)0x01,\
+            (char)0x00, (char)0x00, (char)0x00, (char)0x00, (char)0x00, (char)0x00 };
+
+        if (!AssembleIpString(ip, cmd + 7))
+            return InvalidParameter;
+
+        std::string cmd_str(cmd, send_len);
+        std::string out;
+        return GetML30sPlusB1DeviceQueryString(cmd_str, out);
+    }
+
+    int LidarTools::SetML30sPlusB1DeviceGatewayAddress(std::string addr)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        const int send_len = 13;
+        char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x06, (char)0x02, (char)0x02,\
+            (char)0x00, (char)0x00, (char)0x00, (char)0x00, (char)0x00, (char)0x00 };
+
+        if (!AssembleIpString(addr, cmd + 7))
+            return InvalidParameter;
+
+        std::string cmd_str(cmd, send_len);
+        std::string out;
+        return GetML30sPlusB1DeviceQueryString(cmd_str, out);
+    }
+
+    int LidarTools::SetML30sPlusB1DeviceSubnetMaskAddress(std::string addr)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        const int send_len = 13;
+        char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x06, (char)0x02, (char)0x03,\
+            (char)0x00, (char)0x00, (char)0x00, (char)0x00, (char)0x00, (char)0x00 };
+
+        if (!AssembleIpString(addr, cmd + 7))
+            return InvalidParameter;
+
+        std::string cmd_str(cmd, send_len);
+        std::string out;
+        return GetML30sPlusB1DeviceQueryString(cmd_str, out);
+    }
+
+    int LidarTools::SetML30sPlusB1DeviceMacAddress(std::string mac)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        const int send_len = 15;
+        char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x08, (char)0x02, (char)0x04,\
+            (char)0x00, (char)0x00, (char)0x00, (char)0x00, (char)0x00, (char)0x00, (char)0x00, (char)0x00 };
+        if (!AssembleMacAddress(mac, cmd + 7))
+            return InvalidParameter;
+
+        std::string cmd_str(cmd, send_len);
+        std::string out;
+        return GetML30sPlusB1DeviceQueryString(cmd_str, out);
+    }
+
+    int LidarTools::SetML30sPlusB1DeviceUdpDestinationIpAddress(std::string ip)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        const int send_len = 13;
+        char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x06, (char)0x02, (char)0x05,\
+            (char)0x00, (char)0x00, (char)0x00, (char)0x00, (char)0x00, (char)0x00 };
+
+        if (!AssembleIpString(ip, cmd + 7))
+            return InvalidParameter;
+
+        std::string cmd_str(cmd, send_len);
+        std::string out;
+        return GetML30sPlusB1DeviceQueryString(cmd_str, out);
+    }
+
+    int LidarTools::SetML30sPlusB1DeviceUdpDestinationPort(int port)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        const int send_len = 13;
+        char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x06, (char)0x02, (char)0x06,\
+            (char)0x00, (char)0x00, (char)0x00, (char)0x00, (char)0x00, (char)0x00 };
+
+        AssemblePort(port, cmd + 7);
+
+        std::string cmd_str(cmd, send_len);
+        std::string out;
+        return GetML30sPlusB1DeviceQueryString(cmd_str, out);
+    }
+
+    int LidarTools::SetML30sPlusB1DeviceDHCPEnable(bool en)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        const int send_len = 10;
+        char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x03, (char)0x02, (char)0x07,\
+            (char)0x00, (char)0x00, (char)0x00 };
+
+        if (en)
+            cmd[7] = 0x01;
+        else
+            cmd[7] = 0x00;
+
+        std::string cmd_str(cmd, send_len);
+        std::string out;
+        return GetML30sPlusB1DeviceQueryString(cmd_str, out);
+    }
+
+    int LidarTools::SetML30sPlusB1DeviceAlgorithmEnable(AlgoType tp, bool en)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        const int send_len = 10;
+        char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x03, (char)0x00, (char)0x00,\
+            (char)0x00, (char)0x00, (char)0x00 };
+
+        cmd[7] = en;
+        if (tp == AlgoDeleteClosePoints)
+        {
+            cmd[5] = 0x03;
+            cmd[6] = 0x01;
+        }
+        else if (tp == AlgoRetro)
+        {
+            cmd[5] = 0x04;
+            cmd[6] = 0x01;
+        }
+        else if (tp == AlgoAdhesion)
+        {
+            cmd[5] = 0x05;
+            cmd[6] = 0x01;
+        }
+        else if (tp == AlgoDirtyCheck)
+        {
+            cmd[5] = 0x07;
+            cmd[6] = 0x01;
+        }
+        else if (tp == AlgoIntensitySmooth)
+        {
+            cmd[5] = 0x0F;
+            cmd[6] = 0x01;
+        }
+        else
+            return -1;
+
+        std::string cmd_str(cmd, send_len);
+        std::string out;
+        return GetML30sPlusB1DeviceQueryString(cmd_str, out);
+    }
+
+    int LidarTools::SetML30sPlusB1DeviceRetroParam(RetroParam tp, int value)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        std::string data;
+        uint8_t cmd_tp = 0;
+        uint8_t param_tp = 0;
+        uint8_t val_8bit = value & 0xFF;
+        switch (tp)
+        {
+        case zvision::RetroMinGray:
+            data.resize(1, (char)val_8bit);
+            cmd_tp = 0x04;
+            param_tp = 0x03;
+            break;
+        case zvision::RetroMinGrayNum:
+            data.resize(1, (char)val_8bit);
+            cmd_tp = 0x04;
+            param_tp = 0x02;
+            break;
+        case zvision::RetroDelGrayThres:
+        {
+            char str[2] = { (char)((value >> 8) & 0xFF), (char)(value & 0xFF) };
+            data = std::string(str, 2);
+            cmd_tp = 0x04;
+            param_tp = 0x04;
+            break;
+        }
+        case zvision::RetroDisThres:
+        {
+            char str[2] = { (char)((value >>8) & 0xFF), (char)(value & 0xFF)};
+            data = std::string(str, 2);
+            cmd_tp = 0x04;
+            param_tp = 0x05;
+            break;
+        }
+        case zvision::RetroLowRangeThres:
+            data.resize(1, (char)val_8bit);
+            cmd_tp = 0x04;
+            param_tp = 0x06;
+            break;
+        case zvision::RetroHighRangeThres:
+            data.resize(1, (char)val_8bit);
+            cmd_tp = 0x04;
+            param_tp = 0x07;
+            break;
+        case zvision::RetroParamUnknown:
+        default:
+            return -1;
+        }
+        std::string packet;
+        GenerateML30sPlusB1FilePacket(0x01, data, cmd_tp, param_tp, packet);
+
+        std::string out;
+        return GetML30sPlusB1DeviceQueryString(packet, out);
+    }
+
+    int LidarTools::SetML30sPlusB1DeviceAdhesionParamParam(AdhesionParam tp, float value)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        uint8_t cmd_tp = 0x05;
+        uint8_t param_tp = 0;
+        char values[4] = { (char)0x00, (char)0x00, (char)0x00, (char)0x00 };
+        int ival = value;
+        switch (tp)
+        {
+        case zvision::MinimumHorizontalAngleRange:
+            HostToNetwork((uint8_t*)(&ival), values);
+            param_tp = 0x02;
+            break;
+        case zvision::MaximumHorizontalAngleRange:
+            HostToNetwork((uint8_t*)(&ival), values);
+            param_tp = 0x03;
+            break;
+        case zvision::MinimumVerticalAngleRange:
+            HostToNetwork((uint8_t*)(&ival), values);
+            param_tp = 0x04;
+            break;
+        case zvision::MaximumVerticalAngleRange:
+            HostToNetwork((uint8_t*)(&ival), values);
+            param_tp = 0x05;
+            break;
+        case zvision::HorizontalAngleResolution:
+            HostToNetwork((uint8_t*)(&value), values);
+            param_tp = 0x06;
+            break;
+        case zvision::VerticalAngleResolution:
+            HostToNetwork((uint8_t*)(&value), values);
+            param_tp = 0x07;
+            break;
+        case zvision::DeletePointThreshold:
+            HostToNetwork((uint8_t*)(&value), values);
+            param_tp = 0x08;
+            break;
+        case zvision::MaximumProcessingRange:
+            HostToNetwork((uint8_t*)(&value), values);
+            param_tp = 0x09;
+            break;
+        case zvision::NearFarPointDiff:
+            HostToNetwork((uint8_t*)(&value), values);
+            param_tp = 0x0A;
+            break;
+        case zvision::AdhesionParamUnknown:
+        default:
+            return -1;
+        }
+
+        std::string data(values, 4);
+        std::string packet;
+        GenerateML30sPlusB1FilePacket(0x01, data, cmd_tp, param_tp, packet);
+
+        std::string out;
+        return GetML30sPlusB1DeviceQueryString(packet, out);
+    }
+
+    int LidarTools::SetML30sPlusB1DeviceDownsampleMode(DownsampleMode mode)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        const int send_len = 10;
+        char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x03, (char)0x06, (char)0x01,\
+            (char)0x00, (char)0x00, (char)0x00 };
+
+        if (DownsampleNone == mode)
+            cmd[7] = 0x00;
+        else if (Downsample_1_2 == mode)
+            cmd[7] = 0x01;
+        else if (Downsample_1_4 == mode)
+            cmd[7] = 0x02;
+        else
+            return ReturnCode::InvalidParameter;
+
+        std::string cmd_str(cmd, send_len);
+        std::string out;
+        return GetML30sPlusB1DeviceQueryString(cmd_str, out);
+    }
+
+    int LidarTools::SetML30sPlusB1DeviceDirtyEnable(bool en)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        const int send_len = 10;
+        char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x03, (char)0x07, (char)0x01,\
+            (char)0x00, (char)0x00, (char)0x00 };
+
+        if (en)
+            cmd[7] = 0x01;
+        else
+            cmd[7] = 0x00;
+
+        std::string cmd_str(cmd, send_len);
+        std::string out;
+        return GetML30sPlusB1DeviceQueryString(cmd_str, out);
+    }
+
+    int LidarTools::SetML30sPlusB1DeviceIntensitySmoothEnable(bool en)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        const int send_len = 10;
+        char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x03, (char)0x0F, (char)0x01,\
+            (char)0x00, (char)0x00, (char)0x00 };
+
+        if (en)
+            cmd[7] = 0x01;
+        else
+            cmd[7] = 0x00;
+
+        std::string cmd_str(cmd, send_len);
+        std::string out;
+        return GetML30sPlusB1DeviceQueryString(cmd_str, out);
+    }
+
+    int LidarTools::SetML30sPlusB1DeviceEchoMode(EchoMode mode)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        const int send_len = 10;
+        char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x03, (char)0x08, (char)0x01,\
+            (char)0x00, (char)0x00, (char)0x00 };
+
+        if (EchoSingleFirst == mode)
+            cmd[7] = 0x01;
+        else if (EchoSingleStrongest == mode)
+            cmd[7] = 0x02;
+        else if (EchoSingleLast == mode)
+            cmd[7] = 0x04;
+        else if (EchoDoubleFirstStrongest == mode)
+            cmd[7] = 0x03;
+        else if (EchoDoubleFirstLast == mode)
+            cmd[7] = 0x05;
+        else if (EchoDoubleStrongestLast == mode)
+            cmd[7] = 0x06;
+        else
+            return ReturnCode::InvalidParameter;
+
+        std::string cmd_str(cmd, send_len);
+        std::string out;
+        return GetML30sPlusB1DeviceQueryString(cmd_str, out);
+    }
+
+    int LidarTools::SetML30sPlusB1DevicePtpEnable(bool en)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        const int send_len = 10;
+        char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x03, (char)0x09, (char)0x01,\
+            (char)0x00, (char)0x00, (char)0x00 };
+
+        if (en)
+            cmd[7] = 0x01;
+        else
+            cmd[7] = 0x00;
+
+        std::string cmd_str(cmd, send_len);
+        std::string out;
+        return GetML30sPlusB1DeviceQueryString(cmd_str, out);
+    }
+
+    int LidarTools::SetML30sPlusB1DevicePtpConfiguration(std::string filename)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        // read file
+        std::string content;
+        char c;
+        std::ifstream inFile(filename, std::ios::in | std::ios::binary);
+        if (!inFile)
+            return ReturnCode::OpenFileError;
+        while ((c = inFile.get()) && c != EOF)
+            content.push_back(c);
+        inFile.close();
+        int length = content.size();
+
+        // cmd
+        const int send_len = 13;
+        char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x06, (char)0x09, (char)0x02,\
+            (char)0x00, (char)0x00, (char)0x00, (char)0x00, (char)0x00, (char)0x00 };
+        AssemblePort(length, cmd + 7);
+
+        // send cmd and check ret
+        std::string cmd_str(cmd, send_len);
+        std::string out;
+        int ret = GetML30sPlusB1DeviceQueryString(cmd_str, out);
+        if (ret)
+            return ret;
+
+        // generate packet
+        std::string packet;
+        GenerateML30sPlusB1FilePacket(0x01, content, 0x01, 0x01, packet);
+        // send file and check ret
+        return GetML30sPlusB1DeviceQueryString(packet, out);
+    }
+
+    int LidarTools::SetML30sPlusB1DeviceFrameSyncEnable(bool en)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        const int send_len = 10;
+        char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x03, (char)0x0A, (char)0x01,\
+            (char)0x00, (char)0x00, (char)0x00 };
+
+        if (en)
+            cmd[7] = 0x01;
+        else
+            cmd[7] = 0x00;
+
+        std::string cmd_str(cmd, send_len);
+        std::string out;
+        return GetML30sPlusB1DeviceQueryString(cmd_str, out);
+    }
+
+    int LidarTools::SetML30sPlusB1DeviceFrameSyncOffset(int value)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        const int send_len = 13;
+        char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x06, (char)0x0A, (char)0x02,\
+            (char)0x00, (char)0x00, (char)0x00, (char)0x00, (char)0x00, (char)0x00 };
+        AssemblePort(value, cmd + 7);
+
+        std::string cmd_str(cmd, send_len);
+        std::string out;
+        return GetML30sPlusB1DeviceQueryString(cmd_str, out);
+    }
+
+    int LidarTools::SetML30sPlusB1DeviceCalSendEnable(bool en)
+    {
+        if (!CheckConnection())
+            return -1;
+
+        const int send_len = 10;
+        char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x03, (char)0x0B, (char)0x01,\
+            (char)0x00, (char)0x00, (char)0x00 };
+
+        if (en)
+            cmd[7] = 0x01;
+        else
+            cmd[7] = 0x00;
+
+        std::string cmd_str(cmd, send_len);
+        std::string out;
+        return GetML30sPlusB1DeviceQueryString(cmd_str, out);
+    }
+
+    int LidarTools::SetML30sPlusB1DeviceeCalibrationData(std::string filename)
+    {
+        // 1. read cali data from file
+        CalibrationData cal;
+        int ret = 0;
+        if (0 != (ret = LidarTools::ReadCalibrationData(filename, cal)))
+            return ret;
+
+        if (cal.scan_mode != ScanML30SA1Plus_160)
+            return -1;
+
+        // we need trans cali data
+        int lpos = cal.data.size() / 2;
+        std::vector<float> cal_tmp;
+        std::vector<float> cal_fov0_3 = std::vector<float>{ std::begin(cal.data), std::begin(cal.data) + lpos };
+        std::vector<float> cal_fov4_7 = std::vector<float>{ std::begin(cal.data) + lpos, std::begin(cal.data) + cal.data.size() };
+        int groups = cal.data.size() / 16;
+        for (int g = 0; g < groups; g++) {
+            float val = .0f;
+            for (int col = 0; col < 16; col++) {
+                int id = g * 16 + col;
+                if (col < 8) {
+                    val = cal_fov0_3.at(g * 8 + col);
+                }
+                else {
+                    val = cal_fov4_7.at(g * 8 + col % 8);
+                }
+                cal.data.at(id) = val;
+            }
+        }
+
+        const int cali_pkt_len = 1024;
+        size_t cali_data_len = cal.data.size();
+        // 2. generate calibration buffer
+        std::vector<std::string> cali_pkts;
+        std::string pkt(cali_pkt_len, '0');
+        for (int i = 0; i < cali_data_len; i++) {
+            // float to str
+            char* pdata = (char*)(&cal.data[i]);
+            int* paddr = (int*)pdata;
+            *paddr = ntohl(*paddr);
+            // update packet
+            for (int j = 0; j < 4; j++)
+                pkt.at(i * 4 % cali_pkt_len + j) = *(pdata + j);
+
+            // generate packet
+            if ((i + 1) % 256 == 0) {
+                cali_pkts.push_back(pkt);
+                pkt = std::string(cali_pkt_len, '0');
+            }
+        }
+
+        if (!CheckConnection())
+            return TcpConnTimeout;
+
+        // 3. send cmd
+        const int send_len = 13;
+        char cmd[send_len] = { (char)0xAB, (char)0x00, (char)0x01, (char)0x00, (char)0x06, (char)0x04, (char)0x01,\
+            (char)0x00, (char)0x00, (char)0x00, (char)0x00, (char)0x00, (char)0x00 };
+
+        int file_len = cali_pkts.size() * cali_pkt_len;
+        HostToNetwork((const unsigned char*)&file_len, cmd + 7);
+        std::string cmd_str(cmd, send_len);
+        std::string out;
+        ret = GetML30sPlusB1DeviceQueryString(cmd_str, out);
+        if (ret)
+        {
+            DisConnect();
+            return ret;
+        }
+
+        // 4. send cali data to lidar
+        for (int i = 0; i < cali_pkts.size(); i++) {
+            std::string packet;
+            GenerateML30sPlusB1FilePacket(i+1, cali_pkts[i], 0x04, 0x01, packet);
+            ret = client_->SyncSend(packet, packet.size());
+            if (ret)
+            {
+                LOG_ERROR("Send calibration data error, ret = %d.\n", ret);
+                DisConnect();
+                return TcpSendTimeout;
+            }
+            std::this_thread::sleep_for(std::chrono::microseconds(110));
+        }
+
+        // 5. check
+        std::string data_str;
+        return GetML30sPlusB1DeviceRetData(data_str);
+    }
+
+    int LidarTools::RebootML30sPlusB1Device()
+    {
+        if (!CheckConnection())
+            return -1;
+
+        const int send_len = 10;
+        char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x03, (char)0x0C, (char)0x01,\
+            (char)0x01, (char)0x00, (char)0x00 };
+
+        std::string cmd_str(cmd, send_len);
+        std::string out;
+        return GetML30sPlusB1DeviceQueryString(cmd_str, out);
     }
 
 }

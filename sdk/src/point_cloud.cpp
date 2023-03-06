@@ -135,11 +135,20 @@ namespace zvision
     LidarPointsFilter::~LidarPointsFilter()
     {}
 
-    zvision::DownSampleMode LidarPointsFilter::GetDownsampleMode() {
+    zvision::DownSampleMode LidarPointsFilter::GetDownsampleMode(zvision::ScanMode mode)
+    {
+        if (downsample_ == zvision::Downsample_cfg_file)
+        {
+            if (mode != scan_mode_)
+            {
+                return zvision::DownsampleUnknown;
+            }
+        }
+
         return downsample_;
     }
 
-    void LidarPointsFilter::Init(zvision::DownSampleMode mode, std::string cfg_path) {
+    void LidarPointsFilter::Init(zvision::DownSampleMode mode, std::string cfg_path, bool is_ml30sp_b1_ep) {
 
         init_ = true;
         if (mode != zvision::DownSampleMode::Downsample_cfg_file) {
@@ -152,26 +161,74 @@ namespace zvision
             return;
 
         // load cfg file data
+        const int table_size = 51200;
+        const int total_lines = 640;
+        const int bytes_per_line = 10;
+        const int lines_per_fov = 80;
+        const int points_in_fov = 6400;
+
         try {
-            // for ml30s device, update cover table
-            cover_table_.resize(51200, 1);
-            uncover_cnt_ = 51200;
+            // for ml30s/ml30splus device, update cover table
+            cover_table_.resize(table_size, 1);
+            uncover_cnt_ = table_size;
+
+            // get file type
+            int header_lines = 0;
+            {
+                std::ifstream in(cfg_path.c_str(), std::ios::in);
+                if (!in.is_open())
+                    return;
+                std::string line;
+                std::string ml30s_tag = "Mode ML30S_160";
+                std::string ml30sp_tag = "Mode ML30SPlus_160";
+                while (std::getline(in, line))
+                {
+                    header_lines++;
+                    if (line.compare(0, ml30s_tag.size(), ml30s_tag.c_str(), 0, ml30s_tag.size()) == 0)
+                    {
+                        scan_mode_ = zvision::ScanML30SA1_160;
+                        break;
+                    }
+                    else if (line.compare(0, ml30sp_tag.size(), ml30sp_tag.c_str(), 0, ml30sp_tag.size()) == 0)
+                    {
+                        scan_mode_ = zvision::ScanML30SA1Plus_160;
+                        break;
+                    }
+                }
+                in.close();
+                if (scan_mode_ == zvision::ScanUnknown)
+                    header_lines = 0;
+            }
+
+
             std::ifstream in(cfg_path.c_str(), std::ios::in);
             if (!in.is_open())
                 return;
 
             uint8_t flg = 0x80;
             uint8_t fov_in_group[8] = { 0, 2, 4, 6, 5, 7, 1, 3 };
-            int total_cnt = 640;
+            uint8_t fov_in_group_30sp_b1_ep[8] = { 0, 1, 2, 3, 4, 5, 6, 7};
             std::string line;
             int id = 0;
+            int header_id = 0;
             while (std::getline(in, line))
             {
+                if ((header_lines > 0) && (header_id < header_lines))
+                {
+                    header_id++;
+                    continue;
+                }
+
                 // check
                 if (line.size() == 0)
                     continue;
+                if (line.at(0) == '#')
+                    continue;
 
-                if (line.size() != 20)
+                if (line.size() < 20)
+                    break;
+
+                if (id >= total_lines)
                     break;
 
                 // get value
@@ -183,13 +240,35 @@ namespace zvision
                 }
 
                 // update
-                for (int j = 0; j < 10; j++) {
+                for (int j = 0; j < bytes_per_line; j++) {
                     for (int k = 0; k < 8; k++) {
                         flg = 0x80 >> k;
                         if ((flg & masks[j]) != flg) {
-                            int fov = id / 80;
-                            int group = (id * 10 * 8 + j * 8 + k) % 6400;
-                            int point_id = group * 8 + fov_in_group[fov];
+                            int fov = id / lines_per_fov;
+                            int point_id = -1;
+                            if (scan_mode_ == zvision::ScanML30SA1Plus_160)
+                            {
+                                if (is_ml30sp_b1_ep)
+                                {
+                                    int group = (id * bytes_per_line * 8 + j * 8 + k) % points_in_fov;
+                                    point_id = group * 8 + fov_in_group_30sp_b1_ep[fov];
+                                }
+                                else
+                                {
+                                    int group = (id * bytes_per_line * 8 + j * 8 + k) % points_in_fov;
+                                    if (fov < 4)
+                                        point_id = group * 4 + fov;
+                                    else
+                                        point_id = group * 4 + table_size / 2 + fov - 4;
+                                }
+                            }
+                            else
+                            {
+                                int group = (id * bytes_per_line * 8 + j * 8 + k) % points_in_fov;
+                                point_id = group * 8 + fov_in_group[fov];
+                            }
+                            if (point_id >= table_size || point_id < 0)
+                                continue;
                             cover_table_.at(point_id) = 0;
                             uncover_cnt_--;
                         }
@@ -199,21 +278,26 @@ namespace zvision
             }
 
             in.close();
-            if (id != total_cnt) {
-                cover_table_.resize(51200, 1);
-                uncover_cnt_ = 51200;
+            if (id != total_lines) {
+                cover_table_.resize(table_size, 1);
+                uncover_cnt_ = table_size;
+            }
+            else
+            {
+                // not found version tag, default ScanML30SA1_160
+                if (scan_mode_ == zvision::ScanUnknown)
+                    scan_mode_ = zvision::ScanML30SA1_160;
             }
         }
         catch (std::exception e)
         {
-            cover_table_.resize(51200, 1);
-            uncover_cnt_ = 51200;
+            cover_table_.resize(table_size, 1);
+            uncover_cnt_ = table_size;
             return;
         }
 
         downsample_ = mode;
         cfg_file_path_ = cfg_path;
-        scan_mode_ = zvision::ScanML30SA1_160;
     }
 
     zvision::ScanMode LidarPointsFilter::GetScanMode() {
@@ -295,10 +379,14 @@ namespace zvision
             {
                 // get the cfg from lidar by tcp
 
-				if (device_type_usr_ == DeviceType::LidarMl30SA1Plus || \
-					device_type_usr_ == DeviceType::LidarMl30SB1Plus) {
+				if (device_type_usr_ == DeviceType::LidarMl30SA1Plus)
+                {
 					ret = tool.QueryML30sPlusDeviceConfigurationInfo(cfg);
 				}
+                else if (device_type_usr_ == DeviceType::LidarMl30SB1Plus)
+                {
+                    ret = tool.QueryML30sPlusB1DeviceConfigurationInfo(cfg);
+                }
 				else {
 					ret = tool.QueryDeviceConfigurationInfo(cfg);
 				}
@@ -338,8 +426,8 @@ namespace zvision
             }
             else
             {
-				if (device_type_usr_ == DeviceType::LidarMl30SA1Plus || \
-					device_type_usr_ == DeviceType::LidarMl30SB1Plus) {
+				if (device_type_usr_ == DeviceType::LidarMl30SA1Plus)
+                {
 					zvision::JsonConfigFileParam param;
 					ret = tool.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::read_cali_packets, &param);
 					if (ret != 0) {
@@ -353,6 +441,19 @@ namespace zvision
 						return false;
 					}
 				}
+                else if (device_type_usr_ == DeviceType::LidarMl30SB1Plus)
+                {
+                    zvision::CalibrationPackets cal_pkts;
+                    ret = tool.GetML30sPlusB1DeviceCalibrationPackets(cal_pkts);
+                    if (ret != 0) {
+                        LOG_ERROR("Get lidar[%s]`s calibration packets error\n", device_ip_.c_str());
+                        return false;
+                    }
+                    if (0 != (ret = LidarTools::GetDeviceCalibrationData(cal_pkts, *(this->cal_.get())))) {
+                        LOG_ERROR("Convert lidar[%s]`s calibration packets error\n", device_ip_.c_str());
+                        return false;
+                    }
+                }
 				else {
 					if (tool.GetDeviceCalibrationData(*(this->cal_.get())))
 						return false;
@@ -382,27 +483,27 @@ namespace zvision
         {
             this->device_type_ = PointCloudPacket::GetDeviceType(packet);
             this->scan_mode_ = PointCloudPacket::GetScanMode(packet);
-            if (ScanML30B1_100 == this->scan_mode_)
-            {
-                //this->last_seq_ = 124;
-            }
-            else if ((ScanMode::ScanML30SA1_160 == this->scan_mode_) || (ScanMode::ScanML30SA1_160_1_2 == this->scan_mode_) || (ScanMode::ScanML30SA1_160_1_4 == this->scan_mode_))
-            {
-                //this->last_seq_ = 159;
-            }
-            else if (ScanMode::ScanMLX_160 == this->scan_mode_)
-            {
-                //this->last_seq_ = 399;
-            }
-            else if (ScanMode::ScanMLX_190 == this->scan_mode_)
-            {
-                //this->last_seq_ = 474;
-            }
-            else
-            {
-                LOG_ERROR("Unknown scan mode %d.", this->scan_mode_);
-                return;
-            }
+            //if (ScanML30B1_100 == this->scan_mode_)
+            //{
+            //    //this->last_seq_ = 124;
+            //}
+            //else if ((ScanMode::ScanML30SA1_160 == this->scan_mode_) || (ScanMode::ScanML30SA1_160_1_2 == this->scan_mode_) || (ScanMode::ScanML30SA1_160_1_4 == this->scan_mode_))
+            //{
+            //    //this->last_seq_ = 159;
+            //}
+            //else if (ScanMode::ScanMLX_160 == this->scan_mode_)
+            //{
+            //    //this->last_seq_ = 399;
+            //}
+            //else if (ScanMode::ScanMLX_190 == this->scan_mode_)
+            //{
+            //    //this->last_seq_ = 474;
+            //}
+            //else
+            //{
+            //    LOG_ERROR("Unknown scan mode %d.", this->scan_mode_);
+            //    return;
+            //}
         }
 
         //scan mode is unknown or scan mode and calibration data are not matched
@@ -415,8 +516,22 @@ namespace zvision
             LOG_ERROR("Packet loss, last seq [%3d], current seq[%3d]\n", this->last_seq_, seq);
         }
 
+        if (ScanMode::ScanML30SA1Plus_160 == this->scan_mode_)
+        {
+            if (((seq < this->last_seq_) && (this->last_seq_ != 159)) || (159 == seq))
+            {
+                int ret = PointCloudPacket::ProcessPacket(packet, *(this->cal_lut_), *points_, &points_filter_);
+                if (0 != ret)
+                    LOG_WARN("ProcessPacket error, %d.\n", ret);
+
+                this->ProcessOneSweep();
+                this->last_seq_ = seq;
+                return;
+            }
+
+        }
         // we get last packet by seq, but 10Hz has a 50ms delay issues
-        if (seq < this->last_seq_)/*we have get one total frame*/
+        else if (seq < this->last_seq_)/*we have get one total frame*/
         {
             this->ProcessOneSweep();
         }
@@ -432,17 +547,17 @@ namespace zvision
     {
         // manu downsample
         std::shared_ptr<PointCloud> ds_points;
-        if ((points_filter_.GetDownsampleMode() == Downsample_1_2 || \
-            points_filter_.GetDownsampleMode() == Downsample_1_4 || \
-            points_filter_.GetDownsampleMode() == Downsample_cfg_file) && \
-            ((ScanML30SA1_160 == this->scan_mode_) && (this->points_->points.size() == 51200)))
+        if ((points_filter_.GetDownsampleMode(this->scan_mode_) == Downsample_1_2 || \
+            points_filter_.GetDownsampleMode(this->scan_mode_) == Downsample_1_4 || \
+            points_filter_.GetDownsampleMode(this->scan_mode_) == Downsample_cfg_file) && \
+            ((ScanML30SA1_160 == this->scan_mode_ || ScanML30SA1Plus_160 == this->scan_mode_) && (this->points_->points.size() == 51200)))
         {
             ds_points.reset(new PointCloud());
-            if (points_filter_.GetDownsampleMode() == Downsample_1_2)
+            if (points_filter_.GetDownsampleMode(this->scan_mode_) == Downsample_1_2)
                 ds_points->points.resize(51200 / 2);
-            else if (points_filter_.GetDownsampleMode() == Downsample_1_4)
+            else if (points_filter_.GetDownsampleMode(this->scan_mode_) == Downsample_1_4)
                 ds_points->points.resize(51200 / 4);
-            else if (points_filter_.GetDownsampleMode() == Downsample_cfg_file) {
+            else if (points_filter_.GetDownsampleMode(this->scan_mode_) == Downsample_cfg_file) {
                 int cnt = 51200;
                 points_filter_.GetPointsCoutFromCfgFile(cnt);
                 ds_points->points.resize(cnt);
@@ -507,7 +622,8 @@ namespace zvision
                 {
                     if ((len > 0) && (ip == this->filter_ip_))
                     {
-                        std::string* packet = new std::string(data.c_str(), len);
+                        //std::string* packet = new std::string(data.c_str(), len);
+                        std::string packet = std::string(data.c_str(), len);
                         this->packets_->enqueue(packet);
                     }
                 }
@@ -521,14 +637,10 @@ namespace zvision
     
     void PointCloudProducer::Consumer()
     {
-        std::string* packet = 0;
+        std::string packet;
         while (this->packets_->dequeue(packet))
         {
-            if (packet)
-            {
-                this->ProcessLidarPacket(*packet);
-                delete packet;
-            }
+            this->ProcessLidarPacket(packet);
         }
     }
 
@@ -579,7 +691,7 @@ namespace zvision
 
         if (!this->packets_)
         {
-            this->packets_.reset(new SynchronizedQueue<std::string*>);
+            this->packets_.reset(new SynchronizedQueue<std::string>);
         }
 
         if (!this->receiver_)
