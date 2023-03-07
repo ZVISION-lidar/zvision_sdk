@@ -419,6 +419,7 @@ namespace zvision
 
         //find lidar type
         ScanMode scan_mode = PointCloudPacket::GetScanMode(packet);
+        cloud.scan_mode = scan_mode;
         //type = DeviceType::LidarMLYB;
 
         if (scan_mode != cal_lut.scan_mode)

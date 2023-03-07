@@ -46,6 +46,7 @@ namespace zvision
     {
     public:
         std::vector<Point> points;
+        zvision::ScanMode scan_mode;
     };
 
     //////////////////////////////////////////////////////////////////////////////////////////////
@@ -270,6 +271,12 @@ namespace zvision
         * \return 0 for success, others for failure.
         */
         int GetPointCloud(int frame_number, PointCloud& points);
+
+        /** \brief get sin cos calibration table.
+        * \param[out]  calibration data
+        * \return 0 for success, others for failure.
+        */
+        int GetCalibrationDataSinCosTable(zvision::CalibrationDataSinCosTable&);
 
     private:
 

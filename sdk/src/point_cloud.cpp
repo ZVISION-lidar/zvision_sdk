@@ -833,4 +833,12 @@ namespace zvision
 
         return 0;
     }
+
+    int OfflinePointCloudProducer::GetCalibrationDataSinCosTable(zvision::CalibrationDataSinCosTable& cal)
+    {
+       if (!cal_lut_)
+            return -1;
+        cal = *(cal_lut_.get());
+        return 0;
+    }
 }
