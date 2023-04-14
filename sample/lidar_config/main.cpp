@@ -32,6 +32,7 @@
 #include <thread>
 #include <memory>
 #include "convert.hpp"
+#include "loguru.hpp"
 /* Progress bar defination */
 #define PBSTR "||||||||||||||||||||||||||||||||||||||||||||||||||"
 #define PBWIDTH 50
@@ -41,7 +42,7 @@ static std::map<std::string, int> g_lidars_percent;
 //Callback function for progress notify
 void print_current_progress(std::string ip, int percent)
 {
-    LOG_INFO("#%s:Current progress %3d.\n", ip.c_str(), percent);
+    LOG_F(INFO, "#%s:Current progress %3d.", ip.c_str(), percent);
 }
 
 /* Callback function for progress notifiy with progress bar */
@@ -84,9 +85,9 @@ int sample_config_lidar_mac_address(std::string lidar_ip, std::string mac, zvisi
 		ret = config.SetDeviceMacAddress(mac);
 	}
     if (ret)
-        LOG_ERROR("Set device [%s]'s MAC address to [%s] failed, ret = %d.\n", lidar_ip.c_str(), mac.c_str(), ret);
+        LOG_F(ERROR, "Set device [%s]'s MAC address to [%s] failed, ret = %d.", lidar_ip.c_str(), mac.c_str(), ret);
     else
-        LOG_INFO("Set device [%s]'s MAC address to [%s] ok.\n", lidar_ip.c_str(), mac.c_str());
+        LOG_F(INFO, "Set device [%s]'s MAC address to [%s] ok.", lidar_ip.c_str(), mac.c_str());
     return ret;
 }
 
@@ -104,9 +105,9 @@ int sample_config_lidar_ip(std::string lidar_ip, std::string new_ip, zvision::De
 		ret = config.SetDeviceStaticIpAddress(new_ip);
 	}
     if (ret)
-        LOG_ERROR("Set device [%s]'s IP address to [%s] failed, ret = %d.\n", lidar_ip.c_str(), new_ip.c_str(), ret);
+        LOG_F(ERROR, "Set device [%s]'s IP address to [%s] failed, ret = %d.", lidar_ip.c_str(), new_ip.c_str(), ret);
     else
-        LOG_INFO("Set device [%s]'s IP address to [%s] ok.\n", lidar_ip.c_str(), new_ip.c_str());
+        LOG_F(INFO, "Set device [%s]'s IP address to [%s] ok.", lidar_ip.c_str(), new_ip.c_str());
     return ret;
 }
 
@@ -125,9 +126,9 @@ int sample_config_lidar_subnet_mask(std::string lidar_ip, std::string subnetmask
 	}
 
     if (ret)
-        LOG_ERROR("Set device [%s]'s subnet mask to [%s] failed, ret = %d.\n", lidar_ip.c_str(), subnetmask.c_str(), ret);
+        LOG_F(ERROR, "Set device [%s]'s subnet mask to [%s] failed, ret = %d.", lidar_ip.c_str(), subnetmask.c_str(), ret);
     else
-        LOG_INFO("Set device [%s]'s subnet mask to [%s] ok.\n", lidar_ip.c_str(), subnetmask.c_str());
+        LOG_F(INFO, "Set device [%s]'s subnet mask to [%s] ok.", lidar_ip.c_str(), subnetmask.c_str());
     return ret;
 }
 
@@ -145,9 +146,9 @@ int sample_config_lidar_udp_destination_ip(std::string lidar_ip, std::string dst
 		ret = config.SetDeviceUdpDestinationIpAddress(dst_ip);
 	}
     if (ret)
-        LOG_ERROR("Set device [%s]'s UDP destination ip to [%s] failed, ret = %d.\n", lidar_ip.c_str(), dst_ip.c_str(), ret);
+        LOG_F(ERROR, "Set device [%s]'s UDP destination ip to [%s] failed, ret = %d.", lidar_ip.c_str(), dst_ip.c_str(), ret);
     else
-        LOG_INFO("Set device [%s]'s UDP destination ip to [%s] ok.\n", lidar_ip.c_str(), dst_ip.c_str());
+        LOG_F(INFO, "Set device [%s]'s UDP destination ip to [%s] ok.", lidar_ip.c_str(), dst_ip.c_str());
     return ret;
 }
 
@@ -165,9 +166,9 @@ int sample_config_lidar_udp_destination_port(std::string lidar_ip, int dst_port,
 		ret = config.SetDeviceUdpDestinationPort(dst_port);
 	}
     if (ret)
-        LOG_ERROR("Set device [%s]'s UDP destination port to [%d] failed, ret = %d.\n", lidar_ip.c_str(), dst_port, ret);
+        LOG_F(ERROR, "Set device [%s]'s UDP destination port to [%d] failed, ret = %d.", lidar_ip.c_str(), dst_port, ret);
     else
-        LOG_INFO("Set device [%s]'s UDP destination port to [%d] ok.\n", lidar_ip.c_str(), dst_port);
+        LOG_F(INFO, "Set device [%s]'s UDP destination port to [%d] ok.", lidar_ip.c_str(), dst_port);
     return ret;
 }
 
@@ -185,9 +186,9 @@ int sample_config_lidar_retro_enable(std::string lidar_ip, bool enable, zvision:
 		ret = config.SetDeviceRetroEnable(enable);
 	}
     if (ret)
-        LOG_ERROR("Set device [%s]'s retro to [%d] failed, ret = %d.\n", lidar_ip.c_str(), enable, ret);
+        LOG_F(ERROR, "Set device [%s]'s retro to [%d] failed, ret = %d.", lidar_ip.c_str(), enable, ret);
     else
-        LOG_INFO("Set device [%s]'s retro to [%d] ok.\n", lidar_ip.c_str(), enable);
+        LOG_F(INFO, "Set device [%s]'s retro to [%d] ok.", lidar_ip.c_str(), enable);
     return ret;
 }
 
@@ -197,9 +198,9 @@ int sample_config_lidar_time_sync(std::string lidar_ip, zvision::TimestampType t
     int ret = 0;
     zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
     if (ret = config.SetDeviceTimestampType(type))
-        LOG_ERROR("Set device [%s]'s timestamp type to [%d] failed, ret = %d.\n", lidar_ip.c_str(), type, ret);
+        LOG_F(ERROR, "Set device [%s]'s timestamp type to [%d] failed, ret = %d.", lidar_ip.c_str(), type, ret);
     else
-        LOG_INFO("Set device [%s]'s timestamp type to [%d] ok.\n", lidar_ip.c_str(), type);
+        LOG_F(INFO, "Set device [%s]'s timestamp type to [%d] ok.", lidar_ip.c_str(), type);
     return ret;
 }
 
@@ -220,12 +221,12 @@ int sample_query_lidar_firmware_version(std::string lidar_ip, zvision::DeviceTyp
 		ret = config.QueryDeviceFirmwareVersion(version);
 	}
     if (ret)
-        LOG_ERROR("Query device [%s]'s firmware version failed, ret = %d.\n", lidar_ip.c_str(), ret);
+        LOG_F(ERROR, "Query device [%s]'s firmware version failed, ret = %d.", lidar_ip.c_str(), ret);
     else
     {
-        LOG_INFO("Query device [%s]'s firmware version ok.\n", lidar_ip.c_str());
-        LOG_INFO("FPGA   version: %u.%u.%u\n", version.boot_version[0], version.boot_version[1], version.boot_version[2], version.boot_version[3]);
-        LOG_INFO("Embedded version: %u.%u.%u\n", version.kernel_version[0], version.kernel_version[1], version.kernel_version[2], version.kernel_version[3]);
+        LOG_F(INFO, "Query device [%s]'s firmware version ok.", lidar_ip.c_str());
+        LOG_F(INFO, "FPGA   version: %u.%u.%u", version.boot_version[0], version.boot_version[1], version.boot_version[2], version.boot_version[3]);
+        LOG_F(INFO, "Embedded version: %u.%u.%u", version.kernel_version[0], version.kernel_version[1], version.kernel_version[2], version.kernel_version[3]);
     }
     return ret;
 }
@@ -245,11 +246,11 @@ int sample_query_lidar_serial_number(std::string lidar_ip, zvision::DeviceType t
 		ret = config.QueryDeviceSnCode(serial_number);
 	}
     if (ret)
-        LOG_ERROR("Query device [%s]'s serial number failed, ret = %d.\n", lidar_ip.c_str(), ret);
+        LOG_F(ERROR, "Query device [%s]'s serial number failed, ret = %d.", lidar_ip.c_str(), ret);
     else
     {
-        LOG_INFO("Query device [%s]'s serial number ok.\n", lidar_ip.c_str());
-        LOG_INFO("Serial number: %s\n", serial_number.c_str());
+        LOG_F(INFO, "Query device [%s]'s serial number ok.", lidar_ip.c_str());
+        LOG_F(INFO, "Serial number: %s", serial_number.c_str());
     }
     return ret;
 }
@@ -261,12 +262,12 @@ int sample_query_lidar_hardware_temperature(std::string lidar_ip)
     zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
     float temperature0 = 0.0, temperature1 = 0.0;
     if (ret = config.QueryDeviceTemperature(temperature0, temperature1))
-        LOG_ERROR("Query device [%s]'s hardware temperature failed, ret = %d.\n", lidar_ip.c_str(), ret);
+        LOG_F(ERROR, "Query device [%s]'s hardware temperature failed, ret = %d.", lidar_ip.c_str(), ret);
     else
     {
-        LOG_INFO("Query device [%s]'s hardware temperature ok.\n", lidar_ip.c_str());
-        LOG_INFO("Temperature 0: %.3f\n", temperature0);
-        LOG_INFO("Temperature 1: %.3f\n", temperature1);
+        LOG_F(INFO, "Query device [%s]'s hardware temperature ok.", lidar_ip.c_str());
+        LOG_F(INFO, "Temperature 0: %.3f", temperature0);
+        LOG_F(INFO, "Temperature 1: %.3f", temperature1);
     }
     return ret;
 }
@@ -284,12 +285,12 @@ int sample_query_lidar_configuration(std::string lidar_ip, zvision::DeviceType t
 		ret = config.QueryDeviceConfigurationInfo(info);
 	}
     if (ret)
-        LOG_ERROR("Query device [%s]'s configuration info failed, ret = %d.\n", lidar_ip.c_str(), ret);
+        LOG_F(ERROR, "Query device [%s]'s configuration info failed, ret = %d.", lidar_ip.c_str(), ret);
     else
     {
         std::string info_str = zvision::get_cfg_info_string(info);
-        LOG_INFO("Query device [%s]'s configuration info ok.\n", lidar_ip.c_str());
-        LOG_INFO("%s\n", info_str.c_str());
+        LOG_F(INFO, "Query device [%s]'s configuration info ok.", lidar_ip.c_str());
+        LOG_F(INFO, "%s", info_str.c_str());
     }
     return ret;
 }
@@ -300,11 +301,11 @@ int sample_get_lidar_calibration(std::string lidar_ip, std::string savefilename,
     int ret = 0;
     zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
     if (ret = config.GetDeviceCalibrationDataToFile(savefilename, tp))
-        LOG_ERROR("Get device [%s]'s calibration data failed, ret = %d.\n", lidar_ip.c_str(), ret);
+        LOG_F(ERROR, "Get device [%s]'s calibration data failed, ret = %d.", lidar_ip.c_str(), ret);
     else
     {
-        LOG_INFO("Get device [%s]'s calibration data ok.\n", lidar_ip.c_str());
-        LOG_INFO("Calibration data save to file %s.\n", savefilename.c_str());
+        LOG_F(INFO, "Get device [%s]'s calibration data ok.", lidar_ip.c_str());
+        LOG_F(INFO, "Calibration data save to file %s.", savefilename.c_str());
     }
     return ret;
 }
@@ -321,10 +322,10 @@ int sample_firmware_update(std::string lidar_ip, std::string filename, zvision::
 		ret = config.FirmwareUpdate(filename, print_current_progress_multi);
 	}
     if (ret)
-        LOG_ERROR("Update device [%s]'s firmware %s failed, ret = %d.\n", lidar_ip.c_str(), filename.c_str(), ret);
+        LOG_F(ERROR, "Update device [%s]'s firmware %s failed, ret = %d.", lidar_ip.c_str(), filename.c_str(), ret);
     else
     {
-        LOG_INFO("Update device [%s] fireware %s ok.\n", lidar_ip.c_str(), filename.c_str());
+        LOG_F(INFO, "Update device [%s] fireware %s ok.", lidar_ip.c_str(), filename.c_str());
     }
     return ret;
 }
@@ -342,10 +343,10 @@ int sample_reboot_lidar(std::string lidar_ip, zvision::DeviceType tp = zvision::
 		ret = config.RebootDevice();
 	}
     if (ret)
-        LOG_ERROR("Reboot device [%s] failed, ret = %d.\n", lidar_ip.c_str(), ret);
+        LOG_F(ERROR, "Reboot device [%s] failed, ret = %d.", lidar_ip.c_str(), ret);
     else
     {
-        LOG_INFO("Reboot device [%s] ok.\n", lidar_ip.c_str());
+        LOG_F(INFO, "Reboot device [%s] ok.", lidar_ip.c_str());
     }
     return ret;
 }
@@ -359,18 +360,18 @@ int sample_scan_lidar_on_heat_beat_port(int seconds)
     std::vector<zvision::DeviceConfigurationInfo> devices;
     
     if (ret = zvision::LidarTools::ScanDevice(devices, seconds))
-        LOG_ERROR("Scan device on heart beat port failed, ret = %d.\n", ret);
+        LOG_F(ERROR, "Scan device on heart beat port failed, ret = %d.", ret);
     else
     {
-        LOG_INFO("Scan device on heart beat port ok, total %d found.\n", devices.size());
+        LOG_F(INFO, "Scan device on heart beat port ok, total %d found.", devices.size());
 
         for (int i = 0; i < devices.size(); ++i)
         {
             zvision::DeviceConfigurationInfo& info = devices[i];
             std::string cfg_desp = zvision::get_cfg_info_string(info);
-            LOG_INFO("####################### Device number %3d #######################\n", i);
-            LOG_INFO("%s\n", cfg_desp.c_str());
-            LOG_INFO("#################################################################\n\n");
+            LOG_F(INFO, "####################### Device number %3d #######################", i);
+            LOG_F(INFO, "%s", cfg_desp.c_str());
+            LOG_F(INFO, "#################################################################\n");
         }
     }
     return ret;
@@ -382,9 +383,9 @@ int sample_config_lidar_retro_param_min_ref(std::string lidar_ip, int ref)
     int ret = 0;
     zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
     if (ret = config.SetDeviceRetroParam1MinRef(ref))
-        LOG_ERROR("Set device [%s]'s retro param 1 to [%d] failed, ret = %d.\n", lidar_ip.c_str(), ref, ret);
+        LOG_F(ERROR, "Set device [%s]'s retro param 1 to [%d] failed, ret = %d.", lidar_ip.c_str(), ref, ret);
     else
-        LOG_INFO("Set device [%s]'s retro param 1 to [%d] ok.\n", lidar_ip.c_str(), ref);
+        LOG_F(INFO, "Set device [%s]'s retro param 1 to [%d] ok.", lidar_ip.c_str(), ref);
     return ret;
 }
 
@@ -394,9 +395,9 @@ int sample_config_lidar_retro_param_point_percentage(std::string lidar_ip, int p
     int ret = 0;
     zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
     if (ret = config.SetDeviceRetroParam2PointPercentage(percent))
-        LOG_ERROR("Set device [%s]'s retro param 2 to [%d] failed, ret = %d.\n", lidar_ip.c_str(), percent, ret);
+        LOG_F(ERROR, "Set device [%s]'s retro param 2 to [%d] failed, ret = %d.", lidar_ip.c_str(), percent, ret);
     else
-        LOG_INFO("Set device [%s]'s retro param 2 to [%d] ok.\n", lidar_ip.c_str(), percent);
+        LOG_F(INFO, "Set device [%s]'s retro param 2 to [%d] ok.", lidar_ip.c_str(), percent);
     return ret;
 }
 
@@ -414,9 +415,9 @@ int sample_config_lidar_phase_offset_enable(std::string lidar_ip, bool en, zvisi
 		ret = config.SetDevicePhaseOffsetEnable(en);
 	}
     if (ret)
-        LOG_ERROR("Set device [%s]'s phase offset enable to [%d] failed, ret = %d.\n", lidar_ip.c_str(), en, ret);
+        LOG_F(ERROR, "Set device [%s]'s phase offset enable to [%d] failed, ret = %d.", lidar_ip.c_str(), en, ret);
     else
-        LOG_INFO("Set device [%s]'s phase offset enable to [%d] ok.\n", lidar_ip.c_str(), en);
+        LOG_F(INFO, "Set device [%s]'s phase offset enable to [%d] ok.", lidar_ip.c_str(), en);
     return ret;
 }
 
@@ -434,9 +435,9 @@ int sample_config_lidar_phase_offset_value(std::string lidar_ip, int value_5ns, 
 		ret = config.SetDevicePhaseOffset(value_5ns);
 	}
     if (ret)
-        LOG_ERROR("Set device [%s]'s phase offset value to [%d]x5ns failed, ret = %d.\n", lidar_ip.c_str(), value_5ns, ret);
+        LOG_F(ERROR, "Set device [%s]'s phase offset value to [%d]x5ns failed, ret = %d.", lidar_ip.c_str(), value_5ns, ret);
     else
-        LOG_INFO("Set device [%s]'s phase offset value to [%d]x5ns ok.\n", lidar_ip.c_str(), value_5ns);
+        LOG_F(INFO, "Set device [%s]'s phase offset value to [%d]x5ns ok.", lidar_ip.c_str(), value_5ns);
     return ret;
 }
 
@@ -454,9 +455,9 @@ int sample_config_lidar_ptp_configuration_file(std::string lidar_ip, std::string
 		ret = config.SetDevicePtpConfiguration(filename);
 	}
     if (ret)
-        LOG_ERROR("Set device [%s]'s ptp configuration file to [%s] failed, ret = %d.\n", lidar_ip.c_str(), filename.c_str(), ret);
+        LOG_F(ERROR, "Set device [%s]'s ptp configuration file to [%s] failed, ret = %d.", lidar_ip.c_str(), filename.c_str(), ret);
     else
-        LOG_INFO("Set device [%s]'s ptp configuration file to [%s] ok.\n", lidar_ip.c_str(), filename.c_str());
+        LOG_F(INFO, "Set device [%s]'s ptp configuration file to [%s] ok.", lidar_ip.c_str(), filename.c_str());
     return ret;
 }
 
@@ -474,9 +475,9 @@ int sample_get_lidar_ptp_configuration_to_file(std::string lidar_ip, std::string
 		ret = config.GetDevicePtpConfigurationToFile(filename);
 	}
     if (ret)
-        LOG_ERROR("Get device [%s]'s ptp configuration file to [%s] failed, ret = %d.\n", lidar_ip.c_str(), filename.c_str(), ret);
+        LOG_F(ERROR, "Get device [%s]'s ptp configuration file to [%s] failed, ret = %d.", lidar_ip.c_str(), filename.c_str(), ret);
     else
-        LOG_INFO("Get device [%s]'s ptp configuration file to [%s] ok.\n", lidar_ip.c_str(), filename.c_str());
+        LOG_F(INFO, "Get device [%s]'s ptp configuration file to [%s] ok.", lidar_ip.c_str(), filename.c_str());
     return ret;
 }
 
@@ -498,9 +499,9 @@ int sample_config_lidar_cali_file_broadcast_mode(std::string lidar_ip, bool en, 
 		ret = config.SetDeviceCalSendMode(mode);
 	}
 	if (ret)
-		LOG_ERROR("Set device [%s]'s calibration file broadcast enable to [%d] failed, ret = %d.\n", lidar_ip.c_str(), en, ret);
+		LOG_F(ERROR, "Set device [%s]'s calibration file broadcast enable to [%d] failed, ret = %d.", lidar_ip.c_str(), en, ret);
 	else
-		LOG_INFO("Set device [%s]'s calibration file broadcast enable to [%d] ok.\n", lidar_ip.c_str(), en);
+		LOG_F(INFO, "Set device [%s]'s calibration file broadcast enable to [%d] ok.", lidar_ip.c_str(), en);
 	return ret;
 }
 
@@ -517,14 +518,14 @@ int sample_config_lidar_downsample_mode(std::string lidar_ip, std::string mode)
 	else if (mode.compare("1/4") == 0)
 		dm = zvision::Downsample_1_4;
 	else {
-		LOG_ERROR("Set device [%s]'s downsample mode to [%s] failed, invalid parameters input.\n", lidar_ip.c_str(), mode.c_str());
+		LOG_F(ERROR, "Set device [%s]'s downsample mode to [%s] failed, invalid parameters input.", lidar_ip.c_str(), mode.c_str());
 		return ret;
 	}
 
 	if (ret = config.SetDeviceDownsampleMode(dm))
-		LOG_ERROR("Set device [%s]'s downsample mode to [%s] failed, ret = %d.\n", lidar_ip.c_str(), mode.c_str(), ret);
+		LOG_F(ERROR, "Set device [%s]'s downsample mode to [%s] failed, ret = %d.", lidar_ip.c_str(), mode.c_str(), ret);
 	else
-		LOG_INFO("Set device [%s]'s downsample mode to [%s] ok.\n", lidar_ip.c_str(), mode.c_str());
+		LOG_F(INFO, "Set device [%s]'s downsample mode to [%s] ok.", lidar_ip.c_str(), mode.c_str());
 	return ret;
 }
 
@@ -543,10 +544,10 @@ int sample_set_lidar_retro_parameters(std::string lidar_ip,int id, std::string v
 			ret = config.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::set_retro_critical_point_dis_thre, &param_30sp);
 			break;
 		case 3:
-			LOG_ERROR("Not support for 30sp device [%s].\n", lidar_ip.c_str());
+			LOG_F(ERROR, "Not support for 30sp device [%s].", lidar_ip.c_str());
 			return -1;
 		case 4:
-			LOG_ERROR("Not support for 30sp device [%s].\n", lidar_ip.c_str());
+			LOG_F(ERROR, "Not support for 30sp device [%s].", lidar_ip.c_str());
 			return -1;
 		case 1:
 			param_30sp.target_point_num_thre_retro = (unsigned char)std::atoi(val.c_str());
@@ -598,9 +599,9 @@ int sample_set_lidar_retro_parameters(std::string lidar_ip,int id, std::string v
 	
 
 	if (ret != 0)
-		LOG_ERROR("Set device [%s]'s retro parameters failed, ret = %d.\n", lidar_ip.c_str(), ret);
+		LOG_F(ERROR, "Set device [%s]'s retro parameters failed, ret = %d.", lidar_ip.c_str(), ret);
 	else
-		LOG_INFO("Set device [%s]'s retro parameters ok.\n", lidar_ip.c_str());
+		LOG_F(INFO, "Set device [%s]'s retro parameters ok.", lidar_ip.c_str());
 
 	return ret;
 }
@@ -681,9 +682,9 @@ int sample_set_lidar_adhesion_parameters(std::string lidar_ip, int id, std::stri
 	}
 
 	if (ret != 0)
-		LOG_ERROR("Set device [%s]'s adhesion parameters failed, ret = %d.\n", lidar_ip.c_str(), ret);
+		LOG_F(ERROR, "Set device [%s]'s adhesion parameters failed, ret = %d.", lidar_ip.c_str(), ret);
 	else
-		LOG_INFO("Set device [%s]'s adhesion parameters ok.\n", lidar_ip.c_str());
+		LOG_F(INFO, "Set device [%s]'s adhesion parameters ok.", lidar_ip.c_str());
 
 	return ret;
 }
@@ -722,9 +723,9 @@ int sample_get_lidar_algorithm_parameters(std::string lidar_ip, zvision::DeviceT
 	}
 
 	if (ret)
-		LOG_ERROR("Get device [%s]'s algorithm parameters failed, ret = %d.\n", lidar_ip.c_str(), ret);
+		LOG_F(ERROR, "Get device [%s]'s algorithm parameters failed, ret = %d.", lidar_ip.c_str(), ret);
 	else {
-		LOG_INFO("Get device [%s]'s algorithm parameters ok.\n", lidar_ip.c_str());
+		LOG_F(INFO, "Get device [%s]'s algorithm parameters ok.", lidar_ip.c_str());
 		std::string msg;
 		msg += "------  Retro  -------\n";
 		msg += "min gray num: " + std::to_string(param.retro_min_gray_num) + "\n";
@@ -747,7 +748,7 @@ int sample_get_lidar_algorithm_parameters(std::string lidar_ip, zvision::DeviceT
 		msg += "diff thres: " + std::to_string(param.adhesion_diff_thres) + "\n";
 		msg += "dis limit: " + std::to_string(param.adhesion_dis_limit) + "\n";
 		msg += "min diff: " + std::to_string(param.adhesion_min_diff) + "\n";
-		LOG_INFO(msg.c_str());
+		LOG_F(INFO, msg.c_str());
 	}
 
 	return ret;
@@ -766,9 +767,9 @@ int sample_config_lidar_delete_points(std::string lidar_ip, bool en, zvision::De
 		ret = config.SetDeviceAlgorithmEnable(zvision::AlgoType::AlgoDeleteClosePoints, en);
 	}
 	if (ret)
-		LOG_ERROR("Set device [%s]'s delete close points enable to [%d] failed, ret = %d.\n", lidar_ip.c_str(), en, ret);
+		LOG_F(ERROR, "Set device [%s]'s delete close points enable to [%d] failed, ret = %d.", lidar_ip.c_str(), en, ret);
 	else
-		LOG_INFO("Set device [%s]'s delete close points enable to [%d] ok.\n", lidar_ip.c_str(), en);
+		LOG_F(INFO, "Set device [%s]'s delete close points enable to [%d] ok.", lidar_ip.c_str(), en);
 	return ret;
 }
 
@@ -785,9 +786,9 @@ int sample_config_lidar_adhesion(std::string lidar_ip, bool en, zvision::DeviceT
 		ret = config.SetDeviceAlgorithmEnable(zvision::AlgoType::AlgoAdhesion, en);
 	}
 	if (ret)
-		LOG_ERROR("Set device [%s]'s adhesion enable to [%d] failed, ret = %d.\n", lidar_ip.c_str(), en, ret);
+		LOG_F(ERROR, "Set device [%s]'s adhesion enable to [%d] failed, ret = %d.", lidar_ip.c_str(), en, ret);
 	else
-		LOG_INFO("Set device [%s]'s adhesion enable to [%d] ok.\n", lidar_ip.c_str(), en);
+		LOG_F(INFO, "Set device [%s]'s adhesion enable to [%d] ok.", lidar_ip.c_str(), en);
 	return ret;
 }
 
@@ -869,10 +870,10 @@ int sample_config_lidar_calibration(std::string lidar_ip, std::string filename, 
 	int ret = 0;
 	zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
 	if (ret = config.SetDeviceCalibrationData(filename, tp))
-		LOG_ERROR("Set device [%s]`s calibration data failed, ret = %d.\n", lidar_ip.c_str(), ret);
+		LOG_F(ERROR, "Set device [%s]`s calibration data failed, ret = %d.", lidar_ip.c_str(), ret);
 	else
 	{
-		LOG_INFO("Set device [%s]`s calibration data ok.\n", lidar_ip.c_str());
+		LOG_F(INFO, "Set device [%s]`s calibration data ok.", lidar_ip.c_str());
 	}
 	return ret;
 }
@@ -883,11 +884,11 @@ int sample_get_lidar_channel_file(std::string lidar_ip, std::string savefilename
 	int ret = 0;
 	zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
 	if (ret = config.GetDeviceChannelDataToFile(savefilename, curr))
-		LOG_ERROR("Get device [%s]'s channel data failed, ret = %d.\n", lidar_ip.c_str(), ret);
+		LOG_F(ERROR, "Get device [%s]'s channel data failed, ret = %d.", lidar_ip.c_str(), ret);
 	else
 	{
-		LOG_INFO("Get device [%s]'s channel data ok.\n", lidar_ip.c_str());
-		LOG_INFO("Channel data save to file %s.\n", savefilename.c_str());
+		LOG_F(INFO, "Get device [%s]'s channel data ok.", lidar_ip.c_str());
+		LOG_F(INFO, "Channel data save to file %s.", savefilename.c_str());
 	}
 	return ret;
 }
@@ -898,11 +899,11 @@ int sample_get_lidar_channel_list_file(std::string lidar_ip, std::string savefil
 	int ret = 0;
 	zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
 	if (ret = config.GetDeviceChannelListDataToFile(savefilename))
-		LOG_ERROR("Get device [%s]'s channel list data failed, ret = %d.\n", lidar_ip.c_str(), ret);
+		LOG_F(ERROR, "Get device [%s]'s channel list data failed, ret = %d.", lidar_ip.c_str(), ret);
 	else
 	{
-		LOG_INFO("Get device [%s]'s channel list data ok.\n", lidar_ip.c_str());
-		LOG_INFO("Channel list data save to file %s.\n", savefilename.c_str());
+		LOG_F(INFO, "Get device [%s]'s channel list data ok.", lidar_ip.c_str());
+		LOG_F(INFO, "Channel list data save to file %s.", savefilename.c_str());
 	}
 	return ret;
 }
@@ -924,7 +925,7 @@ int sample_config_lidar_echo_mode(std::string lidar_ip, int id, zvision::DeviceT
 	else if (id == 6)
 		mode = zvision::EchoDoubleStrongestLast;
 	else {
-		LOG_ERROR("Invalid echo mode parameters [%d] ,set lidat echo mode failed.\n.", id);
+		LOG_F(ERROR, "Invalid echo mode parameters [%d] ,set lidat echo mode failed..", id);
 		return zvision::InvalidParameter;
 	}
 
@@ -940,12 +941,12 @@ int sample_config_lidar_echo_mode(std::string lidar_ip, int id, zvision::DeviceT
 	}
 
 	if (ret == zvision::NotSupport)
-		LOG_INFO("Set device [%s]'s echo mode to [%s] ignored, not support.\n", lidar_ip.c_str(), zvision::get_echo_mode_string(mode).c_str(), ret);
+		LOG_F(INFO, "Set device [%s]'s echo mode to [%s] ignored, not support.", lidar_ip.c_str(), zvision::get_echo_mode_string(mode).c_str(), ret);
 	else if(ret)
-		LOG_ERROR("Set device [%s]'s echo mode to [%s] failed, ret = %d.\n", lidar_ip.c_str(), zvision::get_echo_mode_string(mode).c_str(), ret);
+		LOG_F(ERROR, "Set device [%s]'s echo mode to [%s] failed, ret = %d.", lidar_ip.c_str(), zvision::get_echo_mode_string(mode).c_str(), ret);
 	else
 	{
-		LOG_INFO("Set device [%s]'s echo mode to [%s] ok.\n", lidar_ip.c_str(), zvision::get_echo_mode_string(mode).c_str());
+		LOG_F(INFO, "Set device [%s]'s echo mode to [%s] ok.", lidar_ip.c_str(), zvision::get_echo_mode_string(mode).c_str());
 	}
 	return ret;
 }
@@ -958,12 +959,12 @@ int sample_get_lidar_train_log(std::string lidar_ip, std::string path) {
 	ret = config.GetDeviceLog(context);
 	if (ret)
 	{
-		LOG_ERROR("Get device [%s]`s log failed, ret = %d.\n", lidar_ip.c_str(), ret);
+		LOG_F(ERROR, "Get device [%s]`s log failed, ret = %d.", lidar_ip.c_str(), ret);
 		return -1;
 	}
 	else
 	{
-		LOG_INFO("Get device [%s]`s log ok.\n", lidar_ip.c_str());
+		LOG_F(INFO, "Get device [%s]`s log ok.", lidar_ip.c_str());
 	}
 
 	// get log line data
@@ -974,7 +975,7 @@ int sample_get_lidar_train_log(std::string lidar_ip, std::string path) {
 	std::fstream outfile;
 	outfile.open(path, std::ios::out);
 	if (!outfile.is_open()) {
-		LOG_ERROR("Can not open log file [%s].\n", path.c_str());
+		LOG_F(ERROR, "Can not open log file [%s].", path.c_str());
 		return -1;
 	}
 
@@ -988,7 +989,7 @@ int sample_get_lidar_train_log(std::string lidar_ip, std::string path) {
 		outfile << line.substr(pos, line.size() - pos) << std::endl;
 	}
 	outfile.close();
-	LOG_INFO("Save device [%s]`s train log file to [%s].\n", lidar_ip.c_str(), path.c_str());
+	LOG_F(INFO, "Save device [%s]`s train log file to [%s].", lidar_ip.c_str(), path.c_str());
 
 	return 0;
 }
@@ -1014,25 +1015,25 @@ int sample_get_lidar_log(std::string lidar_ip, std::string path, zvision::Device
 
 	if (ret)
 	{
-		LOG_ERROR("Get device [%s]`s log failed, ret = %d.\n", lidar_ip.c_str(), ret);
+		LOG_F(ERROR, "Get device [%s]`s log failed, ret = %d.", lidar_ip.c_str(), ret);
 		return -1;
 	}
 	else
 	{
-		LOG_INFO("Get device [%s]`s log ok.\n", lidar_ip.c_str());
+		LOG_F(INFO, "Get device [%s]`s log ok.", lidar_ip.c_str());
 	}
 
 	// open file
 	std::fstream outfile;
 	outfile.open(path, std::ios::out);
 	if (!outfile.is_open()) {
-		LOG_ERROR("Can not open log file [%s].\n", path.c_str());
+		LOG_F(ERROR, "Can not open log file [%s].", path.c_str());
 		return -1;
 	}
 	// save to file
 	outfile << context;
 	outfile.close();
-	LOG_INFO("Save device [%s]`s log file to [%s].\n", lidar_ip.c_str(), path.c_str());
+	LOG_F(INFO, "Save device [%s]`s log file to [%s].", lidar_ip.c_str(), path.c_str());
 
 	return 0;
 }
@@ -1049,19 +1050,19 @@ int sample_set_lidar_cover_file(std::string lidar_ip, std::string path, int itp 
 	zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
 	if (tp == zvision::DeviceType::LidarMl30SA1Plus || tp == zvision::DeviceType::LidarMl30SB1Plus)
 	{
-		LOG_ERROR("ML30S+ series lidar is not supported temporarily.\n");
+		LOG_F(ERROR, "ML30S+ series lidar is not supported temporarily.");
 		return -1;
 	}
 
 	ret = config.SetDevicePointFireEnConfiguration(path, tp);
 	if (ret)
 	{
-		LOG_ERROR("Set lidar [%s]'s cover file failed, return code %d.\n", lidar_ip.c_str(), ret);
+		LOG_F(ERROR, "Set lidar [%s]'s cover file failed, return code %d.", lidar_ip.c_str(), ret);
 		return -1;
 	}
 	else
 	{
-		LOG_INFO("Set lidar [%s]'s cover file ok.\n", lidar_ip.c_str());
+		LOG_F(INFO, "Set lidar [%s]'s cover file ok.", lidar_ip.c_str());
 	}
 
 	return 0;
@@ -1086,12 +1087,12 @@ int sample_adc_algo_param_update(std::string lidar_ip, std::string input_dir, bo
 	ret = config.QueryDeviceSnCode(serial_number);
 	if (ret)
 	{
-		LOG_ERROR("Query device [%s]'s serial number failed, ret = %d.\n", lidar_ip.c_str(), ret);
+		LOG_F(ERROR, "Query device [%s]'s serial number failed, ret = %d.", lidar_ip.c_str(), ret);
 		return ret;
 	}
 	else
 	{
-		LOG_INFO("Query device [%s]'s serial number[%s] ok.\n", lidar_ip.c_str(), serial_number.c_str());
+		LOG_F(INFO, "Query device [%s]'s serial number[%s] ok.", lidar_ip.c_str(), serial_number.c_str());
 	}
 
 	// 2. get local adc algorithm parameter filepaths
@@ -1110,14 +1111,14 @@ int sample_adc_algo_param_update(std::string lidar_ip, std::string input_dir, bo
 	getFileListInDir(file_dir, files_name);
 	if (files_name.size() == 0)
 	{
-		LOG_ERROR("Get device [%s]'s adc algorithm parameter files from[%s] failed.\n", lidar_ip.c_str(), file_dir.c_str());
+		LOG_F(ERROR, "Get device [%s]'s adc algorithm parameter files from[%s] failed.", lidar_ip.c_str(), file_dir.c_str());
 		return -1;
 	}
 
 	// 3. check files name
 	if (ret = checkAdcAlgoParamFilesName(files_name, serial_number, reset))
 	{
-		LOG_ERROR("Check device [%s]'s adc algorithm parameter files from[%s] failed.\n", lidar_ip.c_str(), file_dir.c_str());
+		LOG_F(ERROR, "Check device [%s]'s adc algorithm parameter files from[%s] failed.", lidar_ip.c_str(), file_dir.c_str());
 		return ret;
 	}
 
@@ -1129,21 +1130,21 @@ int sample_adc_algo_param_update(std::string lidar_ip, std::string input_dir, bo
 		ret = config.GetDeviceFlashConfiguration(flash_data, zvision::FlashParamType::ADC_Algo);
 		if (ret)
 		{
-			LOG_ERROR("Get device [%s]'s adc algorithm parameter data failed.\n", lidar_ip.c_str());
+			LOG_F(ERROR, "Get device [%s]'s adc algorithm parameter data failed.", lidar_ip.c_str());
 			return ret;
 		}
 		else
-			LOG_INFO("Get device [%s]'s adc algorithm parameter data ok.\n", lidar_ip.c_str());
+			LOG_F(INFO, "Get device [%s]'s adc algorithm parameter data ok.", lidar_ip.c_str());
 
 		//  4.2 regenerate new adc algorithm parameter flash data
 		ret = regenerateAdcAlgoParamFlashData(file_dir, files_name, flash_data);
 		if (ret)
 		{
-			LOG_ERROR("Regenerate device [%s]'s adc algorithm parameter data failed.\n", lidar_ip.c_str());
+			LOG_F(ERROR, "Regenerate device [%s]'s adc algorithm parameter data failed.", lidar_ip.c_str());
 			return ret;
 		}
 		else
-			LOG_INFO("Regenerate device [%s]'s adc algorithm parameter data ok.\n", lidar_ip.c_str());
+			LOG_F(INFO, "Regenerate device [%s]'s adc algorithm parameter data ok.", lidar_ip.c_str());
 
 		// 4.3 save adc algorithm parameter flash data to file
 		if (!output_dir.empty())
@@ -1156,9 +1157,9 @@ int sample_adc_algo_param_update(std::string lidar_ip, std::string input_dir, bo
 			file_path = file_path + "/" + serial_number + "_output.adc_all";
 			ret = saveAdcAlgoParamFlashDataToLocal(flash_data, file_path);
 			if (ret)
-				LOG_WARN("Save [%s]'s new adc algorithm parameter data to[%s] failed.\n", lidar_ip.c_str(), file_path.c_str());
+				LOG_F(WARNING, "Save [%s]'s new adc algorithm parameter data to[%s] failed.", lidar_ip.c_str(), file_path.c_str());
 			else
-				LOG_INFO("Save [%s]'s new adc algorithm parameter data to[%s] ok.\n", lidar_ip.c_str(), file_path.c_str());
+				LOG_F(INFO, "Save [%s]'s new adc algorithm parameter data to[%s] ok.", lidar_ip.c_str(), file_path.c_str());
 		}
 	}
 	else
@@ -1168,7 +1169,7 @@ int sample_adc_algo_param_update(std::string lidar_ip, std::string input_dir, bo
 		ret = readAdcDataFromFile(file_path, flash_data);
 		if (ret)
 		{
-			LOG_ERROR("Load device [%s]'s adc algorithm parameter file from[%s] failed.\n", lidar_ip.c_str(), file_path.c_str());
+			LOG_F(ERROR, "Load device [%s]'s adc algorithm parameter file from[%s] failed.", lidar_ip.c_str(), file_path.c_str());
 			return ret;
 		}
 	}
@@ -1177,21 +1178,21 @@ int sample_adc_algo_param_update(std::string lidar_ip, std::string input_dir, bo
 	ret = config.SetDeviceFlashConfiguration(flash_data, zvision::FlashParamType::ADC_Algo);
 	if (ret)
 	{
-		LOG_ERROR("Update device [%s]'s adc algorithm parameter data failed.\n", lidar_ip.c_str());
+		LOG_F(ERROR, "Update device [%s]'s adc algorithm parameter data failed.", lidar_ip.c_str());
 		return ret;
 	}
 	else
-		LOG_INFO("Update device [%s]'s adc algorithm parameter data ok.\n", lidar_ip.c_str());
+		LOG_F(INFO, "Update device [%s]'s adc algorithm parameter data ok.", lidar_ip.c_str());
 
 	//  6. reboot lidar
 	ret = config.RebootDevice();
 	if (ret)
 	{
-		LOG_ERROR("Reboot device [%s] failed, ret = %d.\n", lidar_ip.c_str(), ret);
+		LOG_F(ERROR, "Reboot device [%s] failed, ret = %d.", lidar_ip.c_str(), ret);
 		return ret;
 	}
 	else
-		LOG_INFO("Reboot device [%s] ok.\n", lidar_ip.c_str());
+		LOG_F(INFO, "Reboot device [%s] ok.", lidar_ip.c_str());
 
 	// 7. Log adc algorithm parameter  information.
 	std::stringstream ss;
@@ -1202,7 +1203,7 @@ int sample_adc_algo_param_update(std::string lidar_ip, std::string input_dir, bo
 	for (int i = 1; i < files_name.size(); ++i)
 		ss << "              " << files_name[i] << "\n";
 
-	LOG_INFO(ss.str().c_str());
+	LOG_F(INFO, ss.str().c_str());
 	return ret;
 }
 
@@ -1229,17 +1230,17 @@ int sample_get_adc_algo_param(std::string lidar_ip, std::string filepath)
 	ret = config.GetDeviceFlashConfiguration(flash_data, zvision::FlashParamType::ADC_Algo);
 	if (ret)
 	{
-		LOG_ERROR("Get device [%s]'s  adc algorithm parameter data failed.\n", lidar_ip.c_str());
+		LOG_F(ERROR, "Get device [%s]'s  adc algorithm parameter data failed.", lidar_ip.c_str());
 		return ret;
 	}
 
 	ret = saveAdcAlgoParamFlashDataToLocal(flash_data, filepath);
 	if (ret)
 	{
-		LOG_ERROR("Save [%s]'s adc algorithm parameter data to[%s] failed.\n", lidar_ip.c_str(), filepath.c_str());
+		LOG_F(ERROR, "Save [%s]'s adc algorithm parameter data to[%s] failed.", lidar_ip.c_str(), filepath.c_str());
 	}
 	else
-		LOG_INFO("Save [%s]'s adc algorithm parameter data to[%s] ok.\n", lidar_ip.c_str(), filepath.c_str());
+		LOG_F(INFO, "Save [%s]'s adc algorithm parameter data to[%s] ok.", lidar_ip.c_str(), filepath.c_str());
 
 	return ret;
 }
@@ -1251,9 +1252,9 @@ int sample_config_lidar_layer_detection(std::string lidar_ip, bool en)
 	zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
 	ret = config.SetDeviceLayerDetectionEnable(en);
 	if (ret)
-		LOG_ERROR("Set device [%s]'s layer detection enable to [%d] failed, ret = %d.\n", lidar_ip.c_str(), en, ret);
+		LOG_F(ERROR, "Set device [%s]'s layer detection enable to [%d] failed, ret = %d.", lidar_ip.c_str(), en, ret);
 	else
-		LOG_INFO("Set device [%s]'s layer detection enable to [%d] ok.\n", lidar_ip.c_str(), en);
+		LOG_F(INFO, "Set device [%s]'s layer detection enable to [%d] ok.", lidar_ip.c_str(), en);
 	return ret;
 }
 
@@ -1264,12 +1265,25 @@ int sample_config_lidar_pl_delete_near_point_level(std::string lidar_ip, int mod
 	zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
 	ret = config.SetDeviceDeleteNearPointLevel(mode);
 	if (ret)
-		LOG_ERROR("Set device [%s]'s delete near point level to [%d] failed, ret = %d.\n", lidar_ip.c_str(), mode, ret);
+		LOG_F(ERROR, "Set device [%s]'s delete near point level to [%d] failed, ret = %d.", lidar_ip.c_str(), mode, ret);
 	else
-		LOG_INFO("Set device [%s]'s delete near point level to [%d] ok.\n", lidar_ip.c_str(), mode);
+		LOG_F(INFO, "Set device [%s]'s delete near point level to [%d] ok.", lidar_ip.c_str(), mode);
 	return ret;
 }
 
+void init_log(int argc, char* argv[])
+{
+	loguru::init();
+	loguru::add_file("Log/log.txt", loguru::Truncate, loguru::Verbosity_INFO);
+	loguru::g_stderr_verbosity = 4;
+	loguru::g_preamble_date = 1;
+	loguru::g_preamble_time = 1;
+	loguru::g_preamble_uptime = 1;
+	loguru::g_preamble_thread = 1;
+	loguru::g_preamble_file = 1;
+	loguru::g_preamble_verbose = 1;
+	loguru::g_preamble_pipe = 1;
+}
 
 int main(int argc, char** argv)
 {
@@ -1554,6 +1568,10 @@ int main(int argc, char** argv)
         return 0;
     }
 
+	init_log(argc, argv);
+
+	zvision::set_ml30splus_b1_ep_mode_enable(false);
+
 	std::string opt = std::string(argv[1]);
 	zvision::DeviceType tp = zvision::DeviceType::LidarUnknown;
 	std::string appname = "";
@@ -1793,7 +1811,7 @@ int main(int argc, char** argv)
 
     else
     {
-        LOG_ERROR("Invalid parameters\n.");
+        LOG_F(ERROR, "Invalid parameters.");
         return zvision::InvalidParameter;
     }
 

@@ -231,7 +231,7 @@ int sample_get_lidar_calibration(std::string lidar_ip, std::string savefilename)
 //Sample code 12 : Firmware update.
 int sample_firmware_update(std::string lidar_ip, std::string filename)
 {
-    zvision::LidarTools config(lidar_ip, 25000, 25000, 25000);
+    zvision::LidarTools config(lidar_ip, 5000, 5000, 5000);
 	int	ret = config.ML30sPlusB1FirmwareUpdate(filename, print_current_progress_multi, false);
     if (ret)
         LOG_F(ERROR, "Update device [%s]'s firmware %s failed, ret = %d.", lidar_ip.c_str(), filename.c_str(), ret);
@@ -743,7 +743,7 @@ int main(int argc, char** argv)
     {
         std::cout << "############################# USER GUIDE ################################\n\n"
 
-			<< "Note: Only For ML30S+ B1 Device!\n\n"
+			<< "Note: Only For ML30S+ B1 EP1(40ms) Device!\n\n"
 
             << "Sample 1 : config mac address\n"
             << "Format: -config_mac lidar_ip mac_address\n"
@@ -911,7 +911,7 @@ int main(int argc, char** argv)
 
 	init_log(argc, argv);
 
-	zvision::set_ml30splus_b1_ep_mode_enable(false);
+	zvision::set_ml30splus_b1_ep_mode_enable(true);
 
 	std::string opt = std::string(argv[1]);
 	std::string appname = "";

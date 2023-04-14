@@ -26,9 +26,11 @@
 
 namespace zvision
 {
+    // For ML30S+B1 EP(40ms) device
+    static bool g_zvision_ml30splus_b1_ep_mode = false;
 
     std::string get_sdk_version_string() {
-        std::string ver = "v0.1.12";
+        std::string ver = "v0.1.13";
         return ver;
     }
 
@@ -539,5 +541,16 @@ namespace zvision
         std::string tag = std::string("zvision-lidar-mark-tag") + str_x;
         return tag;
     }
+
+    void set_ml30splus_b1_ep_mode_enable(bool en) 
+    {
+        g_zvision_ml30splus_b1_ep_mode = en;
+    }
+
+    bool is_ml30splus_b1_ep_mode_enable()
+    {
+        return g_zvision_ml30splus_b1_ep_mode;
+    }
+
 } // end namespace zvision
 

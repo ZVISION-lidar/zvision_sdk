@@ -173,6 +173,70 @@ namespace zvision
         return ((flag == 0xAAAA) || (flag == 0xBBBB) || (flag == 0xCCCC));
     }
 
+    bool PointCloudPacket::IsPtpMode(std::string& packet)
+    {
+        uint8_t* pdata = (uint8_t*) packet.c_str();
+        int stat = (( (*(pdata + 2)) & 0x30) >> 4);
+        return stat & 0x2;
+    }
+
+    double PointCloudPacket::GetPacketSendInterval(ScanMode mode)
+    {
+        double ret = 0;
+        switch (mode)
+        {
+        case zvision::ScanML30B1_100:
+            break;
+        case zvision::ScanML30SA1_160:
+            ret = 250;
+            break;
+        case zvision::ScanML30SA1_160_1_2:
+            ret = 250*2;
+            break;
+        case zvision::ScanML30SA1_160_1_4:
+            ret = 250*4;
+            break;
+        case zvision::ScanML30SA1_190:
+            break;
+        case zvision::ScanML30SA1Plus_160:
+            if (zvision::is_ml30splus_b1_ep_mode_enable())
+                ret = 250;
+            else
+                ret = 562.5;
+            break;
+        case zvision::ScanML30SA1Plus_160_1_2:
+            if (zvision::is_ml30splus_b1_ep_mode_enable())
+                ret = 250*2;
+            else
+                ret = 562.5*2;
+            break;
+        case zvision::ScanML30SA1Plus_160_1_4:
+            if (zvision::is_ml30splus_b1_ep_mode_enable())
+                ret = 250*4;
+            else
+                ret = 562.5*4;
+            break;
+        case zvision::ScanMLX_160:
+            break;
+        case zvision::ScanMLX_190:
+            break;
+        case zvision::ScanMLXS_180:
+            ret = 200;
+            break;
+        case zvision::ScanMLYA_190:
+            break;
+        case zvision::ScanMLYB_190:
+            break;
+        case zvision::ScanUnknown:
+            break;
+        default:
+            break;
+        }
+
+        ret = ret * 1e-6;
+        return ret;
+    }
+
     DeviceType PointCloudPacket::GetDeviceType(std::string& packet)
     {
         if (packet.size() != POINT_CLOUD_UDP_LEN)
@@ -419,14 +483,14 @@ namespace zvision
 
         //find lidar type
         ScanMode scan_mode = PointCloudPacket::GetScanMode(packet);
-        cloud.scan_mode = scan_mode;
-        //type = DeviceType::LidarMLYB;
 
         if (scan_mode != cal_lut.scan_mode)
         {
             //std::cout << "Scan mode is " << scan_mode << " calibration mode is " << cal_lut.scan_mode << std::endl;
             return NotMatched;
         }
+
+        cloud.scan_mode = scan_mode;
 
         //device is unknown or device type and calibration data are not matched
         if (scan_mode == ScanUnknown)
@@ -527,12 +591,12 @@ namespace zvision
             else if (ScanML30SA1_160_1_2 == scan_mode)
             {
                 fires = 51200 / 2;
-                fire_interval_us = 1.5625 / 2.0 / 2.0; // 0.000000390625
+                fire_interval_us = 1.5625;
             }
             else if (ScanML30SA1_160_1_4 == scan_mode)
             {
                 fires = 51200 / 4;
-                fire_interval_us = 1.5625 / 2.0; // not smooth
+                fire_interval_us = 1.5625 * 2;  // not smooth
             }
             else // 190 lines
             {
@@ -647,63 +711,69 @@ namespace zvision
 			else if (ScanML30SA1Plus_160_1_2 == scan_mode)
 			{
 				fires = 51200 / 2;
-				fire_interval_us = 1.5625 / 2.0 / 2.0;
+				fire_interval_us = 1.5625;
 			}
 			else if (ScanML30SA1Plus_160_1_4 == scan_mode)
 			{
 				fires = 51200 / 4;
-				fire_interval_us = 1.5625 / 2.0;
+				fire_interval_us = 1.5625 * 2.0;
 			}
 
 			if (1 == echo_cnt)
 			{
-#ifdef ZVISION_ML30sPlus_b1_ep_mode
-                groups_in_one_udp = 40;
-                points_in_one_group = 8;
-                point_position_in_group = 0;
-                group_len = 32;
-                fov_index = fov_index_ml30sa1_plus_ep_single_echo;
-                fire_index = fire_index_ml30sa1_plus_ep_single_echo;
-                number_index = number_index_ml30sa1_plus_ep_single_echo;
-#else
-				groups_in_one_udp = 80;
-				points_in_one_group = 4;
-				point_position_in_group = 0;
-				group_len = 16;
-				int udp_cnt = fires / points_in_one_group / groups_in_one_udp;
-				if (seq < udp_cnt / 2)
-					fov_index = fov_index_ml30sa1_plus_H_single_echo;
-				else
-					fov_index = fov_index_ml30sa1_plus_L_single_echo;
+                if (zvision::is_ml30splus_b1_ep_mode_enable())
+                {
+                    groups_in_one_udp = 40;
+                    points_in_one_group = 8;
+                    point_position_in_group = 0;
+                    group_len = 32;
+                    fov_index = fov_index_ml30sa1_plus_ep_single_echo;
+                    fire_index = fire_index_ml30sa1_plus_ep_single_echo;
+                    number_index = number_index_ml30sa1_plus_ep_single_echo;
+                }
+                else
+                {
+                    groups_in_one_udp = 80;
+				    points_in_one_group = 4;
+				    point_position_in_group = 0;
+				    group_len = 16;
+				    int udp_cnt = fires / points_in_one_group / groups_in_one_udp;
+				    if (seq < udp_cnt / 2)
+					    fov_index = fov_index_ml30sa1_plus_H_single_echo;
+				    else
+					    fov_index = fov_index_ml30sa1_plus_L_single_echo;
 
-				fire_index = fire_index_ml30sa1_plus_single_echo;
-				number_index = number_index_ml30sa1_plus_single_echo;
-#endif
+				    fire_index = fire_index_ml30sa1_plus_single_echo;
+				    number_index = number_index_ml30sa1_plus_single_echo;
+                }
 			}
 			else
 			{
-#ifdef ZVISION_ML30sPlus_b1_ep_mode
-                groups_in_one_udp = 20;
-                points_in_one_group = 16;
-                point_position_in_group = 0;
-                group_len = 64;
-                fov_index = fov_index_ml30sa1_plus_ep_dual_echo;
-                fire_index = fire_index_ml30sa1_plus_ep_dual_echo;
-                number_index = number_index_ml30sa1_plus_ep_dual_echo;
-#else
-				groups_in_one_udp = 40;
-				points_in_one_group = 8;
-				point_position_in_group = 0;
-				group_len = 32;
-				int udp_cnt = fires / points_in_one_group / groups_in_one_udp * 2;
-				if (seq < udp_cnt / 2)
-					fov_index = fov_index_ml30sa1_plus_H_dual_echo;
-				else
-					fov_index = fov_index_ml30sa1_plus_L_dual_echo;
+                if (zvision::is_ml30splus_b1_ep_mode_enable())
+                {
+                    groups_in_one_udp = 20;
+                    points_in_one_group = 16;
+                    point_position_in_group = 0;
+                    group_len = 64;
+                    fov_index = fov_index_ml30sa1_plus_ep_dual_echo;
+                    fire_index = fire_index_ml30sa1_plus_ep_dual_echo;
+                    number_index = number_index_ml30sa1_plus_ep_dual_echo;
+                }
+                else 
+                {
+                    groups_in_one_udp = 40;
+				    points_in_one_group = 8;
+				    point_position_in_group = 0;
+				    group_len = 32;
+				    int udp_cnt = fires / points_in_one_group / groups_in_one_udp * 2;
+				    if (seq < udp_cnt / 2)
+					    fov_index = fov_index_ml30sa1_plus_H_dual_echo;
+				    else
+					    fov_index = fov_index_ml30sa1_plus_L_dual_echo;
 
-				fire_index = fire_index_ml30sa1_plus_dual_echo;
-				number_index = number_index_ml30sa1_plus_dual_echo;
-#endif
+				    fire_index = fire_index_ml30sa1_plus_dual_echo;
+				    number_index = number_index_ml30sa1_plus_dual_echo;
+                }
 			}
 		}
         else
@@ -717,6 +787,8 @@ namespace zvision
         if (points != (int)cloud.points.size())
         {
             cloud.points.resize(points);
+            cloud.is_ptp_mode = PointCloudPacket::IsPtpMode(packet);
+            cloud.timestamp = PointCloudPacket::GetTimestamp(packet) - 1.0 * seq * PointCloudPacket::GetPacketSendInterval(scan_mode);
         }
 
         // downsample
@@ -883,7 +955,7 @@ namespace zvision
         switch (value)
         {
         case 0x1111:
-            mode = ScanML30SA1_160;
+            mode = ScanML30SA1Plus_160;
             break;
         case 0x2222:
             mode = ScanMLXS_180;
@@ -892,7 +964,7 @@ namespace zvision
             break;
         }
 
-        value = (*(data + 22) << 8) | *(data + 23);
+        value = (*(data + 8) << 8) | *(data + 9);
         switch (value)
         {
         case 0xAAAA:
@@ -956,13 +1028,13 @@ namespace zvision
             return -1;
 
         uint8_t* data = (unsigned char*)(packet.data());
-        return (*(data + 24) << 8) | *(data + 25);
+        return (*(data + 10) << 8) | *(data + 11);
     }
 
     double InternalPacket::GetTimestamp(const std::string& packet)
     {
         int len = packet.size();
-        const int chk_sum_len = 2;
+        const int chk_sum_len = 4;
         const int reserved_len = 2;
         const int stamp_len = 10;
         int stamp_offset = len - reserved_len - chk_sum_len - stamp_len;
@@ -981,7 +1053,7 @@ namespace zvision
         return (double)seconds + (double)ms / 1000.0 + (double)us / 1000000.0;
     }
 
-    uint64_t InternalPacket::GetTimestampNS(const std::string& packet)
+    void InternalPacket::GetTimestampNS(const std::string& packet, uint64_t& s, uint32_t& ms, uint32_t& us)
     {
         int len = packet.size();
         const int chk_sum_len = 2;
@@ -998,9 +1070,9 @@ namespace zvision
         seconds += ((uint64_t)data[stamp_offset + 4] << 8);
         seconds += ((uint64_t)data[stamp_offset + 5]);
 
-        uint32_t ms = (int)(data[stamp_offset + 6] << 8) + data[stamp_offset + 7];
-        uint32_t us = (int)(data[stamp_offset + 8] << 8) + data[stamp_offset + 9];
-        return (uint64_t)(seconds * 1000000000) + (uint64_t)(ms * 1000000) + (uint64_t)(us * 1000);
+        s = seconds;
+        ms = (int)(data[stamp_offset + 6] << 8) + data[stamp_offset + 7];
+        us = (int)(data[stamp_offset + 8] << 8) + data[stamp_offset + 9];
     }
 
     bool InternalPacket::GetFrameResolveInfo(const std::string& packet, InternalPacketHeader& header)
@@ -1116,7 +1188,7 @@ namespace zvision
         {
         case Tp_BloomingPacket:
         {
-            info.point_size = 12;
+            info.point_size = 16; // 16 12
             break;
         }
 
@@ -1124,13 +1196,11 @@ namespace zvision
             return false;
         }
 
-
-
         header.valid = true;
         return true;
     }
 
-    int BloomingPacket::ProcessPacket(const std::string& packet, const zvision::CalibrationDataSinCosTable& cal_lut, BloomingPoints& cloud, InternalPacketHeader* header)
+    int BloomingPacket::ProcessPacket(const std::string& packet, const zvision::CalibrationDataSinCosTable& cal_lut, BloomingFrame& frame, InternalPacketHeader* header)
     {
         int ret = -1;
         InternalPacketHeader header_;
@@ -1146,8 +1216,17 @@ namespace zvision
             return ret;
 
         const auto& info = header_.resolve_info;
-        if (cloud.size() < info.npoints)
-            cloud.resize(info.npoints);
+        // initial frame
+        if (frame.points.size() < info.npoints) 
+        {
+            frame.points.resize(info.npoints);
+            // get frame timestamp
+            double timestamp = BloomingPacket::GetTimestamp(packet);
+            uint32_t delta_us = BloomingPacket::DELTA_PACKRT_US * header_.seq;
+            timestamp = timestamp - (double)delta_us * 1e-6;
+            frame.timestamp = timestamp;
+        }
+            
 
         // resolve
         uint8_t* pdata = (uint8_t*)packet.c_str() + PACKET_HEADER_LEN;
@@ -1162,7 +1241,16 @@ namespace zvision
 
                 BloomingPoint point;
                 // get point descrption
-                point.fov_id = info.fov_id_in_group.at(p);
+                if (header_.scan_mode == ScanML30SA1Plus_160)
+                {
+                    if (point_id < (info.npoints / 2))
+                        point.fov_id = info.fov_id_in_group.at(p);
+                    else
+                        point.fov_id = info.fov_id_in_group.at(p + (info.fov_id_in_group.size() / 2));
+                }
+                else
+                    point.fov_id = info.fov_id_in_group.at(p);
+
                 point.group_id = group_id;
                 point.fire_id = fire_id;
                 point.point_id = point_id;
@@ -1171,24 +1259,44 @@ namespace zvision
                 // get point data
                 uint8_t* point_ptr = pdata + pos;
                 point.peak = *point_ptr;
-                point.pulse_width = static_cast<float>(*(point_ptr + 1)) + static_cast<float>(*(point_ptr + 2)) / 256.0f;
+                point.pulse_width = static_cast<float>(*(point_ptr + 2)) + static_cast<float>(*(point_ptr + 1)) / 256.0f;
+                point.pulse_width_ori = (*(point_ptr + 2)) << 8 | (*(point_ptr + 1));
                 point.gain = *(point_ptr + 3);
-                uint32_t d19_r13 = (*(point_ptr + 4) << 24) + (*(point_ptr + 5) << 16) + (*(point_ptr + 6) << 8) + (*(point_ptr + 7));
-                point.distance = DISTANCE_UNITS * static_cast<int>(d19_r13 >> (32 - DISTANCE_BITS));
-                point.reserved = (d19_r13 & 0x1F00) >> 8;
-                point.reflectivity = d19_r13 & 0xFF;
+                
+                uint32_t* d19_r13 = (uint32_t*)(point_ptr + 4);
+                point.distance = DISTANCE_UNITS * static_cast<int>(*d19_r13 >> (32 - DISTANCE_BITS));
+                point.reserved = (*d19_r13 & 0x1F00) >> 8;
+                point.reflectivity = *d19_r13 & 0xFF;
+                point.reflectivity_13bits = *d19_r13 & 0x1FFF;
                 point.noisy = static_cast<float>(*(point_ptr + 9)) + static_cast<float>(*(point_ptr + 8)) / 256.0f;
-                point.noisy = static_cast<float>(*(point_ptr + 11)) + static_cast<float>(*(point_ptr + 10)) / 256.0f;
+                point.noisy_ori = (*(point_ptr + 9)) << 8 | (*(point_ptr + 8));
+                point.direct_current = static_cast<float>(*(point_ptr + 11)) + static_cast<float>(*(point_ptr + 10)) / 256.0f;
+                point.direct_current_ori = (*(point_ptr + 11)) << 8 | (*(point_ptr + 10));
+                
+                uint32_t* reserved_ftof = (uint32_t*) (point_ptr + 12);
+                point.ftof = (*reserved_ftof) & 0xFFF;
+                point.ftof_max = (*reserved_ftof >> 12) & 0xFF;
+
 
                 point.x = point.distance * cal_lut.data.at(fire_id).cos_ele * cal_lut.data.at(fire_id).sin_azi;
                 point.y = point.distance * cal_lut.data.at(fire_id).cos_ele * cal_lut.data.at(fire_id).cos_azi;
                 point.z = point.distance * cal_lut.data.at(fire_id).sin_ele;
                 point.valid = true;
-                cloud.at(point_id) = point;
+                frame.points.at(point_id) = point;
             }
         }
 
         return 0;
     }
 
+    bool BloomingPacket::IsValidPacket(const std::string& packet)
+    {
+        if (packet.size() != PACKET_LEN)
+            return false;
+
+        uint8_t* pdata = (uint8_t*)(packet.data());
+        bool ret = ( * (pdata + 8) == 0xAA ) && (*(pdata + 9) == 0x01);
+        ret = ret || (*(pdata + 8) == 0xCC) && (*(pdata + 9) == 0x01);
+        return ret;
+    }
 }

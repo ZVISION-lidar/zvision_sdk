@@ -25,6 +25,7 @@
 #include "packet.h"
 #include "lidar_tools.h"
 #include "print.h"
+#include "loguru.hpp"
 
 #include <rapidjson/document.h>
 
@@ -67,12 +68,12 @@ namespace zvision
         int ret = 0;
         lidars.clear();
 
-        LOG_DEBUG("\nScan device on the heart beat port %d for %d second(s).\n", heart_beat_port, scan_time);
+        LOG_F(2, "\nScan device on the heart beat port %d for %d second(s).", heart_beat_port, scan_time);
         while (1)
         {
             if (0 != (ret = recv.SyncRecv(data, len, ip)))
             {
-                LOG_ERROR("Scan device error, receive failed ret = %d.\n", ret);
+                LOG_F(ERROR, "Scan device error, receive failed ret = %d.", ret);
                 break;
             }
 
@@ -109,7 +110,7 @@ namespace zvision
             DeviceConfigurationInfo info;
             if (0 != (ret = config.QueryDeviceConfigurationInfo(info)))
             {
-                LOG_ERROR("Scan device error, query device info failed, ret = %d.\n", ret);
+                LOG_F(ERROR, "Scan device error, query device info failed, ret = %d.", ret);
                 break;
             }
             device_list.push_back(info);
@@ -128,7 +129,7 @@ namespace zvision
             DeviceConfigurationInfo info;
             if (0 != (ret = config.QueryML30sPlusB1DeviceConfigurationInfo(info)))
             {
-                LOG_ERROR("Scan device error, query device info failed, ret = %d.\n", ret);
+                LOG_F(ERROR, "Scan device error, query device info failed, ret = %d.", ret);
                 break;
             }
             device_list.push_back(info);
@@ -328,22 +329,25 @@ namespace zvision
 						break;
 					}
 
-#ifdef ZVISION_ML30sPlus_b1_ep_mode
-                    // for line with fov 0,1,2,3,4,5,6,7
-                    for (int j = 1; j < column; j++)
+                    if (zvision::is_ml30splus_b1_ep_mode_enable())
                     {
-                        cal.data[i * 16 + j - 1] = static_cast<float>(std::atof(datas[j].c_str()));
+                        // for line with fov 0,1,2,3,4,5,6,7
+                        for (int j = 1; j < column; j++)
+                        {
+                            cal.data[i * 16 + j - 1] = static_cast<float>(std::atof(datas[j].c_str()));
+                        }
                     }
-#else
-					// for line with fov 0,1,2,3,4,5,6,7
-					for (int j = 1; j < column; j++)
-					{
-						if (j <= column / 2) // for H view
-							cal.data[i * 8 + j - 1] = static_cast<float>(std::atof(datas[j].c_str()));
-						else // for L view
-							cal.data[i * 8 + j - 1 - column / 2 + lpos] = static_cast<float>(std::atof(datas[j].c_str()));
-					}
-#endif
+                    else
+                    {
+                    	// for line with fov 0,1,2,3,4,5,6,7
+					    for (int j = 1; j < column; j++)
+					    {
+						    if (j <= column / 2) // for H view
+							    cal.data[i * 8 + j - 1] = static_cast<float>(std::atof(datas[j].c_str()));
+						    else // for L view
+							    cal.data[i * 8 + j - 1 - column / 2 + lpos] = static_cast<float>(std::atof(datas[j].c_str()));
+					    }
+                    }
 				}
 
 				for (int i = 0; i < curr; i++)
@@ -610,19 +614,21 @@ namespace zvision
                         outfile << i / data_in_line + 1;
                     }
 
-#ifdef ZVISION_ML30sPlus_b1_ep_mode
-                    outfile << " " << cal.data[i];
-#else
-                    int idx = i % 16;
-                    int grp = i / 16;
-                    if (idx < 8) {
-                        outfile << " " << cal.data[idx + grp * 8];
+                    if (zvision::is_ml30splus_b1_ep_mode_enable())
+                    {
+                        outfile << " " << cal.data[i];
                     }
-                    else {
-                        outfile << " " << cal.data[(idx - 8) + grp * 8 + lpos];
+                    else
+                    {
+                        int idx = i % 16;
+                        int grp = i / 16;
+                        if (idx < 8) {
+                            outfile << " " << cal.data[idx + grp * 8];
+                        }
+                        else {
+                            outfile << " " << cal.data[(idx - 8) + grp * 8 + lpos];
+                        }
                     }
-#endif
-
                 }
                 outfile.close();
                 return 0;
@@ -896,7 +902,7 @@ namespace zvision
 
 	int LidarTools::QueryDeviceHdcpNetAddr(std::string& addrs) {
 		if (!CheckConnection())
-			return -1;
+			return TcpConnTimeout;
 
 		/*Read device mac info*/
 		const int send_len = 4;
@@ -906,7 +912,7 @@ namespace zvision
 		if (client_->SyncSend(cmd, send_len))
 		{
 			DisConnect();
-			return -1;
+			return TcpSendTimeout;
 		}
 
 		const int recv_len = 20;
@@ -914,14 +920,14 @@ namespace zvision
 		if (client_->SyncRecv(recv, 4))
 		{
 			DisConnect();
-			return -1;
+			return TcpRecvTimeout;
 		}
 
 		// check
 		if (!CheckDeviceRet(recv))
 		{
 			DisConnect();
-			return -1;
+			return DevAckError;
 		}
 
 		// Assuming read failure while len bigger than 16.
@@ -930,13 +936,13 @@ namespace zvision
 			// clear receive buffer
 			std::string temp(len, 'x');
 			client_->SyncRecv(temp, len);
-			return -1;
+			return TcpRecvTimeout;
 		}
 
 		if (client_->SyncRecv(recv, 16))
 		{
 			DisConnect();
-			return -1;
+			return TcpRecvTimeout;
 		}
 
 		addrs = recv.substr(0,16);
@@ -947,7 +953,7 @@ namespace zvision
 	int LidarTools::QueryDeviceFactoryMac(std::string& mac) {
 
 		if (!CheckConnection())
-			return -1;
+			return TcpConnTimeout;
 
 		/*Read device mac info*/
 		const int send_len = 4;
@@ -957,7 +963,7 @@ namespace zvision
 		if (client_->SyncSend(cmd, send_len))
 		{
 			DisConnect();
-			return -1;
+			return TcpSendTimeout;
 		}
 
 		const int recv_len = 8;
@@ -965,14 +971,14 @@ namespace zvision
 		if (client_->SyncRecv(recv, 4))
 		{
 			DisConnect();
-			return -1;
+			return TcpRecvTimeout;
 		}
 
 		// check
 		if (!CheckDeviceRet(recv))
 		{
 			DisConnect();
-			return -1;
+			return DevAckError;
 		}
 
 		// Assuming read failure while length is not 8.
@@ -981,18 +987,18 @@ namespace zvision
 			// clear receive buffer
 			std::string temp(len, 'x');
 			client_->SyncRecv(temp, len);
-			return -1;
+			return TcpRecvTimeout;
 		}
 
 		if (client_->SyncRecv(recv, 8))
 		{
 			DisConnect();
-			return -1;
+			return TcpRecvTimeout;
 		}
 
 		std::string flag = recv.substr(0,2);
 		if (flag.compare("MA") != 0) {
-			return -1;
+			return NotMatched;
 		}
 
 		std::string addr = recv.substr(2,6);
@@ -1008,7 +1014,7 @@ namespace zvision
     int LidarTools::QueryDeviceSnCode(std::string& sn)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         /*Read version info*/
         const int send_len = 4;
@@ -1018,7 +1024,7 @@ namespace zvision
         if (client_->SyncSend(cmd, send_len))
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
 		const int recv_len = 21;
@@ -1026,19 +1032,19 @@ namespace zvision
         if (client_->SyncRecv(recv, 4))
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
 		if (client_->SyncRecv(recv, 17))
 		{
 			DisConnect();
-			return -1;
+			return TcpRecvTimeout;
 		}
 
 		{
@@ -1063,7 +1069,7 @@ namespace zvision
     int LidarTools::QueryDeviceFirmwareVersion(FirmwareVersion& version)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         /*Read version info*/
         const int send_len = 4;
@@ -1076,25 +1082,25 @@ namespace zvision
         if (client_->SyncSend(bv_cmd, send_len))//send cmd
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, recv_len))//recv ret
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))//check ret
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         if (client_->SyncRecv(recv, recv_len))//recv version data
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         memcpy(&(version.boot_version), recv.c_str(), 4);
@@ -1105,25 +1111,25 @@ namespace zvision
         if (client_->SyncSend(kv_cmd, send_len))
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, recv_len))
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         if (client_->SyncRecv(recv, recv_len))//recv version data
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         memcpy(&(version.kernel_version), recv.c_str(), 4);
@@ -1135,7 +1141,7 @@ namespace zvision
     int LidarTools::QueryDeviceTemperature(float& PS, float& PL)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         /*Read temperature info*/
         const int send_len = 4;
@@ -1148,19 +1154,19 @@ namespace zvision
         if (client_->SyncSend(cmd, send_len))//send cmd
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, recv_len))//recv ret
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))//check ret
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         NetworkToHost((const unsigned char*)recv.c_str() + 4, (char*)&PS);
@@ -1173,7 +1179,7 @@ namespace zvision
     int LidarTools::QueryDeviceConfigurationInfo(DeviceConfigurationInfo& info)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         /*Read configuration info*/
         const int send_len = 4;
@@ -1186,25 +1192,25 @@ namespace zvision
         if (client_->SyncSend(cmd, send_len))//send cmd
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, 4))//recv ret
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))//check ret
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         if (client_->SyncRecv(recv, 106))//recv configuration data
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         unsigned char* header = (unsigned char*)recv.c_str();
@@ -1392,7 +1398,7 @@ namespace zvision
         memset(info.backup_version.kernel_version, 0, 4);
         if (0 != QueryDeviceBackupFirmwareVersion(info.backup_version))
         {
-            LOG_ERROR("Query backup firmware version error.\n");
+            LOG_F(ERROR, "Query backup firmware version error.");
         }
 
 		// get device factory mac
@@ -1425,7 +1431,7 @@ namespace zvision
 
 	int LidarTools::QueryDeviceAlgoParam(DeviceAlgoParam& param) {
 		if (!CheckConnection())
-			return -1;
+			return TcpConnTimeout;
 
 		/*Read configuration info*/
 		const int send_len = 4;
@@ -1438,19 +1444,19 @@ namespace zvision
 		if (client_->SyncSend(cmd, send_len))//send cmd
 		{
 			DisConnect();
-			return -1;
+			return TcpSendTimeout;
 		}
 
 		if (client_->SyncRecv(recv, 4))//recv ret
 		{
 			DisConnect();
-			return -1;
+			return TcpRecvTimeout;
 		}
 
 		if (!CheckDeviceRet(recv))//check ret
 		{
 			DisConnect();
-			return -1;
+			return DevAckError;
 		}
 
 		// check whether algo param is valid
@@ -1458,13 +1464,13 @@ namespace zvision
 		if (len != 100) {
 			std::string temp(len, 'x');
 			client_->SyncRecv(temp, len);
-			return -1;
+			return TcpRecvTimeout;
 		}
 
 		if (client_->SyncRecv(recv, 100))//recv configuration data
 		{
 			DisConnect();
-			return -1;
+			return TcpRecvTimeout;
 		}
 
 		unsigned char* header = (unsigned char*)recv.c_str();
@@ -1594,7 +1600,7 @@ namespace zvision
         else
         {
             DisConnect();
-            return -1;// not support
+            return NotSupport;// not support
         }
 
         pkts.push_back(cal_recv);
@@ -1604,7 +1610,7 @@ namespace zvision
             int ret = client_->SyncRecv(cal_recv, cal_pkt_len);
             if (ret)
             {
-                LOG_ERROR("Receive calibration data error, ret = %d.\n", ret);
+                LOG_F(ERROR, "Receive calibration data error, ret = %d.", ret);
                 DisConnect();
                 return TcpRecvTimeout;
             }
@@ -1692,26 +1698,27 @@ namespace zvision
 
         }
 
-#ifndef ZVISION_ML30sPlus_b1_ep_mode
-		// now we reorder the cali data   0~15... -> 0~7... + 8~15...
-		if (ScanML30SA1Plus_160 == sm || ScanML30SA1Plus_160_1_2 == sm || ScanML30SA1Plus_160_1_4 == sm) {
-			std::vector<float> dst;
-			dst.resize(cal.data.size(),.0f);
-			int id_h = 0;
-			int id_l = cal.data.size() / 2;
-			for (int i = 0; i < cal.data.size(); i++) {
-				if (i / 8 % 2 == 0) {
-					dst.at(id_h) = cal.data[i];
-					id_h++;
-				}
-				else {
-					dst.at(id_l) = cal.data[i];
-					id_l++;
-				}
-			}
-			cal.data = dst;
-		}
-#endif
+        if (!zvision::is_ml30splus_b1_ep_mode_enable())
+        {
+            // now we reorder the cali data   0~15... -> 0~7... + 8~15...
+		    if (ScanML30SA1Plus_160 == sm || ScanML30SA1Plus_160_1_2 == sm || ScanML30SA1Plus_160_1_4 == sm) {
+			    std::vector<float> dst;
+			    dst.resize(cal.data.size(),.0f);
+			    int id_h = 0;
+			    int id_l = cal.data.size() / 2;
+			    for (int i = 0; i < cal.data.size(); i++) {
+				    if (i / 8 % 2 == 0) {
+					    dst.at(id_h) = cal.data[i];
+					    id_h++;
+				    }
+				    else {
+					    dst.at(id_l) = cal.data[i];
+					    id_l++;
+				    }
+			    }
+			    cal.data = dst;
+		    }
+        }
 
         cal.scan_mode = sm;
         return 0;
@@ -1749,31 +1756,32 @@ namespace zvision
 
 		// only support for ml30sa1
 		if (cal.scan_mode != ScanML30SA1_160 && cal.scan_mode != ScanML30SA1Plus_160)
-			return -1;
+			return NotSupport;
 
-#ifndef ZVISION_ML30sPlus_b1_ep_mode
-        // we need trans cali data
-        if (cal.scan_mode == ScanML30SA1Plus_160) {
-            int lpos = cal.data.size() / 2;
-            std::vector<float> cal_tmp;
-            std::vector<float> cal_fov0_3 = std::vector<float>{ std::begin(cal.data), std::begin(cal.data) + lpos };
-            std::vector<float> cal_fov4_7 = std::vector<float>{ std::begin(cal.data) + lpos, std::begin(cal.data) + cal.data.size() };
-            int groups = cal.data.size() / 16;
-            for (int g = 0; g < groups;g++) {
-                float val = .0f;
-                for (int col = 0; col < 16;col++) {
-                    int id = g * 16 + col;
-                    if (col < 8) {
-                        val = cal_fov0_3.at(g*8 +col);
+        if (!zvision::is_ml30splus_b1_ep_mode_enable())
+        {
+            // we need trans cali data
+            if (cal.scan_mode == ScanML30SA1Plus_160) {
+                int lpos = cal.data.size() / 2;
+                std::vector<float> cal_tmp;
+                std::vector<float> cal_fov0_3 = std::vector<float>{ std::begin(cal.data), std::begin(cal.data) + lpos };
+                std::vector<float> cal_fov4_7 = std::vector<float>{ std::begin(cal.data) + lpos, std::begin(cal.data) + cal.data.size() };
+                int groups = cal.data.size() / 16;
+                for (int g = 0; g < groups;g++) {
+                    float val = .0f;
+                    for (int col = 0; col < 16;col++) {
+                        int id = g * 16 + col;
+                        if (col < 8) {
+                            val = cal_fov0_3.at(g*8 +col);
+                        }
+                        else {
+                            val = cal_fov4_7.at(g * 8 + col%8);
+                        }
+                        cal.data.at(id) = val;
                     }
-                    else {
-                        val = cal_fov4_7.at(g * 8 + col%8);
-                    }
-                    cal.data.at(id) = val;
                 }
             }
         }
-#endif
 
 		const int cali_pkt_len = 1024;
 		size_t cali_data_len = cal.data.size();
@@ -1806,20 +1814,20 @@ namespace zvision
 		if (client_->SyncSend(cmd, cmd_len))
 		{
 			DisConnect();
-			return -1;
+			return TcpSendTimeout;
 		}
 		// recv ret
 		std::string recv(cmd_len, 'x');
 		if (client_->SyncRecv(recv, cmd_len))
 		{
 			DisConnect();
-			return -1;
+			return TcpRecvTimeout;
 		}
 		// check ret
 		if (!CheckDeviceRet(recv))
 		{
 			DisConnect();
-			return -1;
+			return DevAckError;
 		}
 
 		// 4. send cali data to lidar
@@ -1827,7 +1835,7 @@ namespace zvision
 			ret = client_->SyncSend(cali_pkts[i], cali_pkts[i].size());
 			if (ret)
 			{
-				LOG_ERROR("Send calibration data error, ret = %d.\n", ret);
+				LOG_F(ERROR, "Send calibration data error, ret = %d.", ret);
 				DisConnect();
 				return TcpSendTimeout;
 			}
@@ -1839,13 +1847,13 @@ namespace zvision
 		if (client_->SyncRecv(recv, cmd_len))
 		{
 			DisConnect();
-			return -1;
+			return TcpRecvTimeout;
 		}
 		// check ret
 		if (!CheckDeviceRet(recv))
 		{
 			DisConnect();
-			return -1;
+			return DevAckError;
 		}
 
 		return 0;
@@ -1854,7 +1862,7 @@ namespace zvision
     int LidarTools::SetDeviceStaticIpAddress(std::string ip)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         /*Set device static ip address*/
         const int send_len = 6;
@@ -1871,19 +1879,19 @@ namespace zvision
         if (client_->SyncSend(bv_cmd, send_len))//send cmd
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, recv_len))//recv ret
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))//check ret
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         return 0;
@@ -1891,7 +1899,7 @@ namespace zvision
 
 	int LidarTools::ResetDeviceMacAddress() {
 		if (!CheckConnection())
-			return -1;
+			return TcpConnTimeout;
 
 		/*Reset device mac address */
 		const int send_len = 9;
@@ -1905,19 +1913,19 @@ namespace zvision
 		if (client_->SyncSend(bv_cmd, send_len))//send cmd
 		{
 			DisConnect();
-			return -1;
+			return TcpSendTimeout;
 		}
 
 		if (client_->SyncRecv(recv, recv_len))//recv ret
 		{
 			DisConnect();
-			return -1;
+			return TcpRecvTimeout;
 		}
 
 		if (!CheckDeviceRet(recv))//check ret
 		{
 			DisConnect();
-			return -1;
+			return DevAckError;
 		}
 
 		return 0;
@@ -1926,7 +1934,7 @@ namespace zvision
     int LidarTools::SetDeviceSubnetMask(std::string mask)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         /*Set device subnet mask, default 255.255.255.0*/
         const int send_len = 6;
@@ -1943,19 +1951,19 @@ namespace zvision
         if (client_->SyncSend(bv_cmd, send_len))//send cmd
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, recv_len))//recv ret
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))//check ret
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         return 0;
@@ -1964,7 +1972,7 @@ namespace zvision
     int LidarTools::SetDeviceMacAddress(std::string mac)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         /*Set device subnet mask, default FF:FF:FF:FF:FF:FF*/
         const int send_len = 8;
@@ -1981,19 +1989,19 @@ namespace zvision
         if (client_->SyncSend(bv_cmd, send_len))//send cmd
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, recv_len))//recv ret
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))//check ret
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         return 0;
@@ -2002,7 +2010,7 @@ namespace zvision
     int LidarTools::SetDeviceUdpDestinationIpAddress(std::string ip)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         /*Set device udp destination ip address*/
         const int send_len = 6;
@@ -2020,19 +2028,19 @@ namespace zvision
         if (client_->SyncSend(cmd, send_len))//send cmd
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, recv_len))//recv ret
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))//check ret
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         return 0;
@@ -2041,7 +2049,7 @@ namespace zvision
     int LidarTools::SetDeviceUdpDestinationPort(int port)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         /*Set device udp destination port*/
         const int send_len = 6;
@@ -2057,19 +2065,19 @@ namespace zvision
         if (client_->SyncSend(cmd, send_len))//send cmd
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, recv_len))//recv ret
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))//check ret
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         return 0;
@@ -2079,7 +2087,7 @@ namespace zvision
     int LidarTools::SetDeviceTimestampType(TimestampType tp)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         /*Set device timestamp type*/
         const int send_len = 4;
@@ -2090,7 +2098,7 @@ namespace zvision
         else if (TimestampPpsGps == tp)
             set_cmd[2] = 0x02;
         else
-            return -1;
+            return NotSupport;
 
         std::string cmd(set_cmd, send_len);
 
@@ -2100,19 +2108,19 @@ namespace zvision
         if (client_->SyncSend(cmd, send_len))//send cmd
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, recv_len))//recv ret
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))//check ret
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         return 0;
@@ -2122,7 +2130,7 @@ namespace zvision
 	int LidarTools::SetDeviceAlgorithmEnable(AlgoType tp, bool en) {
 
 		if (!CheckConnection())
-			return -1;
+			return TcpConnTimeout;
 
 		/*Set device Algorithm enable*/
 		const int send_len = 4;
@@ -2135,7 +2143,7 @@ namespace zvision
 		else if (AlgoRetro == tp)
 			set_cmd[2] = 0x03;
 		else
-			return -1;
+			return NotSupport;
 
 		if (en)
 			set_cmd[3] = 0x01;
@@ -2150,19 +2158,19 @@ namespace zvision
 		if (client_->SyncSend(cmd, send_len))//send cmd
 		{
 			DisConnect();
-			return -1;
+			return TcpSendTimeout;
 		}
 
 		if (client_->SyncRecv(recv, recv_len))//recv ret
 		{
 			DisConnect();
-			return -1;
+			return TcpRecvTimeout;
 		}
 
 		if (!CheckDeviceRet(recv))//check ret
 		{
 			DisConnect();
-			return -1;
+			return DevAckError;
 		}
 
 		return 0;
@@ -2171,7 +2179,7 @@ namespace zvision
     int LidarTools::SetDeviceRetroEnable(bool en)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         /*Set device timestamp type*/
         const int send_len = 4;
@@ -2190,19 +2198,19 @@ namespace zvision
         if (client_->SyncSend(cmd, send_len))//send cmd
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, recv_len))//recv ret
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))//check ret
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         return 0;
@@ -2215,7 +2223,7 @@ namespace zvision
             return InvalidParameter;
 
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         /*Set device retro param 1*/
         const int send_len = 4;
@@ -2231,19 +2239,19 @@ namespace zvision
         if (client_->SyncSend(cmd, send_len))//send cmd
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, recv_len))//recv ret
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))//check ret
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         return 0;
@@ -2255,7 +2263,7 @@ namespace zvision
             return InvalidParameter;
 
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         /*Set device retro param 2*/
         const int send_len = 4;
@@ -2271,19 +2279,19 @@ namespace zvision
         if (client_->SyncSend(cmd, send_len))//send cmd
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, recv_len))//recv ret
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))//check ret
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         return 0;
@@ -2292,7 +2300,7 @@ namespace zvision
 	int LidarTools::SetDeviceAdhesionParam(AdhesionParam tp, int val) {
 
 		if (!CheckConnection())
-			return -1;
+			return TcpConnTimeout;
 
 		const int send_len = 7;
 		char set_cmd[send_len] = { (char)0xBA, (char)0x20, (char)0x00,(char)0x00, (char)0x00, (char)0x00, (char)0x00 };
@@ -2307,7 +2315,7 @@ namespace zvision
 		else if (MaximumVerticalAngleRange == tp)
 			set_cmd[2] = 0x04;
 		else
-			return -1;
+			return NotSupport;
 
 		HostToNetwork((const unsigned char*)&val, set_cmd + 3);
 
@@ -2318,19 +2326,19 @@ namespace zvision
 		if (client_->SyncSend(cmd, send_len))//send cmd
 		{
 			DisConnect();
-			return -1;
+			return TcpSendTimeout;
 		}
 
 		if (client_->SyncRecv(recv, recv_len))//recv ret
 		{
 			DisConnect();
-			return -1;
+			return TcpRecvTimeout;
 		}
 
 		if (!CheckDeviceRet(recv))//check ret
 		{
 			DisConnect();
-			return -1;
+			return DevAckError;
 		}
 
 		return 0;
@@ -2339,7 +2347,7 @@ namespace zvision
 	int LidarTools::SetDeviceAdhesionParam(AdhesionParam tp, float val) {
 
 		if (!CheckConnection())
-			return -1;
+			return TcpConnTimeout;
 
 		const int send_len = 7;
 		char set_cmd[send_len] = { (char)0xBA, (char)0x20, (char)0x00,(char)0x00, (char)0x00, (char)0x00, (char)0x00 };
@@ -2356,7 +2364,7 @@ namespace zvision
 		else if(NearFarPointDiff == tp)
 			set_cmd[2] = 0x09;
 		else
-			return -1;
+			return NotSupport;
 
 		HostToNetwork((const unsigned char*)&val, set_cmd + 3);
 
@@ -2367,19 +2375,19 @@ namespace zvision
 		if (client_->SyncSend(cmd, send_len))//send cmd
 		{
 			DisConnect();
-			return -1;
+			return TcpSendTimeout;
 		}
 
 		if (client_->SyncRecv(recv, recv_len))//recv ret
 		{
 			DisConnect();
-			return -1;
+			return TcpRecvTimeout;
 		}
 
 		if (!CheckDeviceRet(recv))//check ret
 		{
 			DisConnect();
-			return -1;
+			return DevAckError;
 		}
 
 		return 0;
@@ -2388,10 +2396,10 @@ namespace zvision
 	int LidarTools::SetDeviceRetroParam(RetroParam tp, int val) {
 
 		if (!CheckConnection())
-			return -1;
+			return TcpConnTimeout;
 
 		if (tp != RetroParam::RetroDisThres)
-			return -1;
+			return NotSupport;
 
 		const int send_len = 7;
 		char set_cmd[send_len] = { (char)0xBA, (char)0x15, (char)0x02,(char)0x00, (char)0x00, (char)0x00, (char)0x00 };
@@ -2403,7 +2411,7 @@ namespace zvision
 		if (client_->SyncSend(cmd, send_len))
 		{
 			DisConnect();
-			return -1;
+			return TcpSendTimeout;
 		}
 
 		// recv
@@ -2412,14 +2420,14 @@ namespace zvision
 		if (client_->SyncRecv(recv, recv_len))
 		{
 			DisConnect();
-			return -1;
+			return TcpRecvTimeout;
 		}
 
 		// check
 		if (!CheckDeviceRet(recv))
 		{
 			DisConnect();
-			return -1;
+			return DevAckError;
 		}
 
 		return 0;
@@ -2428,7 +2436,7 @@ namespace zvision
 	int LidarTools::SetDeviceRetroParam(RetroParam tp, unsigned short val) {
 
 		if (!CheckConnection())
-			return -1;
+			return TcpConnTimeout;
 
 		const int send_len = 5;
 		char set_cmd[send_len] = { (char)0xBA, (char)0x15, (char)0x00,(char)0x00, (char)0x00 };
@@ -2438,7 +2446,7 @@ namespace zvision
 		else if (tp == RetroParam::RetroHighRangeThres)
 			set_cmd[2] = 0x04;
 		else
-			return -1;
+			return NotSupport;
 
 		set_cmd[3] = val >> 8 & 0xFF;
 		set_cmd[4] = val & 0xFF;
@@ -2449,7 +2457,7 @@ namespace zvision
 		if (client_->SyncSend(cmd, send_len))
 		{
 			DisConnect();
-			return -1;
+			return TcpSendTimeout;
 		}
 
 		// recv
@@ -2458,14 +2466,14 @@ namespace zvision
 		if (client_->SyncRecv(recv, recv_len))
 		{
 			DisConnect();
-			return -1;
+			return TcpRecvTimeout;
 		}
 
 		// check
 		if (!CheckDeviceRet(recv))
 		{
 			DisConnect();
-			return -1;
+			return DevAckError;
 		}
 		return 0;
 	}
@@ -2473,7 +2481,7 @@ namespace zvision
 	int LidarTools::SetDeviceRetroParam(RetroParam tp, unsigned char val) {
 
 		if (!CheckConnection())
-			return -1;
+			return TcpConnTimeout;
 
 		const int send_len = 4;
 		char set_cmd[send_len] = { (char)0xBA, (char)0x15, (char)0x00,(char)0x00 };
@@ -2489,7 +2497,7 @@ namespace zvision
 		else if (tp == RetroParam::RetroMinGray)
 			set_cmd[2] = 0x08;
 		else
-			return -1;
+			return NotSupport;
 
 		set_cmd[3] = val;
 		std::string cmd(set_cmd, send_len);
@@ -2498,7 +2506,7 @@ namespace zvision
 		if (client_->SyncSend(cmd, send_len))
 		{
 			DisConnect();
-			return -1;
+			return TcpSendTimeout;
 		}
 
 		// recv
@@ -2507,14 +2515,14 @@ namespace zvision
 		if (client_->SyncRecv(recv, recv_len))
 		{
 			DisConnect();
-			return -1;
+			return TcpRecvTimeout;
 		}
 
 		// check
 		if (!CheckDeviceRet(recv))
 		{
 			DisConnect();
-			return -1;
+			return DevAckError;
 		}
 
 		return 0;
@@ -2523,13 +2531,13 @@ namespace zvision
     int LidarTools::FirmwareUpdate(std::string& filename, ProgressCallback cb)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         std::ifstream in(filename, std::ifstream::ate | std::ifstream::binary);
         if (!in.is_open())
         {
-            LOG_ERROR("Open file error.\n");
-            return -1;
+            LOG_F(ERROR, "Open file error.");
+            return OpenFileError;
         }
 
         std::streampos end = in.tellg();
@@ -2548,19 +2556,19 @@ namespace zvision
         if (client_->SyncSend(cmd, send_len))
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, recv_len))
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         // transfer, erase flash, write
@@ -2599,21 +2607,21 @@ namespace zvision
         if (readed != block_total)
         {
             client_->Close();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, recv_len))
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
-        LOG_DEBUG("Data transfer ok...\n");
+        LOG_F(2, "Data transfer ok...");
 
         // waitting for step 2
         const int recv_step_len = 5;
@@ -2637,11 +2645,11 @@ namespace zvision
 
         if(!ok)
         {
-            LOG_ERROR("Waiting for erase flash failed...\n");
+            LOG_F(ERROR, "Waiting for erase flash failed...");
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
-        LOG_DEBUG("Waiting for erase flash ok...\n");
+        LOG_F(2, "Waiting for erase flash ok...");
 
         // waitting for step 3
         while (1)
@@ -2662,23 +2670,23 @@ namespace zvision
 
         if (!ok)
         {
-            LOG_ERROR("Waiting for write flash failed...\n");
+            LOG_F(ERROR, "Waiting for write flash failed...");
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
-        LOG_DEBUG("Waiting for write flash ok...\n");
+        LOG_F(2, "Waiting for write flash ok...");
 
         //device check data
         if (client_->SyncRecv(recv, recv_len))
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         return 0;
@@ -2688,7 +2696,7 @@ namespace zvision
     int LidarTools::RebootDevice()
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         /*Set device timestamp type*/
         const int send_len = 4;
@@ -2702,19 +2710,19 @@ namespace zvision
         if (client_->SyncSend(cmd, send_len))//send cmd
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, recv_len))//recv ret
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))//check ret
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         return 0;
@@ -2723,7 +2731,7 @@ namespace zvision
     int LidarTools::GetDeviceLog(std::string& log)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         /*Get device log info*/
         const int send_len = 4;
@@ -2737,26 +2745,26 @@ namespace zvision
         if (client_->SyncSend(cmd, send_len))//send cmd
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, recv_len))//recv ret
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))//check ret
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         // get log buffer length
         if (client_->SyncRecv(recv, recv_len))
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
         uint32_t log_buffer_len = 0;
         NetworkToHost((const unsigned char*)recv.c_str(), (char *)&log_buffer_len);
@@ -2767,7 +2775,7 @@ namespace zvision
         if (client_->SyncRecv(log_buffer, log_buffer_len))
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         // assemble the buffer to string
@@ -2779,7 +2787,7 @@ namespace zvision
         {
             uint32_t file_len = 0;
             NetworkToHost((const unsigned char*)(&log_buffer[position]), (char *)&file_len);
-            LOG_INFO("FILE %d len %u.\n", i, file_len);
+            LOG_F(INFO, "FILE %d len %u.", i, file_len);
             std::string content(log_buffer, position + 4, file_len); // copy to file list
             file_contents.push_back(content);
             position += (file_len + 4);
@@ -2796,13 +2804,13 @@ namespace zvision
         if (client_->SyncRecv(recv, recv_len))
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))//check ret
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         return 0;
@@ -2811,7 +2819,7 @@ namespace zvision
     int LidarTools::SetDevicePhaseOffset(uint32_t offset)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         /*Phase offset*/
         const int send_len = 6;
@@ -2827,19 +2835,19 @@ namespace zvision
         if (client_->SyncSend(cmd, send_len))//send cmd
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, recv_len))//recv ret
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))//check ret
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         return 0;
@@ -2848,7 +2856,7 @@ namespace zvision
     int LidarTools::SetDevicePhaseOffsetEnable(bool en)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         /*Set device phase offset enable*/
         const int send_len = 4;
@@ -2864,19 +2872,19 @@ namespace zvision
         if (client_->SyncSend(cmd, send_len))//send cmd
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, recv_len))//recv ret
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))//check ret
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         return 0;
@@ -2900,7 +2908,7 @@ namespace zvision
 		std::string content = data;
 
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         // --- send data to device
         const int send_len = 6;
@@ -2917,39 +2925,39 @@ namespace zvision
         if (client_->SyncSend(cmd, send_len))//send cmd
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, recv_len))//recv ret
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))//check ret
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         // send file to device
         if (client_->SyncSend(content, file_len))
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         // final ack
         if (client_->SyncRecv(recv, recv_len))//recv ret
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))//check ret
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         return ReturnCode::Success;
@@ -2972,7 +2980,7 @@ namespace zvision
 		int length = data.size();
 		std::string content = data;
 		if (!CheckConnection())
-			return -1;
+			return TcpConnTimeout;
 
 		// --- send data to device
 		const int send_len = 7;
@@ -2989,39 +2997,39 @@ namespace zvision
 		if (client_->SyncSend(cmd, send_len))//send cmd
 		{
 			DisConnect();
-			return -1;
+			return TcpSendTimeout;
 		}
 
 		if (client_->SyncRecv(recv, recv_len))//recv ret
 		{
 			DisConnect();
-			return -1;
+			return TcpRecvTimeout;
 		}
 
 		if (!CheckDeviceRet(recv))//check ret
 		{
 			DisConnect();
-			return -1;
+			return DevAckError;
 		}
 
 		// send file to device
 		if (client_->SyncSend(content, file_len))
 		{
 			DisConnect();
-			return -1;
+			return TcpSendTimeout;
 		}
 
 		// final ack
 		if (client_->SyncRecv(recv, recv_len))//recv ret
 		{
 			DisConnect();
-			return -1;
+			return TcpRecvTimeout;
 		}
 
 		if (!CheckDeviceRet(recv))//check ret
 		{
 			DisConnect();
-			return -1;
+			return DevAckError;
 		}
 
 		return ReturnCode::Success;
@@ -3030,7 +3038,7 @@ namespace zvision
 
     int LidarTools::QueryDeviceConfigFileVersion(std::string& ver) {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         /*Read version info*/
         const int send_len = 4;
@@ -3043,19 +3051,19 @@ namespace zvision
         if (client_->SyncSend(bv_cmd, send_len))//send cmd
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, recv_len))//recv ret
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))//check ret
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         const int recv_ver_len = 3;
@@ -3063,7 +3071,7 @@ namespace zvision
         if (client_->SyncRecv(recv_ver, recv_ver_len))//recv version data
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         char cver[128] = "";
@@ -3077,7 +3085,7 @@ namespace zvision
     int LidarTools::GetDevicePtpConfiguration(std::string& ptp_cfg)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         /*Get device log info*/
         const int send_len = 4;
@@ -3091,26 +3099,26 @@ namespace zvision
         if (client_->SyncSend(cmd, send_len))//send cmd
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, recv_len))//recv ret
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))//check ret
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         // get ptp configuration data
         if (client_->SyncRecv(recv, recv_len))
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
         uint32_t ptp_buffer_len = 0;
         NetworkToHost((const unsigned char*)recv.c_str(), (char *)&ptp_buffer_len);
@@ -3120,7 +3128,7 @@ namespace zvision
         if (client_->SyncRecv(ptp_cfg_buffer, ptp_buffer_len))
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         ptp_cfg = ptp_cfg_buffer;
@@ -3181,7 +3189,7 @@ namespace zvision
             return InvalidContent;
 
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         // --- send data to device
         const int send_len = 6;
@@ -3216,56 +3224,42 @@ namespace zvision
 
         const int recv_len = 4;
         std::string recv(recv_len, 'x');
-
-        // test
-        if(0)
-        {
-            std::ofstream out("test.hex", std::ios::binary);
-            if (out.is_open())
-            {
-                out.write(content.c_str(), content.size());
-                out.close();
-            }
-            std::cout << "data size is " << content.size() << std::endl;
-        }
-        //return 0;
-
         if (client_->SyncSend(cmd, send_len))//send cmd
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, recv_len))//recv ret
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))//check ret
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         // send file to device
         if (client_->SyncSend(content, data_len))
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         // final ack
         if (client_->SyncRecv(recv, recv_len))//recv ret
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))//check ret
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         return ReturnCode::Success;
@@ -3275,13 +3269,13 @@ namespace zvision
     int LidarTools::BackupFirmwareUpdate(std::string& filename, ProgressCallback cb)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         std::ifstream in(filename, std::ifstream::ate | std::ifstream::binary);
         if (!in.is_open())
         {
-            LOG_ERROR("Open file error.\n");
-            return -1;
+            LOG_F(ERROR, "Open file error.");
+            return OpenFileError;
         }
 
         std::streampos end = in.tellg();
@@ -3300,19 +3294,19 @@ namespace zvision
         if (client_->SyncSend(cmd, send_len))
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, recv_len))
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         // transfer, erase flash, write
@@ -3352,20 +3346,20 @@ namespace zvision
         if (readed != block_total)
         {
             client_->Close();
-            return -1;
+            return TcpSendTimeout;
         }
         if (client_->SyncRecv(recv, recv_len))
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
-        LOG_DEBUG("Data transfer ok...\n");
+        LOG_F(2, "Data transfer ok...");
 
         // waitting for step 2
         const int recv_step_len = 5;
@@ -3376,7 +3370,7 @@ namespace zvision
             if (client_->SyncRecv(recv_step, recv_step_len))
             {
                 ok = false;
-                LOG_ERROR("Waiting for erase flash failed...\n");
+                LOG_F(ERROR, "Waiting for erase flash failed...");
                 break;
             }
             unsigned char step = (unsigned char)recv_step[4];
@@ -3391,9 +3385,9 @@ namespace zvision
         if (!ok)
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
-        LOG_DEBUG("Waiting for erase flash ok...\n");
+        LOG_F(2, "Waiting for erase flash ok...");
 
         // waitting for step 3
         while (1)
@@ -3415,20 +3409,20 @@ namespace zvision
         if (!ok)
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         //device check data
         if (client_->SyncRecv(recv, recv_len))
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         return 0;
@@ -3438,7 +3432,7 @@ namespace zvision
     int LidarTools::QueryDeviceBackupFirmwareVersion(FirmwareVersion& version)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         /*Read version info*/
         const int send_len = 4;
@@ -3451,25 +3445,25 @@ namespace zvision
         if (client_->SyncSend(bv_cmd, send_len))//send cmd
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, recv_len))//recv ret
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))//check ret
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         if (client_->SyncRecv(recv, recv_len))//recv version data
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         memcpy(&(version.boot_version), recv.c_str(), 4);
@@ -3480,25 +3474,25 @@ namespace zvision
         if (client_->SyncSend(kv_cmd, send_len))
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, recv_len))
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         if (client_->SyncRecv(recv, recv_len))//recv version data
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         memcpy(&(version.kernel_version), recv.c_str(), 4);
@@ -3510,7 +3504,7 @@ namespace zvision
     int LidarTools::SetDeviceEchoMode(EchoMode mode)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         /*Set device echo mode*/
         const int send_len = 4;
@@ -3540,13 +3534,13 @@ namespace zvision
         if (client_->SyncSend(cmd, send_len))//send cmd
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, recv_len))//recv ret
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))//check ret
@@ -3557,7 +3551,7 @@ namespace zvision
             if ((uint8_t)recv[2] == 0xFF && (uint8_t)recv[3] == 0x21) {
                 return NotSupport;
             }
-            return -1;
+            return DevAckError;
         }
 
         return 0;
@@ -3566,7 +3560,7 @@ namespace zvision
     int LidarTools::SetDeviceCalSendMode(CalSendMode mode)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         /*Set device cal send mode*/
         const int send_len = 4;
@@ -3587,19 +3581,19 @@ namespace zvision
         if (client_->SyncSend(cmd, send_len))//send cmd
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, recv_len))//recv ret
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))//check ret
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         return 0;
@@ -3608,7 +3602,7 @@ namespace zvision
     int LidarTools::SetDeviceDownsampleMode(DownsampleMode mode)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         /*Set device downsample*/
         const int send_len = 4;
@@ -3631,19 +3625,19 @@ namespace zvision
         if (client_->SyncSend(cmd, send_len))//send cmd
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, recv_len))//recv ret
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))//check ret
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         return 0;
@@ -3652,7 +3646,7 @@ namespace zvision
 	int LidarTools::SetDeviceDHCPMode(StateMode mode) {
 
 		if (!CheckConnection())
-			return -1;
+			return TcpConnTimeout;
 
 		/*Set device dhcp mode*/
 		const int send_len = 4;
@@ -3673,19 +3667,19 @@ namespace zvision
 		if (client_->SyncSend(cmd, send_len))//send cmd
 		{
 			DisConnect();
-			return -1;
+			return TcpSendTimeout;
 		}
 
 		if (client_->SyncRecv(recv, recv_len))//recv ret
 		{
 			DisConnect();
-			return -1;
+			return TcpRecvTimeout;
 		}
 
 		if (!CheckDeviceRet(recv))//check ret
 		{
 			DisConnect();
-			return -1;
+			return DevAckError;
 		}
 
 		return 0;
@@ -3694,7 +3688,7 @@ namespace zvision
 	int LidarTools::SetDeviceGatewayAddr(std::string addr) {
 
 		if (!CheckConnection())
-			return -1;
+			return TcpConnTimeout;
 
 		/*Set device gateway address*/
 		const int send_len = 6;
@@ -3711,19 +3705,19 @@ namespace zvision
 		if (client_->SyncSend(cmd, send_len))//send cmd
 		{
 			DisConnect();
-			return -1;
+			return TcpSendTimeout;
 		}
 
 		if (client_->SyncRecv(recv, recv_len))//recv ret
 		{
 			DisConnect();
-			return -1;
+			return TcpRecvTimeout;
 		}
 
 		if (!CheckDeviceRet(recv))//check ret
 		{
 			DisConnect();
-			return -1;
+			return DevAckError;
 		}
 
 		return 0;
@@ -3732,7 +3726,7 @@ namespace zvision
 	int LidarTools::SetDeviceFactoryMac(std::string& mac) {
 
 		if (!CheckConnection())
-			return -1;
+			return TcpConnTimeout;
 
 		/*Set device factory mac*/
 		const int send_len = 8;
@@ -3752,19 +3746,19 @@ namespace zvision
 		if (client_->SyncSend(cmd, send_len))//send cmd
 		{
 			DisConnect();
-			return -1;
+			return TcpSendTimeout;
 		}
 
 		if (client_->SyncRecv(recv, recv_len))//recv ret
 		{
 			DisConnect();
-			return -1;
+			return TcpRecvTimeout;
 		}
 
 		if (!CheckDeviceRet(recv))//check ret
 		{
 			DisConnect();
-			return -1;
+			return DevAckError;
 		}
 
 		return 0;
@@ -3773,7 +3767,7 @@ namespace zvision
     int LidarTools::GetDeviceChannelDataToFile(std::string path, bool curr)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         // command
         const int cmd_len = 4;
@@ -3786,20 +3780,20 @@ namespace zvision
         if (client_->SyncSend(cmd, cmd_len))
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
         // receive
         std::string recv(cmd_len, 'x');
         if (client_->SyncRecv(recv, cmd_len))
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
         //check ret
         if (!CheckDeviceRet(recv))
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
         // get channel data
         const int recv_len = 102400;
@@ -3812,7 +3806,7 @@ namespace zvision
             if (client_->SyncRecv(tmp, pkt_len))
             {
                 DisConnect();
-                return -1;
+                return TcpRecvTimeout;
             }
             recv_data += tmp;
         }
@@ -3841,7 +3835,7 @@ namespace zvision
     int LidarTools::GetDeviceChannelListDataToFile(std::string path)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         // command
         const int cmd_len = 4;
@@ -3851,20 +3845,20 @@ namespace zvision
         if (client_->SyncSend(cmd, cmd_len))
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
         // receive
         std::string recv(cmd_len, 'x');
         if (client_->SyncRecv(recv, cmd_len))
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
         //check ret
         if (!CheckDeviceRet(recv))
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
         // get channel data
         const int recv_len = 51200;
@@ -3877,7 +3871,7 @@ namespace zvision
             if (client_->SyncRecv(tmp, pkt_len))
             {
                 DisConnect();
-                return -1;
+                return TcpRecvTimeout;
             }
             recv_data += tmp;
         }
@@ -3902,7 +3896,7 @@ namespace zvision
     int LidarTools::GetDeviceFlashConfiguration(std::string& buf, FlashParamType type) {
 
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         // --- send data to device
         const int send_len = 11;
@@ -3922,7 +3916,7 @@ namespace zvision
         if (client_->SyncSend(cmd, send_len))
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         const int recv_check = 4;
@@ -3931,14 +3925,14 @@ namespace zvision
         if (client_->SyncRecv(recv, recv_check))
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         // check ret
         if (!CheckDeviceRet(recv))
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         // recv flash data
@@ -3946,7 +3940,7 @@ namespace zvision
         if (client_->SyncRecv(buf, read_size))
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         // rect ret
@@ -3954,14 +3948,14 @@ namespace zvision
         if (client_->SyncRecv(recv, recv_check))
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         // final check
         if (!CheckDeviceRet(recv))
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         return ReturnCode::Success;
@@ -3970,7 +3964,7 @@ namespace zvision
     int LidarTools::SetDeviceFlashConfiguration(const std::string& buf, FlashParamType tp, DeviceType devType) {
 
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         // 1. generate send command
         uint32_t read_size_arr[] = { 32,12000,12000,102400,640,3080,6400,16004,0,0,0,0,0,0,0,19200 };
@@ -4042,38 +4036,38 @@ namespace zvision
         if (client_->SyncSend(cmd, send_len))
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, recv_len))
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         // 3.2 send flash data to device
         if (client_->SyncSend(content, data_len))
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, recv_len))
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         return ReturnCode::Success;
@@ -4083,7 +4077,7 @@ namespace zvision
     {
         int ret = -1;
         if (!CheckConnection())
-            return ret;
+            return TcpConnTimeout;
 
         // 1. read hardware diagnostic control
         DeviceConfigurationInfo info;
@@ -4105,17 +4099,17 @@ namespace zvision
         if (client_->SyncSend(cmd, send_len))//send cmd
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
         if (client_->SyncRecv(recv, recv_len))//recv ret
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
         if (!CheckDeviceRet(recv))//check ret
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
         return 0;
     }
@@ -4123,7 +4117,7 @@ namespace zvision
     int LidarTools::SetDeviceDeleteNearPointLevel(int mode)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         const int send_len = 4;
         char set_cmd[send_len] = { (char)0xBA, (char)0x25, (char)0x00, (char)0x00 };
@@ -4132,7 +4126,7 @@ namespace zvision
         else if (mode == 1)
             set_cmd[2] = 0x01;
         else
-            return -1;
+            return InvalidParameter;
 
         std::string cmd(set_cmd, send_len);
         const int recv_len = 4;
@@ -4141,19 +4135,19 @@ namespace zvision
         if (client_->SyncSend(cmd, send_len))//send cmd
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, recv_len))//recv ret
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))//check ret
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         return 0;
@@ -4193,7 +4187,7 @@ namespace zvision
     int LidarTools::QueryMLXSDeviceNetworkConfigurationInfo(MLXSDeviceNetworkConfigurationInfo& info)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         /*Read configuration info*/
         const int send_len = 9;
@@ -4291,7 +4285,7 @@ namespace zvision
 
         if (client_->SyncSend(cmd, send_len))
         {
-            LOG_ERROR("Send cali cmd error: %d\n", client_->GetSysErrorCode());
+            LOG_F(ERROR, "Send cali cmd error: %d", client_->GetSysErrorCode());
             DisConnect();
             return TcpSendTimeout;
         }
@@ -4299,7 +4293,7 @@ namespace zvision
         std::string recv(recv_len, 'x');
         if (client_->SyncRecv(recv, recv_len))
         {
-            LOG_ERROR("Receive cali ret error:  %d\n", client_->GetSysErrorCode());
+            LOG_F(ERROR, "Receive cali ret error:  %d", client_->GetSysErrorCode());
             DisConnect();
             return TcpRecvTimeout;
         }
@@ -4321,7 +4315,7 @@ namespace zvision
 
         if (!check)
         {
-            LOG_ERROR("Check cali ret error: %d\n", client_->GetSysErrorCode());
+            LOG_F(ERROR, "Check cali ret error: %d", client_->GetSysErrorCode());
             DisConnect();
             return DevAckError;
         }
@@ -4344,7 +4338,7 @@ namespace zvision
             int ret = client_->SyncRecv(header_recv, cali_header_len);
             if (ret)
             {
-                LOG_ERROR("Receive mlxs calibration header error\n");
+                LOG_F(ERROR, "Receive mlxs calibration header error");
                 DisConnect();
                 return TcpRecvTimeout;
             }
@@ -4354,7 +4348,7 @@ namespace zvision
                 || (*(pheader_recv + 1) != 0xAC) \
                 || (*(pheader_recv + 4) != 0x00))
             {
-                LOG_ERROR("Check mlxs calibration header error\n");
+                LOG_F(ERROR, "Check mlxs calibration header error.");
                 DisConnect();
                 return DevAckError;
             }
@@ -4366,7 +4360,7 @@ namespace zvision
             ret = client_->SyncRecv(data_recv, data_len);
             if (ret)
             {
-                LOG_ERROR("Receive mlxs calibration data error\n");
+                LOG_F(ERROR, "Receive mlxs calibration data error.");
                 DisConnect();
                 return TcpRecvTimeout;
             }
@@ -4381,7 +4375,7 @@ namespace zvision
             uint16_t chk = get_check_sum(cali_pkt);
             if (chk != pkt_chk)
             {
-                LOG_ERROR("Check mlxs calibration data error.\n");
+                LOG_F(ERROR, "Check mlxs calibration data error.");
                 DisConnect();
                 return DevAckError;
             }
@@ -4397,13 +4391,13 @@ namespace zvision
                 }
                 if (0x00 == check_all_00)
                 {
-                    LOG_ERROR("Check calibration data error, data is all 0x00.\n");
+                    LOG_F(ERROR, "Check calibration data error, data is all 0x00.");
                     DisConnect();
                     return InvalidContent;
                 }
                 if (0xFF == check_all_ff)
                 {
-                    LOG_ERROR("Check calibration data error, data is all 0xFF\n");
+                    LOG_F(ERROR, "Check calibration data error, data is all 0xFF.");
                     DisConnect();
                     return InvalidContent;
                 }
@@ -4447,7 +4441,7 @@ namespace zvision
         // final check
         if (data.size() != total_len)
         {
-            LOG_ERROR("Get mlxs calibration data error\n");
+            LOG_F(ERROR, "Get mlxs calibration data error.");
             return NotEnoughData;
         }
 
@@ -4470,7 +4464,7 @@ namespace zvision
     int LidarTools::RebootMLXSDevice()
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         const int send_len = 9;
         char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x00, (char)0x00, (char)0x02, (char)0x0C, (char)0x01, (char)0x00, (char)0x00 };
@@ -4482,7 +4476,7 @@ namespace zvision
     int LidarTools::ShutdownMLXSDevice()
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         const int send_len = 9;
         char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x00, (char)0x00, (char)0x02, (char)0x0C, (char)0x02, (char)0x00, (char)0x00 };
@@ -4500,7 +4494,7 @@ namespace zvision
 		if (client_->SyncRecv(recv, recv_len))
 		{
 			DisConnect();
-			return -1;
+			return TcpRecvTimeout;
 		}
 		uint32_t log_buffer_len = 0;
 		NetworkToHost((const unsigned char*)recv.c_str(), (char *)&log_buffer_len);
@@ -4510,7 +4504,7 @@ namespace zvision
 		if (client_->SyncRecv(log_buffer, log_buffer_len))
 		{
 			DisConnect();
-			return -1;
+			return TcpRecvTimeout;
 		}
 
 		if (isFull) {
@@ -4527,7 +4521,7 @@ namespace zvision
 		{
 			uint32_t file_len = 0;
 			NetworkToHost((const unsigned char*)(&log_buffer[position]), (char *)&file_len);
-			LOG_INFO("FILE %d len %u.\n", i, file_len);
+			LOG_F(INFO, "FILE %d len %u.", i, file_len);
 			// copy to file list
 			std::string content(log_buffer, position + 4, file_len);
 			file_contents.push_back(content);
@@ -4543,20 +4537,20 @@ namespace zvision
 		if (client_->SyncRecv(recv, recv_len))
 		{
 			DisConnect();
-			return -1;
+			return TcpRecvTimeout;
 		}
 		//check ret
 		if (!CheckDeviceRet(recv))
 		{
 			DisConnect();
-			return -1;
+			return DevAckError;
 		}
 		return 0;
 	}
 
 	int LidarTools::GenerateML30SPlusDeviceCmdString(EML30SPlusCmd type, std::string& buf, zvision::JsonConfigFileParam* param) {
 
-		if (!param) return -1;
+		if (!param) return InvalidParameter;
 		param->temp_recv_data_len = 0;
 
 		std::string str_cmd;
@@ -4575,7 +4569,7 @@ namespace zvision
 			str_cmd.append(cmd, 3);
             char ip[4] = {0};
             if (!AssembleIpString(param->ip, ip))
-                return -1;
+                return InvalidParameter;
             str_value = std::string(ip, 6);
 		}break;
 		case zvision::set_gateway: {
@@ -4583,7 +4577,7 @@ namespace zvision
 			str_cmd.append(cmd, 3);
             char ip[4] = { 0 };
             if (!AssembleIpString(param->gateway, ip))
-                return -1;
+                return InvalidParameter;
             str_value = std::string(ip, 6);
 		}break;
 		case zvision::set_netmask: {
@@ -4591,7 +4585,7 @@ namespace zvision
 			str_cmd.append(cmd, 3);
             char ip[4] = { 0 };
             if (!AssembleIpString(param->netmask, ip))
-                return -1;
+                return InvalidParameter;
             str_value = std::string(ip, 6);
 		}break;
 		case zvision::set_mac: {
@@ -4599,7 +4593,7 @@ namespace zvision
 			str_cmd.append(cmd, 3);
             char mac[6] = { 0 };
             if (!AssembleMacAddress(param->mac, mac))
-               return -1;
+               return InvalidParameter;
             str_value = std::string(mac, 6);
 		}break;
 		case zvision::set_udp_dest_ip: {
@@ -4607,7 +4601,7 @@ namespace zvision
 			str_cmd.append(cmd, 3);
             char ip[4] = { 0 };
             if (!AssembleIpString(param->udp_dest_ip, ip))
-                return -1;
+                return InvalidParameter;
             str_value = std::string(ip, 6);
 		}break;
 		case zvision::set_udp_dest_port: {
@@ -4749,7 +4743,7 @@ namespace zvision
 			// read file data
 			std::ifstream infile(param->temp_filepath);
 			if (!infile.is_open())
-				return -1;
+				return OpenFileError;
 			std::stringstream ss;
 			ss << infile.rdbuf();
 			param->temp_send_data = ss.str();
@@ -4777,14 +4771,14 @@ namespace zvision
 			// read file data
 			std::ifstream infile(param->temp_filepath);
 			if (!infile.is_open())
-				return -1;
+				return OpenFileError;
 			std::stringstream ss;
 			ss << infile.rdbuf();
 			std::string str = ss.str();
 			// check json format
 			rapidjson::Document doc;
 			if (doc.Parse(str.c_str()).HasParseError())
-				return -1;
+				return InvalidContent;
 
 			param->temp_send_data = str;
 			param->temp_send_data_len = str.size();
@@ -4866,12 +4860,12 @@ namespace zvision
 		}break;
 
 		default:
-			return -1;
+			return InvalidParameter;
 		}
 
 		std::string str = str_cmd + str_value;
 		if (!valid || str.empty())
-			return -1;
+			return InvalidContent;
 
 		buf = str;
 		return 0;
@@ -4880,7 +4874,7 @@ namespace zvision
 	int LidarTools::RunPost(EML30SPlusCmd type, zvision::JsonConfigFileParam* param) {
 
 		if (!param)
-			return -1;
+			return InvalidParameter;
 
 		const unsigned char* pdata = (unsigned char*)param->temp_recv_data.c_str();
 		const int data_len = param->temp_recv_data.size();
@@ -4920,7 +4914,7 @@ namespace zvision
 		case zvision::read_config_param_saved: {
 			//NetworkToHostShort(pdata,(char*)&param->algo_param_len);
 			if (data_len < 48)
-				return -1;
+				return InvalidContent;
 			memcpy(param->embedded_ver, pdata, 4);
 			ResolveIpString(pdata, param->embedded_version);
 			memcpy(param->fpga_ver, pdata + 4, 4);
@@ -5043,7 +5037,7 @@ namespace zvision
                 outfile.close();
             }
             else {
-                return -1;
+                return OpenFileError;
             }
         }break;
 		default:
@@ -5057,7 +5051,7 @@ namespace zvision
 
 		// pre check
 		if (!param)
-			return -1;
+			return InvalidParameter;
 
 		/* for special command */
 		// read cali packets
@@ -5070,17 +5064,17 @@ namespace zvision
 		std::string cmd_str;
 		int ret = GenerateML30SPlusDeviceCmdString(type, cmd_str, param);
 		if (ret != 0)
-			return -1;
+			return InvalidParameter;
 
 		/* 2. Send cmd to device. */
 		// Check tcp connection.
 		if (!CheckConnection())
-			return -1;
+			return TcpConnTimeout;
 		// send cmd
 		if (client_->SyncSend(cmd_str, cmd_str.size()))
 		{
 			DisConnect();
-			return -1;
+			return TcpSendTimeout;
 		}
 
 		// need ack
@@ -5090,13 +5084,13 @@ namespace zvision
 			if (client_->SyncRecv(recv, recv_len))
 			{
 				DisConnect();
-				return -1;
+				return TcpRecvTimeout;
 			}
 
 			if (!CheckDeviceRet(recv))
 			{
 				DisConnect();
-				return -1;
+				return DevAckError;
 			}
 		}
 
@@ -5116,7 +5110,7 @@ namespace zvision
 		if (type > cmd_section_control && type < cmd_section_send_data ) {
 			int send_len = param->temp_send_data.size();
 			if (!send_len)
-				return -1;
+				return InvalidContent;
 
 			std::string send_data = param->temp_send_data;
 			int pkt_cnt = send_len / pkt_len;
@@ -5132,7 +5126,7 @@ namespace zvision
 				if (client_->SyncSend(str_send, len))
 				{
 					DisConnect();
-					return -1;
+					return TcpSendTimeout;
 				}
 
 				// update
@@ -5147,12 +5141,12 @@ namespace zvision
                 if (client_->SyncRecv(recv, recv_len))
                 {
                     DisConnect();
-                    return -1;
+                    return TcpRecvTimeout;
                 }
                 if (!CheckDeviceRet(recv))
                 {
                     DisConnect();
-                    return -1;
+                    return DevAckError;
                 }
             }
 		}
@@ -5168,7 +5162,7 @@ namespace zvision
 				if (client_->SyncRecv(str, bytes))
 				{
 					DisConnect();
-					return -1;
+					return TcpRecvTimeout;
 				}
 
 				// Get length.
@@ -5182,14 +5176,14 @@ namespace zvision
 				else if (bytes == 4)
 					NetworkToHost((uint8_t*)str.c_str(), (char*)&recv_len);
 				else
-					return -1;
+					return NotMatched;
 			}
 			else if (param->temp_recv_data_len == 0)
 				recv_len = client_->GetAvailableBytesLen();
 			else
 				recv_len = param->temp_recv_data_len;
 
-			if(recv_len == 0) return -1;
+			if(recv_len == 0) return NotEnoughData;
 
 
 			// for special cmd
@@ -5212,7 +5206,7 @@ namespace zvision
 				if (client_->SyncRecv(pkt, len))
 				{
 					DisConnect();
-					return -1;
+					return TcpRecvTimeout;
 				}
 				// update
                 const char* pdata = pkt.data();
@@ -5226,7 +5220,7 @@ namespace zvision
 
 		// 6. post deal
 		if (RunPost(type, param) != 0)
-			return -1;
+			return Failure;
 
 		// read all recv buf if necessar
 		{
@@ -5353,13 +5347,13 @@ namespace zvision
     int LidarTools::ML30sPlusFirmwareUpdate(std::string& filename, ProgressCallback cb,bool isBak)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         std::ifstream in(filename, std::ifstream::ate | std::ifstream::binary);
         if (!in.is_open())
         {
-            LOG_ERROR("Open file error.\n");
-            return -1;
+            LOG_F(ERROR, "Open file error.");
+            return OpenFileError;
         }
 
         std::streampos end = in.tellg();
@@ -5381,19 +5375,19 @@ namespace zvision
         if (client_->SyncSend(cmd, send_len))
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, recv_len))
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         // transfer, erase flash, write
@@ -5432,21 +5426,21 @@ namespace zvision
         if (readed != block_total)
         {
             client_->Close();
-            return -1;
+            return TcpSendTimeout;
         }
 
         if (client_->SyncRecv(recv, recv_len))
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
-        LOG_DEBUG("Data transfer ok...\n");
+        LOG_F(2, "Data transfer ok...");
 
         // waitting for step 2
         const int recv_step_len = 5;
@@ -5470,11 +5464,11 @@ namespace zvision
 
         if (!ok)
         {
-            LOG_ERROR("Waiting for erase flash failed...\n");
+            LOG_F(ERROR, "Waiting for erase flash failed...");
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
-        LOG_DEBUG("Waiting for erase flash ok...\n");
+        LOG_F(2, "Waiting for erase flash ok...");
 
         // waitting for step 3
         while (1)
@@ -5495,23 +5489,23 @@ namespace zvision
 
         if (!ok)
         {
-            LOG_ERROR("Waiting for write flash failed...\n");
+            LOG_F(ERROR, "Waiting for write flash failed...");
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
-        LOG_DEBUG("Waiting for write flash ok...\n");
+        LOG_F(2, "Waiting for write flash ok...");
 
         //device check data
         if (client_->SyncRecv(recv, recv_len))
         {
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
 
         if (!CheckDeviceRet(recv))
         {
             DisConnect();
-            return -1;
+            return DevAckError;
         }
 
         return 0;
@@ -5527,7 +5521,7 @@ namespace zvision
         std::string recv_header(recv_header_len, 'x');
         if (client_->SyncRecv(recv_header, recv_header_len))
         {
-            LOG_ERROR("Receive recv header error:  %d.\n", client_->GetSysErrorCode());
+            LOG_F(ERROR, "Receive recv header error:  %d.", client_->GetSysErrorCode());
             DisConnect();
             return TcpRecvTimeout;
         }
@@ -5542,7 +5536,7 @@ namespace zvision
                 std::string temp(len, 'x');
                 client_->SyncRecv(temp, len);
             }
-            LOG_ERROR("Check recv header error.\n");
+            LOG_F(ERROR, "Check recv header error.");
             DisConnect();
             return DevAckError;
         }
@@ -5551,7 +5545,7 @@ namespace zvision
         std::string recv_data(recv_data_len, 'x');
         if (client_->SyncRecv(recv_data, recv_data_len))
         {
-            LOG_ERROR("Receive recv data error:  %d.\n", client_->GetSysErrorCode());
+            LOG_F(ERROR, "Receive recv data error:  %d.", client_->GetSysErrorCode());
             DisConnect();
             return TcpRecvTimeout;
         }
@@ -5564,7 +5558,7 @@ namespace zvision
     {
         const int min_ret_len = 7;
         if (ret.size() < min_ret_len)
-            return -1;
+            return DevAckError;
 
         const int chk_sum_len = 2;
         // check sum
@@ -5572,7 +5566,7 @@ namespace zvision
         uint16_t chk_sum = get_check_sum(ret.substr(0, ret.size() - chk_sum_len));
         uint16_t chk_val = *(pdata + ret.size() - chk_sum_len) << 8 | *(pdata + ret.size() - chk_sum_len + 1);
         if (chk_sum != chk_val)
-            return -1;
+            return DevAckError;
 
         // check flag
         return  *(pdata + 4);
@@ -5593,7 +5587,7 @@ namespace zvision
         const int ret_header_len = 5;
         const int chk_sum_len = 2;
         if (str_ret.size() < min_ret_len)
-            return -1;
+            return NotEnoughData;
 
         out = str_ret.substr(ret_header_len, str_ret.size() - ret_header_len - chk_sum_len);
         return 0;
@@ -5605,7 +5599,7 @@ namespace zvision
         if (cmd.size() < chk_sum_len)
         {
             DisConnect();
-            return -1;
+            return InvalidParameter;
         }
 
         std::string cmd_str = cmd;
@@ -5617,7 +5611,7 @@ namespace zvision
         if (client_->SyncSend(cmd_str, cmd_str.size()))
         {
             DisConnect();
-            return -1;
+            return TcpSendTimeout;
         }
 
         std::string data_str;
@@ -5644,7 +5638,7 @@ namespace zvision
         // send cmd
         if (client_->SyncSend(cmd, send_len))
         {
-            LOG_ERROR("Send cali cmd error: %d\n", client_->GetSysErrorCode());
+            LOG_F(ERROR, "Send cali cmd error: %d", client_->GetSysErrorCode());
             DisConnect();
             return TcpSendTimeout;
         }
@@ -5653,7 +5647,7 @@ namespace zvision
         std::string recv_ret1(ret_len1, 'x');
         if (client_->SyncRecv(recv_ret1, ret_len1))
         {
-            LOG_ERROR("Receive cali ret1 error:  %d\n", client_->GetSysErrorCode());
+            LOG_F(ERROR, "Receive cali ret1 error:  %d", client_->GetSysErrorCode());
             DisConnect();
             return TcpRecvTimeout;
         }
@@ -5667,7 +5661,7 @@ namespace zvision
                 std::string temp(len, 'x');
                 client_->SyncRecv(temp, len);
             }
-            LOG_ERROR("Get cali ret error, data len not valid:[%d]\n", ret_len2);
+            LOG_F(ERROR, "Get cali ret error, data len not valid:[%d]", ret_len2);
             DisConnect();
             return DevAckError;
         }
@@ -5675,7 +5669,7 @@ namespace zvision
         std::string recv_ret2(ret_len2, 'x');
         if (client_->SyncRecv(recv_ret2, ret_len2))
         {
-            LOG_ERROR("Receive cali ret2 error:  %d\n", client_->GetSysErrorCode());
+            LOG_F(ERROR, "Receive cali ret2 error:  %d", client_->GetSysErrorCode());
             DisConnect();
             return TcpRecvTimeout;
         }
@@ -5699,7 +5693,7 @@ namespace zvision
 
         if (!check)
         {
-            LOG_ERROR("Check cali ret error: %d\n", client_->GetSysErrorCode());
+            LOG_F(ERROR, "Check cali ret error: %d.", client_->GetSysErrorCode());
             DisConnect();
             return DevAckError;
         }
@@ -5721,7 +5715,7 @@ namespace zvision
             int ret = client_->SyncRecv(header_recv, cali_header_len);
             if (ret)
             {
-                LOG_ERROR("Receive calibration header error.\n");
+                LOG_F(ERROR, "Receive calibration header error.");
                 DisConnect();
                 return TcpRecvTimeout;
             }
@@ -5731,7 +5725,7 @@ namespace zvision
             NetworkToHostShort((uint8_t*)header_recv.data() + (cali_header_len - chk_sum_len), (char*)(&data_len));
             if (data_len - chk_sum_len < 0 )
             {
-                LOG_ERROR("Check calibration header error.\n");
+                LOG_F(ERROR, "Check calibration header error.");
                 DisConnect();
                 return InvalidContent;
             }
@@ -5741,7 +5735,7 @@ namespace zvision
             ret = client_->SyncRecv(data_recv, data_len);
             if (ret)
             {
-                LOG_ERROR("Receive calibration data error.\n");
+                LOG_F(ERROR, "Receive calibration data error.");
                 DisConnect();
                 return TcpRecvTimeout;
             }
@@ -5756,7 +5750,7 @@ namespace zvision
             uint16_t chk = get_check_sum(cali_pkt);
             if (chk != pkt_chk)
             {
-                LOG_ERROR("Check mlxs calibration data error.\n");
+                LOG_F(ERROR, "Check mlxs calibration data error.");
                 DisConnect();
                 return DevAckError;
             }
@@ -5772,13 +5766,13 @@ namespace zvision
                 }
                 if (0x00 == check_all_00)
                 {
-                    LOG_ERROR("Check calibration data error, data is all 0x00.\n");
+                    LOG_F(ERROR, "Check calibration data error, data is all 0x00.");
                     DisConnect();
                     return InvalidContent;
                 }
                 if (0xFF == check_all_ff)
                 {
-                    LOG_ERROR("Check calibration data error, data is all 0xFF\n");
+                    LOG_F(ERROR, "Check calibration data error, data is all 0xFF.");
                     DisConnect();
                     return InvalidContent;
                 }
@@ -5821,7 +5815,7 @@ namespace zvision
         // we should get 100/200/400
         if (pkts.size() != 100 && pkts.size() != 200 && pkts.size() != 400)
         {
-            LOG_ERROR("Get calibration data error.\n");
+            LOG_F(ERROR, "Get calibration data error.");
             DisConnect();
             return NotEnoughData;
         }
@@ -5848,7 +5842,7 @@ namespace zvision
     int LidarTools::GetML30sPlusB1DeviceSN(std::string& sn)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         const int send_len = 9;
         char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x02, (char)0x0D, (char)0x01, (char)0x00, (char)0x00 };
@@ -5865,7 +5859,7 @@ namespace zvision
     int LidarTools::GetML30sPlusB1DeviceMacAddr(std::string& mac)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         const int send_len = 9;
         char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x02, (char)0x0D, (char)0x02, (char)0x00, (char)0x00 };
@@ -5877,7 +5871,7 @@ namespace zvision
 
         if (out.size() != 6)
         {
-            LOG_ERROR("Check recv data len error.\n");
+            LOG_F(ERROR, "Check recv data len error.");
             DisConnect();
             return NotMatched;
         }
@@ -5891,7 +5885,7 @@ namespace zvision
     int LidarTools::GetML30sPlusB1DeviceFirmwareVersion(FirmwareVersion& version, FirmwareVersion& ver_bak)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         const int send_len = 9;
         char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x02, (char)0x0D, (char)0x04, (char)0x00, (char)0x00 };
@@ -5903,7 +5897,7 @@ namespace zvision
 
         if (out.size() < 16)
         {
-            LOG_ERROR("Check recv data len error.\n");
+            LOG_F(ERROR, "Check recv data len error.");
             DisConnect();
             return NotMatched;
         }
@@ -5919,7 +5913,7 @@ namespace zvision
     int LidarTools::GetML30sPlusB1DeviceNetworkConfigurationInfo(DeviceConfigurationInfo& info)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         const int send_len = 9;
         char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x02, (char)0x0D, (char)0x03, (char)0x00, (char)0x00 };
@@ -5931,7 +5925,7 @@ namespace zvision
 
         if (out.size() < 27)
         {
-            LOG_ERROR("Check recv data len error.\n");
+            LOG_F(ERROR, "Check recv data len error.");
             DisConnect();
             return NotMatched;
         }
@@ -5963,7 +5957,7 @@ namespace zvision
     int LidarTools::GetML30sPlusB1DeviceConfigParamInUse(DeviceConfigurationInfo& info)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         const int send_len = 9;
         char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x02, (char)0x0D, (char)0x05, (char)0x00, (char)0x00 };
@@ -5975,7 +5969,7 @@ namespace zvision
 
         if (out.size() < 0x32)
         {
-            LOG_ERROR("Check recv data len error.\n");
+            LOG_F(ERROR, "Check recv data len error.");
             DisConnect();
             return NotMatched;
         }
@@ -6069,7 +6063,7 @@ namespace zvision
     int LidarTools::GetML30sPlusB1DeviceAlgoParamInUse(DeviceConfigurationInfo& info)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         const int send_len = 9;
         char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x02, (char)0x0D, (char)0x07, (char)0x00, (char)0x00 };
@@ -6081,7 +6075,7 @@ namespace zvision
 
         if (out.size() < 85)
         {
-            LOG_ERROR("Check recv data len error.\n");
+            LOG_F(ERROR, "Check recv data len error.");
             DisConnect();
             return NotMatched;
         }
@@ -6233,7 +6227,7 @@ namespace zvision
     int LidarTools::GetML30sPlusB1DeviceLog(std::string& log)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         const int send_len = 9;
         char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x02, (char)0x0D, (char)0x0C, (char)0x00, (char)0x00 };
@@ -6268,7 +6262,7 @@ namespace zvision
     int LidarTools::GetML30sPlusB1DevicePtpConfiguration(std::string& ptp_cfg)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         const int send_len = 9;
         char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x02, (char)0x0D, (char)0x0D, (char)0x00, (char)0x00 };
@@ -6344,14 +6338,14 @@ namespace zvision
     int LidarTools::ML30sPlusB1FirmwareUpdate(std::string& filename, ProgressCallback cb, bool isBak)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         // get file size
         std::ifstream in(filename, std::ifstream::ate | std::ifstream::binary);
         if (!in.is_open())
         {
-            LOG_ERROR("Open file error.\n");
-            return -1;
+            LOG_F(ERROR, "Open file error.");
+            return OpenFileError;
         }
         std::streampos end = in.tellg();
         int size = static_cast<int>(end);
@@ -6407,30 +6401,35 @@ namespace zvision
                 {
                     cb(start_percent++, this->device_ip_.c_str());
                 }
+
+                // sleep
+                std::this_thread::sleep_for(std::chrono::microseconds(210));
             }
             idata.close();
         }
         if (readed != block_total)
         {
             client_->Close();
-            return -1;
+            return TcpSendTimeout;
         }
 
         // get ret
         std::string str_ret;
-        if (GetML30sPlusB1DeviceRet(str_ret) != 0)
+        ret = GetML30sPlusB1DeviceRet(str_ret);
+        if ( ret != 0)
         {
             DisConnect();
-            return -1;
+            return ret;
         }
 
         // check ret
-        if (CheckML30sPlusB1DeviceRet(str_ret) != 0)
+        ret = CheckML30sPlusB1DeviceRet(str_ret);
+        if (ret != 0)
         {
             DisConnect();
-            return -1;
+            return ret;
         }
-        LOG_DEBUG("Data transfer ok...\n");
+        LOG_F(2, "Data transfer ok...");
 
         // waitting for step 2
         bool ok = false;
@@ -6452,11 +6451,11 @@ namespace zvision
 
         if (!ok)
         {
-            LOG_ERROR("Waiting for erase flash failed...\n");
+            LOG_F(ERROR, "Waiting for erase flash failed...");
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
-        LOG_DEBUG("Waiting for erase flash ok...\n");
+        LOG_F(2, "Waiting for erase flash ok...");
 
         // waitting for step 3
         while (1)
@@ -6477,24 +6476,26 @@ namespace zvision
 
         if (!ok)
         {
-            LOG_ERROR("Waiting for write flash failed...\n");
+            LOG_F(ERROR, "Waiting for write flash failed...");
             DisConnect();
-            return -1;
+            return TcpRecvTimeout;
         }
-        LOG_DEBUG("Waiting for write flash ok...\n");
+        LOG_F(2, "Waiting for write flash ok...");
 
         // recv ret
-        if (GetML30sPlusB1DeviceRet(str_ret) != 0)
+        ret = GetML30sPlusB1DeviceRet(str_ret);
+        if (ret != 0)
         {
             DisConnect();
-            return -1;
+            return ret;
         }
 
         // check ret
-        if (CheckML30sPlusB1DeviceRet(str_ret) != 0)
+        ret = CheckML30sPlusB1DeviceRet(str_ret);
+        if (ret != 0)
         {
             DisConnect();
-            return -1;
+            return ret;
         }
 
         return 0;
@@ -6503,7 +6504,7 @@ namespace zvision
     int LidarTools::SetML30sPlusB1DeviceStaticIpAddress(std::string ip)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         const int send_len = 13;
         char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x06, (char)0x02, (char)0x01,\
@@ -6520,7 +6521,7 @@ namespace zvision
     int LidarTools::SetML30sPlusB1DeviceGatewayAddress(std::string addr)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         const int send_len = 13;
         char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x06, (char)0x02, (char)0x02,\
@@ -6537,7 +6538,7 @@ namespace zvision
     int LidarTools::SetML30sPlusB1DeviceSubnetMaskAddress(std::string addr)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         const int send_len = 13;
         char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x06, (char)0x02, (char)0x03,\
@@ -6554,7 +6555,7 @@ namespace zvision
     int LidarTools::SetML30sPlusB1DeviceMacAddress(std::string mac)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         const int send_len = 15;
         char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x08, (char)0x02, (char)0x04,\
@@ -6570,7 +6571,7 @@ namespace zvision
     int LidarTools::SetML30sPlusB1DeviceUdpDestinationIpAddress(std::string ip)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         const int send_len = 13;
         char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x06, (char)0x02, (char)0x05,\
@@ -6587,7 +6588,7 @@ namespace zvision
     int LidarTools::SetML30sPlusB1DeviceUdpDestinationPort(int port)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         const int send_len = 13;
         char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x06, (char)0x02, (char)0x06,\
@@ -6603,7 +6604,7 @@ namespace zvision
     int LidarTools::SetML30sPlusB1DeviceDHCPEnable(bool en)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         const int send_len = 10;
         char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x03, (char)0x02, (char)0x07,\
@@ -6622,7 +6623,7 @@ namespace zvision
     int LidarTools::SetML30sPlusB1DeviceAlgorithmEnable(AlgoType tp, bool en)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         const int send_len = 10;
         char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x03, (char)0x00, (char)0x00,\
@@ -6655,7 +6656,7 @@ namespace zvision
             cmd[6] = 0x01;
         }
         else
-            return -1;
+            return NotSupport;
 
         std::string cmd_str(cmd, send_len);
         std::string out;
@@ -6665,7 +6666,7 @@ namespace zvision
     int LidarTools::SetML30sPlusB1DeviceRetroParam(RetroParam tp, int value)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         std::string data;
         uint8_t cmd_tp = 0;
@@ -6711,7 +6712,7 @@ namespace zvision
             break;
         case zvision::RetroParamUnknown:
         default:
-            return -1;
+            return NotSupport;
         }
         std::string packet;
         GenerateML30sPlusB1FilePacket(0x01, data, cmd_tp, param_tp, packet);
@@ -6723,7 +6724,7 @@ namespace zvision
     int LidarTools::SetML30sPlusB1DeviceAdhesionParamParam(AdhesionParam tp, float value)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         uint8_t cmd_tp = 0x05;
         uint8_t param_tp = 0;
@@ -6769,7 +6770,7 @@ namespace zvision
             break;
         case zvision::AdhesionParamUnknown:
         default:
-            return -1;
+            return NotSupport;
         }
 
         std::string data(values, 4);
@@ -6783,7 +6784,7 @@ namespace zvision
     int LidarTools::SetML30sPlusB1DeviceDownsampleMode(DownsampleMode mode)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         const int send_len = 10;
         char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x03, (char)0x06, (char)0x01,\
@@ -6806,7 +6807,7 @@ namespace zvision
     int LidarTools::SetML30sPlusB1DeviceDirtyEnable(bool en)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         const int send_len = 10;
         char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x03, (char)0x07, (char)0x01,\
@@ -6825,7 +6826,7 @@ namespace zvision
     int LidarTools::SetML30sPlusB1DeviceIntensitySmoothEnable(bool en)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         const int send_len = 10;
         char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x03, (char)0x0F, (char)0x01,\
@@ -6844,7 +6845,7 @@ namespace zvision
     int LidarTools::SetML30sPlusB1DeviceEchoMode(EchoMode mode)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         const int send_len = 10;
         char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x03, (char)0x08, (char)0x01,\
@@ -6873,7 +6874,7 @@ namespace zvision
     int LidarTools::SetML30sPlusB1DevicePtpEnable(bool en)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         const int send_len = 10;
         char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x03, (char)0x09, (char)0x01,\
@@ -6892,7 +6893,7 @@ namespace zvision
     int LidarTools::SetML30sPlusB1DevicePtpConfiguration(std::string filename)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         // read file
         std::string content;
@@ -6928,7 +6929,7 @@ namespace zvision
     int LidarTools::SetML30sPlusB1DeviceFrameSyncEnable(bool en)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         const int send_len = 10;
         char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x03, (char)0x0A, (char)0x01,\
@@ -6947,7 +6948,7 @@ namespace zvision
     int LidarTools::SetML30sPlusB1DeviceFrameSyncOffset(int value)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         const int send_len = 13;
         char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x06, (char)0x0A, (char)0x02,\
@@ -6962,7 +6963,7 @@ namespace zvision
     int LidarTools::SetML30sPlusB1DeviceCalSendEnable(bool en)
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         const int send_len = 10;
         char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x03, (char)0x0B, (char)0x01,\
@@ -6987,7 +6988,7 @@ namespace zvision
             return ret;
 
         if (cal.scan_mode != ScanML30SA1Plus_160)
-            return -1;
+            return NotSupport;
 
         // we need trans cali data
         int lpos = cal.data.size() / 2;
@@ -7056,7 +7057,7 @@ namespace zvision
             ret = client_->SyncSend(packet, packet.size());
             if (ret)
             {
-                LOG_ERROR("Send calibration data error, ret = %d.\n", ret);
+                LOG_F(ERROR, "Send calibration data error, ret = %d.", ret);
                 DisConnect();
                 return TcpSendTimeout;
             }
@@ -7071,7 +7072,7 @@ namespace zvision
     int LidarTools::RebootML30sPlusB1Device()
     {
         if (!CheckConnection())
-            return -1;
+            return TcpConnTimeout;
 
         const int send_len = 10;
         char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x03, (char)0x0C, (char)0x01,\

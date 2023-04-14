@@ -36,11 +36,6 @@
 
 #include <vector>
 
-// For ML30S+B1 EP(40ms) device
-#ifndef ZVISION_ML30sPlus_b1_ep_mode
-// #define ZVISION_ML30sPlus_b1_ep_mode
-#endif
-
 namespace zvision
 {
 #ifdef _WIN32
@@ -407,11 +402,18 @@ namespace zvision
         float z = .0f;
         uint8_t peak = 0;
         float  pulse_width = .0f;
+        uint16_t pulse_width_ori = 0;
         uint8_t gain = 0;
-        uint8_t reserved = 0;           // 5 bits
-        uint16_t reflectivity = 0;      // 8 bits
-        float direct_current = .0f;
+        uint8_t reserved = 0;            // 5 bits
+        uint16_t reflectivity = 0;       // 8 bits
+        uint16_t reflectivity_13bits = 0;// 13 bits
         float noisy = .0f;
+        uint16_t noisy_ori = 0;
+        float direct_current = .0f;
+        uint16_t direct_current_ori = 0;
+
+        uint8_t ftof_max = 0;
+        uint16_t ftof = 0;
         int valid = 0;
     }BloomingPoint;
 
@@ -700,6 +702,15 @@ namespace zvision
     * \return string tag.
     */
     std::string get_lidar_frame_mark_string();
+
+    // temp
+    /** \bref change ml30s+ b1 ep1 mode
+    */
+    void set_ml30splus_b1_ep_mode_enable(bool en);
+
+    /** \bref get ml30s+ b1 ep1 mode
+*/
+    bool is_ml30splus_b1_ep_mode_enable();
 }
 
 #endif //end DEFINE_H_

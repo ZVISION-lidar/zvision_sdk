@@ -32,6 +32,7 @@
 #include "print.h"
 #include "lidar_tools.h"
 #include "point_cloud.h"
+#include "loguru.hpp"
 #include <stdio.h>
 #include <fstream>
 #include <iostream>
@@ -146,7 +147,7 @@ struct PlayParam {
 //Pointcloud callback function.
 void sample_pointcloud_callback(zvision::PointCloud& pc, int& status)
 {
-    LOG_INFO("PointCloud callback, size %d status %d.\n", pc.points.size(), status);
+     LOG_F(2, "PointCloud callback, size %d status %d.", pc.points.size(), status);
 }
 
 //sample 0 : get online pointcloud. You can get poincloud from online device.
@@ -180,10 +181,10 @@ void sample_online_pointcloud(const PlayParam& param)
 
         //Step 3 : Wait the pointcloud for 200 ms. this function return when get poincloud ok or timeout. 
         if (ret = player.GetPointCloud(cloud, 200))
-            LOG_ERROR("GetPointCloud error, ret = %d.\n", ret);
+             LOG_F(ERROR, "GetPointCloud error, ret = %d.", ret);
         else
         {
-            LOG_INFO("GetPointCloud ok.\n");
+             LOG_F(2, "GetPointCloud ok.");
 #ifdef USING_PCL_VISUALIZATION
             pcl::PointCloud<pcl::PointXYZRGBA>::Ptr  pcl_cloud = point_cloud_convert(cloud);
             if (!(viewer->updatePointCloud(pcl_cloud, "cloud")))
@@ -223,15 +224,15 @@ void sample_offline_pointcloud(std::string lidar_ip = "192.168.10.108", int port
     //Step 3 : Read pointcloud info from file.
     if (ret = player.GetPointCloudInfo(size, type))
     {
-        LOG_ERROR("OfflinePointCloudProducer GetPointCloudInfo failed, ret = %d.\n", ret);
+         LOG_F(ERROR, "OfflinePointCloudProducer GetPointCloudInfo failed, ret = %d.", ret);
     }
     else
     {
-        LOG_INFO("OfflinePointCloudProducer GetPointCloudInfo ok, count is %d, type is %d\n", size, type);
+         LOG_F(2, "OfflinePointCloudProducer GetPointCloudInfo ok, count is %d, type is %d.", size, type);
 
         if (0 == size)
         {
-            LOG_ERROR("No pointcloud found for lidar %s:%d.\n", lidar_ip.c_str(), port);
+             LOG_F(ERROR, "No pointcloud found for lidar %s:%d.", lidar_ip.c_str(), port);
             return;
         }
 #ifdef USING_PCL_VISUALIZATION
@@ -239,31 +240,34 @@ void sample_offline_pointcloud(std::string lidar_ip = "192.168.10.108", int port
         viewer.reset(new pcl::visualization::PCLVisualizer("cloudviewtest"));
 #endif
         //Step 4: Iterate the pointcloud.
-        for (int i = 0; i < size; ++i)
+        while (true)
         {
-            zvision::PointCloud pointcloud;
-            if (ret = player.GetPointCloud(i, pointcloud))
+            for (int i = 0; i < size-1; ++i)
             {
-                LOG_ERROR("GetPointCloud error, frame number is %d, ret = %d.", i, ret);
-            }
-            else
-            {
-                int point_valid = 0;
-                for (auto& n : pointcloud.points)
+                zvision::PointCloud pointcloud;
+                if (ret = player.GetPointCloud(i, pointcloud))
                 {
-                    if (n.valid)
-                        point_valid++;
+                     LOG_F(ERROR, "GetPointCloud error, frame number is %d, ret = %d.", i, ret);
                 }
-                LOG_INFO("GetPointCloud ok, frame number is %d, valid points %d.\n", i, point_valid);
-#ifdef USING_PCL_VISUALIZATION
-                pcl::PointCloud<pcl::PointXYZRGBA>::Ptr  pcl_cloud = point_cloud_convert(pointcloud);
-                if (!(viewer->updatePointCloud(pcl_cloud, "cloud")))
+                else
                 {
-                    viewer->addPointCloud(pcl_cloud, "cloud", 0);
-                    viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 2, "cloud");
+                    int point_valid = 0;
+                    for (auto& n : pointcloud.points)
+                    {
+                        if (n.valid)
+                            point_valid++;
+                    }
+                     LOG_F(2, "GetPointCloud ok, frame number is %d, valid points %d.", i, point_valid);
+    #ifdef USING_PCL_VISUALIZATION
+                    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr  pcl_cloud = point_cloud_convert(pointcloud);
+                    if (!(viewer->updatePointCloud(pcl_cloud, "cloud")))
+                    {
+                        viewer->addPointCloud(pcl_cloud, "cloud", 0);
+                        viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 2, "cloud");
+                    }
+                    viewer->spinOnce(50);
+    #endif
                 }
-                viewer->spinOnce(50);
-#endif
             }
         }
     }
@@ -322,7 +326,7 @@ void sample_offline2pcd(std::string lidar_ip = "192.168.10.108", int port = 2368
 	// get cali files
 	std::vector<std::string> calis;
 	if (!GetFiles(calis, calidir)) {
-		LOG_ERROR("Get calibration files failed.\n");
+        LOG_F(ERROR, "Get calibration files failed.");
 		return;
 	}
 
@@ -330,20 +334,20 @@ void sample_offline2pcd(std::string lidar_ip = "192.168.10.108", int port = 2368
 	std::string pcap_filename = pcapfilename;
 	// for per califile, get pointcloud
 	for (auto cali : calis) {
-		printf("For cali file:  %s\n", cali.c_str());
+        LOG_F(2, "For cali file:  %s.", cali.c_str());
 		std::string cal_filename = cali;
 		zvision::OfflinePointCloudProducer player(pcap_filename, cal_filename, lidar_ip, port);
 		int size = 0;
 		zvision::DeviceType type = zvision::LidarUnknown;
 		if (ret = player.GetPointCloudInfo(size, type))
 		{
-			LOG_ERROR("OfflinePointCloudProducer GetPointCloudInfo failed, ret = %d.\n", ret);
+			 LOG_F(ERROR, "OfflinePointCloudProducer GetPointCloudInfo failed, ret = %d.", ret);
 		}
 		else
 		{
 			if (0 == size)
 			{
-				LOG_ERROR("No pointcloud found for lidar %s:%d, calibration file:%s.\n", lidar_ip.c_str(), port, cali.c_str());
+				 LOG_F(ERROR, "No pointcloud found for lidar %s:%d, calibration file:%s.", lidar_ip.c_str(), port, cali.c_str());
 				continue;
 			}
 			for (int i = 0; i < size; ++i)
@@ -351,7 +355,7 @@ void sample_offline2pcd(std::string lidar_ip = "192.168.10.108", int port = 2368
 				zvision::PointCloud pointcloud;
 				if (ret = player.GetPointCloud(i, pointcloud))
 				{
-					LOG_ERROR("  GetPointCloud error, frame number is %d, ret = %d.", i, ret);
+					 LOG_F(ERROR, "  GetPointCloud error, frame number is %d, ret = %d.", i, ret);
 				}
 				else
 				{
@@ -382,18 +386,34 @@ void sample_offline2pcd(std::string lidar_ip = "192.168.10.108", int port = 2368
 						boost::filesystem::create_directory(save_path);
 
 					std::string pcd_path = save_path + "/" + boost::filesystem::basename(cal_filename) + "_" + std::to_string(i) + ".pcd";
-					printf("  save frame[%d]`s pcd to -->  %s\n", i, pcd_path.c_str());
+                    LOG_F(2, "  save frame[%d]`s pcd to -->  %s.", i, pcd_path.c_str());
 					pcl::io::savePCDFileASCII(pcd_path, cloud);
 				}
 			}
 		}
 	}
-	printf("Done!\n");
+    LOG_F(2, "Done!");
 }
 #endif
 
+void init_log(int argc, char* argv[])
+{
+    loguru::init();
+    loguru::add_file("Log/log.txt", loguru::Truncate, loguru::Verbosity_INFO);
+    loguru::g_stderr_verbosity = 4;
+    loguru::g_preamble_date = 1;
+    loguru::g_preamble_time = 1;
+    loguru::g_preamble_uptime = 1;
+    loguru::g_preamble_thread = 1;
+    loguru::g_preamble_file = 1;
+    loguru::g_preamble_verbose = 1;
+    loguru::g_preamble_pipe = 1;
+}
+
 int main(int argc, char** argv)
 {
+    init_log(argc, argv);
+
     using Param = std::map<std::string, std::string>;
     std::map<std::string, std::string> paras;
     std::string appname = "";
@@ -403,6 +423,7 @@ int main(int argc, char** argv)
     Param::iterator offline = paras.find("-offline");
 	Param::iterator offline2pcd = paras.find("-offline2pcd");
 
+    zvision::set_ml30splus_b1_ep_mode_enable(false);
     if (online != paras.end())// play online sensor
     {
         Param::iterator find = paras.find("-ip");// device ip
@@ -438,6 +459,11 @@ int main(int argc, char** argv)
             if (paras.end() != (find = paras.find("-30spb1"))) {
                 tp = zvision::DeviceType::LidarMl30SB1Plus;
             }
+            if (paras.end() != (find = paras.find("-30spb1ep1")))
+            {
+                tp = zvision::DeviceType::LidarMl30SB1Plus;
+                zvision::set_ml30splus_b1_ep_mode_enable(true);
+            }
             if (paras.end() != (find = paras.find("-d")))// downsample mode
             {
                 downsample_str = find->second;
@@ -462,7 +488,7 @@ int main(int argc, char** argv)
         }
         else
         {
-            LOG_ERROR("Invalid parameters, no device ip address found.\n");
+             LOG_F(ERROR, "Invalid parameters, no device ip address found.");
         }
     }   
     else if (offline != paras.end())// play online sensor
@@ -471,6 +497,10 @@ int main(int argc, char** argv)
         Param::iterator port_find = paras.find("-p");// pointcloud udp port
         Param::iterator pcap_find = paras.find("-f");// pointcloud udp port
         Param::iterator calibration_find = paras.find("-c");// pointcloud udp port
+        if (paras.end() != paras.find("-30spb1ep1"))      // for 30s+ ep1 mode 
+        {
+            zvision::set_ml30splus_b1_ep_mode_enable(true);
+        }
 
         if ((ip_find != paras.end()) && (port_find != paras.end()) && (pcap_find != paras.end()) && (calibration_find != paras.end()))
         {
@@ -484,13 +514,13 @@ int main(int argc, char** argv)
         else
         {
             if(ip_find == paras.end())
-                LOG_ERROR("Invalid parameters, device ip address not found.\n");
+                 LOG_F(ERROR, "Invalid parameters, device ip address not found.");
             if (port_find == paras.end())
-                LOG_ERROR("Invalid parameters, port not found.\n");
+                 LOG_F(ERROR, "Invalid parameters, port not found.");
             if (pcap_find == paras.end())
-                LOG_ERROR("Invalid parameters, filename not found.\n");
+                 LOG_F(ERROR, "Invalid parameters, filename not found.");
             if (calibration_find == paras.end())
-                LOG_ERROR("Invalid parameters, calibration file name not found.\n");
+                 LOG_F(ERROR, "Invalid parameters, calibration file name not found.");
         }
     }
 #ifdef USING_PCL_VISUALIZATION
@@ -500,6 +530,10 @@ int main(int argc, char** argv)
 		Param::iterator port_find = paras.find("-p");// device udp port
 		Param::iterator pcap_find = paras.find("-f");// pcap file
 		Param::iterator calidir = paras.find("-cali_dir");// cali file
+        if (paras.end() != paras.find("-30spb1ep1"))      // for 30s+ ep1 mode 
+        {
+            zvision::set_ml30splus_b1_ep_mode_enable(true);
+        }
 
 		if ((ip_find != paras.end()) && (port_find != paras.end()) && (pcap_find != paras.end()) && (calidir != paras.end()))
 		{
@@ -514,13 +548,13 @@ int main(int argc, char** argv)
 		else
 		{
 			if (ip_find == paras.end())
-				LOG_ERROR("Invalid parameters, device ip address not found.\n");
+				 LOG_F(ERROR, "Invalid parameters, device ip address not found.");
 			if (port_find == paras.end())
-				LOG_ERROR("Invalid parameters, port not found.\n");
+				 LOG_F(ERROR, "Invalid parameters, port not found.");
 			if (pcap_find == paras.end())
-				LOG_ERROR("Invalid parameters, filename not found.\n");
+				 LOG_F(ERROR, "Invalid parameters, filename not found.");
 			if (calidir == paras.end())
-				LOG_ERROR("Invalid parameters, calibration file name not found.\n");
+				 LOG_F(ERROR, "Invalid parameters, calibration file name not found.");
 		}
 	}
 #endif
@@ -535,19 +569,21 @@ int main(int argc, char** argv)
         << "        -g  multicast_group_ip_address(optional, valid when -j is set)\n"
 		<< "        -30sp (optional, special for ML30S+ lidar)\n"
         << "        -30spb1 (optional, special for ML30S+B1 lidar)\n"
+        << "        -30spb1ep1 (optional, special for ML30S+B1 EP1 lidar)\n"
         << "        -d  downsample mode(none, 1/2 or 1/4, optional,only valid for ScanML30SA1_160)\n"
         << "        -dcfg  downsample mode(downsample config file path, optional, only valid for ScanML30SA1_160)\n"
         << "\n"
         << "Online sample 1 : -online -ip 192.168.10.108\n"
 		<< "Online sample 2 : -online -ip 192.168.10.108 -30sp\n"
         << "Online sample 3 : -online -ip 192.168.10.108 -30spb1\n"
-        << "Online sample 4 : -online -ip 192.168.10.108 -p 2368\n"
-        << "Online sample 5 : -online -ip 192.168.10.108 -c xxxx.cal\n"
-        << "Online sample 6 : -online -ip 192.168.10.108 -p 2368 -c xxxx.cal\n"
-        << "Online sample 7 : -online -ip 192.168.10.108 -j\n"
-        << "Online sample 8 : -online -ip 192.168.10.108 -j 239.0.0.1\n"
-        << "Online sample 9 : -online -ip 192.168.10.108 -d 1/2\n"
-        << "Online sample 10 : -online -ip 192.168.10.108 -dcfg xxxx.txt\n"
+        << "Online sample 4 : -online -ip 192.168.10.108 -30spb1ep1\n"
+        << "Online sample 5 : -online -ip 192.168.10.108 -p 2368\n"
+        << "Online sample 6 : -online -ip 192.168.10.108 -c xxxx.cal\n"
+        << "Online sample 7 : -online -ip 192.168.10.108 -p 2368 -c xxxx.cal\n"
+        << "Online sample 8 : -online -ip 192.168.10.108 -j\n"
+        << "Online sample 9 : -online -ip 192.168.10.108 -j 239.0.0.1\n"
+        << "Online sample 10 : -online -ip 192.168.10.108 -d 1/2\n"
+        << "Online sample 11 : -online -ip 192.168.10.108 -dcfg xxxx.txt\n"
         << "\n"
 
         << "Offline sample param:\n"
@@ -556,8 +592,10 @@ int main(int argc, char** argv)
         << "        -p  pointcloud_udp_port(required)\n"
         << "        -f  pcap_file_name(required)\n"
         << "        -c  calibration_file_name(required)\n"
+        << "        -30spb1ep1 (optional, special for ML30S+B1 EP1 lidar)\n"
         << "\n"
         << "Offline sample 1 : -offline -ip 192.168.10.108 -p 2368 -f xxxx.pcap -c xxxx.cal\n"
+        << "Offline sample 2 : -offline -ip 192.168.10.108 -p 2368 -f xxxx.pcap -c xxxx.cal -30spb1ep1\n"
 
 #ifdef USING_PCL_VISUALIZATION
         << "\n"
@@ -567,8 +605,11 @@ int main(int argc, char** argv)
 		<< "        -p  pointcloud_udp_port(required)\n"
 		<< "        -f  pcap_file_name(required)\n"
 		<< "        -cali_dir  calibration_file_name(required)\n"
+        << "        -30spb1ep1 (optional, special for ML30S+B1 EP1 lidar)\n"
 		<< "\n"
 		<< "Offline sample 1 : -offline2pcd -ip 192.168.10.108 -p 2368 -f xxxx.pcap -cali_dir /home/data/cali\n"
+        << "Offline sample 2 : -offline2pcd -ip 192.168.10.108 -p 2368 -f xxxx.pcap -cali_dir /home/data/cali -30spb1ep1\n"
+
 #endif
 
         << "############################# END  GUIDE ################################\n\n"

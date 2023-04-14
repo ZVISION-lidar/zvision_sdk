@@ -38,6 +38,8 @@ namespace zvision
 {
     class UdpReceiver;
     class PcapUdpSource;
+    struct BloomingFrame;
+    typedef std::shared_ptr<BloomingFrame> BloomingFramePtr;
 
     template <typename T>
     class SynchronizedQueue;
@@ -47,6 +49,12 @@ namespace zvision
     public:
         std::vector<Point> points;
         zvision::ScanMode scan_mode;
+        bool is_ptp_mode = false;
+        double timestamp = .0;
+        double sys_stamp = .0;
+
+        bool use_blooming = false;
+        BloomingFramePtr blooming_frame;
     };
 
     //////////////////////////////////////////////////////////////////////////////////////////////
@@ -57,6 +65,10 @@ namespace zvision
     public:
         LidarPointsFilter();
         ~LidarPointsFilter();
+
+        /** \brief filter buckling pointcloud(only for ml30s device).
+        */
+        static void FilterBucklingPointCloud(PointCloud& cloud);
 
         /** \brief init filter parameter(only for ml30s device).
         */
@@ -167,6 +179,9 @@ namespace zvision
         /*thread function: get lidar udp packet*/
         void Producer();
 
+        /*thread function: get lidar internel udp packet*/
+        void InternalProducer();
+
         /*thread function: get packet and process to pointcloud**/
         void Consumer();
 
@@ -196,6 +211,10 @@ namespace zvision
 
         /** \brief receive udp data packet */
         std::shared_ptr<UdpReceiver> receiver_;
+
+        /** \brief receive udp data packet */
+        std::shared_ptr<UdpReceiver> internal_receiver_;
+
         std::string device_ip_;
         std::string cal_filename_;
         DeviceType device_type_;

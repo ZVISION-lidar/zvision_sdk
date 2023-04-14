@@ -106,6 +106,16 @@ namespace zvision
         */
         static bool IsValidPacket(std::string& packet);
 
+        /** \brief Packet is ptp timestamp mode or not.
+        * \return true for yes, false for no.
+        */
+        static bool IsPtpMode(std::string& packet);
+
+        /** \brief Get packet sending interval.
+        * \return packet sending interval (s).
+        */
+        static double GetPacketSendInterval(ScanMode mode);
+
         /** \brief Get device type from the pointcloud packet.
         * \return DeviceType.
         */
@@ -176,7 +186,6 @@ namespace zvision
     // New architecture protocol
     struct InternalFrameResolveInfo
     {
-        //bool is_dual = false;
         int echo = 0;
         int fovs = 0;
         int lines = 0;
@@ -191,7 +200,15 @@ namespace zvision
         std::vector<int> fov_id_in_group;
     };
     typedef std::vector<BloomingPoint> BloomingPoints;
-    typedef std::shared_ptr<BloomingPoints> BloomingPointsPtr;
+
+    struct BloomingFrame
+    {
+        BloomingPoints points;
+        // second
+        double timestamp = 0;
+        double sys_stamp = 0;
+    };
+    typedef std::shared_ptr<BloomingFrame> BloomingFramePtr;
     struct InternalPacketHeader
     {
         bool valid = false;
@@ -211,19 +228,20 @@ namespace zvision
         /** \brief packet header.
         *   Product Id:       2 bytes   (uint16_t)
         *   Product Version:  2 bytes   (uint16_t)
-        *   Product SN:      18 bytes   (string)
+        *   Frame id:         2 bytes   (uint16_t)
+        *   Reserved:         2 bytes   (uint16_t)
         *   Content Type:     2 bytes   (uint16_t)
         *   Block Id:         2 bytes   (uint16_t)
         *   PayLoad Length:   4 bytes   (uint32_t)
         */
-        static const int PACKET_HEADER_LEN = 30;
+        static const int PACKET_HEADER_LEN = 16;
 
         /** \brief packet tail.
         *   timestamp: 10 bytes
         *   reserved:   2 bytes
-        *   check sum:  2 bytes   (uint32_t)
+        *   check sum:  4 bytes   (uint32_t)
         */
-        static const int PACKET_TAIL_LEN = 14;
+        static const int PACKET_TAIL_LEN = 16;
 
         static const int DISTANCE_BITS = 19;
 
@@ -248,9 +266,8 @@ namespace zvision
         static double GetTimestamp(const std::string& packet);
 
         /** \brief Get the timestamp from the blooming packet.
-        * \return timestamp in nano second.
         */
-        static uint64_t GetTimestampNS(const std::string& packet);
+        static void GetTimestampNS(const std::string& packet, uint64_t& s, uint32_t& ms, uint32_t& us);
 
 
         static bool GetFrameResolveInfo(const std::string& packet, InternalPacketHeader& header);
@@ -261,16 +278,22 @@ namespace zvision
     {
 
     public:
-        static const int PACKET_LEN = 1304;
+        // v2:5152 v1:3872
+        static const int PACKET_LEN = 5152;
+        static const int DELTA_PACKRT_US = 500;
+        static const int FRAME_THRESHOLD_MS = 50;
         /** \brief Process a blooming udp packet to points.
         * \param[in] packet          udp data packet
         * \param[in] cal_lut         calibration data
         * \param[out] cloud          to store the pointcloud
         * \return 0 for ok, others for failure.
         */
-        static int ProcessPacket(const std::string& packet, const zvision::CalibrationDataSinCosTable& cal_lut, BloomingPoints& cloud, InternalPacketHeader* header);
+        static int ProcessPacket(const std::string& packet, const zvision::CalibrationDataSinCosTable& cal_lut, BloomingFrame& frame, InternalPacketHeader* header);
+
+        static bool IsValidPacket(const std::string& packet);
 
         uint8_t data[PACKET_LEN];
+        double sys_stamp = .0;
     };
 
 }

@@ -142,6 +142,8 @@ namespace zvision
         /** \brief socket which represents the socket resource. */
         ///int socket_;
 
+        const int MAX_PCAP_PKT_LEN = 8192;
+
     };
 
     //////////////////////////////////////////////////////////////////////////////////////////////
@@ -150,6 +152,7 @@ namespace zvision
     public:
 
         using SweepHeaderPos = std::vector<std::streampos>;
+        using BloomingHeaderPos = std::vector<std::streampos>;
         using CalibrationHeaderPos = std::vector<std::streampos>;
         using CalibrationPacketPos = std::vector<std::streampos>;
         using MarkedFramePos = std::vector<int>;
@@ -163,6 +166,7 @@ namespace zvision
             CalibrationPackets cal_pkts_;
             DeviceConfigurationInfo dev_cfg_;
             MarkedFramePos frames_marked_;
+            BloomingHeaderPos blooming_headers_;
         };
 
         using DeviceDataInfoMap = std::map<std::string, DeviceDataInfo>;
@@ -286,18 +290,26 @@ namespace zvision
         virtual ~PcapUdpSource();
 
         /** \brief Calls the Read method to reveive data from local udp port.
-        * \param[in] data the buffer to store the data received.
-        * \param[in] len  the length received.
+        * \param[out] data the buffer to store the data received.
+        * \param[out] len  the length received.
+        * \param[out] packet header data.
         * \return 0 for success, others for failure.
         */
-        virtual int ReadOne(std::string& data, int& len);
+        virtual int ReadOne(std::string& data, int& len, std::string& header);
 
         /** \brief Calls the GetPointCloudPackets method to get one frame pointcloud's packets from pcap file.
-        * \param[in]  data     the buffer to store the data received.
-        * \param[out] packets  the packets which is a full pointcloud.
+        * \param[in]  frame_number    frame id by position_.
+        * \param[out] packets         the packets which is a full pointcloud.
         * \return 0 for success, others for failure.
         */
         int GetPointCloudPackets(int frame_number, std::vector<PointCloudPacket>& packets);
+
+        /** \brief Calls the GetPointCloudPackets method to get one frame pointcloud's packets from pcap file.
+        * \param[in]  stamp (s)    match the blooming packets in blooming_position_.
+        * \param[out] packets         the packets which is a full blooming.
+        * \return 0 for success, others for failure.
+        */
+        int GetBloomingPackets(int frame, double stamp, std::vector<BloomingPacket>& packets);
 
         /** \brief Calls the ReadFrameInfo method to get the frame information.
         * \param[out] size      return the frame counter in the pcap file.
@@ -337,8 +349,11 @@ namespace zvision
         /** \brief timeout(ms) for read.
         int read_timeout_ms_;*/
 
-        /** \brief Server listening port. */
+        /** \brief pointcloud frame header position in pcap file. */
         std::vector<std::streampos> position_;
+
+        /** \brief blooming frame header position and ptp timestamp in pcap file. */
+        std::vector<std::pair<std::streampos, double>> blooming_position_;
 
         /** \brief Pcap filename. */
         std::string filename_;

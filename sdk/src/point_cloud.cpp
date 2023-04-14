@@ -27,12 +27,15 @@
 #include "packet.h"
 #include "packet_source.h"
 #include "print.h"
+#include "loguru.hpp"
 #include <iostream>
 #include <functional>
 #include <fstream>
 #include <thread>
 #include <queue>
 #include <mutex>
+#include <cmath>
+#include <math.h>
 
 namespace zvision
 {
@@ -134,6 +137,102 @@ namespace zvision
 
     LidarPointsFilter::~LidarPointsFilter()
     {}
+
+    void LidarPointsFilter::FilterBucklingPointCloud(PointCloud& cloud)
+    {        
+        if (cloud.scan_mode != ScanMode::ScanML30SA1Plus_160)
+            return;
+        bool is_ml30splus_b1_ep_mode = zvision::is_ml30splus_b1_ep_mode_enable();
+        // for ml30s+b1 ep1 fov0-fov7
+        int npoints = 51200;
+        int points_per_group = 8;
+        int points_per_line = 80;
+        if (!is_ml30splus_b1_ep_mode)
+        {
+            points_per_group = 4;
+        }
+        static const int blks = 16;
+        static float RMS[4][3] = { 0.0433094, -0.016089,  0.0151864,
+                                    0.0398198, -0.0177786, -0.0101136,
+                                   -0.0398198, -0.0177786, -0.0101136,
+                                   -0.0433094, -0.016089,  0.0151864 };
+        static float rms_mod[4] = { 0 };
+        if (rms_mod[0] < 1e-5)
+        {
+            for (int i = 0; i < 4; i++)
+            {
+                rms_mod[i] = std::sqrt(std::pow(RMS[i][0], 2) + std::pow(RMS[i][1], 2) + std::pow(RMS[i][2], 2));
+            }
+        }
+
+        static int fov_rm_id[8] = { 0,1,2,3,0,1,2,3 };
+        if (cloud.points.size() == npoints)
+        {
+            int groups = npoints / points_per_group;
+            for (int g = 0; g < groups; g++)
+            {
+                for (int p = 0; p < points_per_group; p++)
+                {
+                    int id = g * points_per_group + p;
+                    auto& point = cloud.points.at(id);
+
+                    if (point.distance < 3)
+                        continue;
+
+                    // calculate
+                    int rm_id = fov_rm_id[p];
+                    float mult_p_rm = RMS[rm_id][0] * point.x \
+                        + RMS[rm_id][1] * point.y \
+                        + RMS[rm_id][2] * point.z;
+
+                    float theta = std::acos((mult_p_rm) / (rms_mod[rm_id] * point.distance));
+                    float delta_azi = 0;
+                    float delta_ele = 0;
+                    {
+                        float sig = 1.0f;
+                        if (rm_id >= 2)
+                            sig = -1.0f;
+
+                        delta_azi = sig * rms_mod[rm_id] * (1.0 / 2 - 1.0 / point.distance) * std::sin(theta) * std::cos(point.ele);
+                        delta_ele = sig * rms_mod[rm_id] * (1.0 / 2 - 1.0 / point.distance) * std::sin(theta) * std::sin(point.ele);
+
+                        // repair layer
+                        if (point.fov == 1 || point.fov == 5 || point.fov == 2 || point.fov == 6)
+                        {
+                            float ratio = 1.0f;
+                            static float blk_ratio[blks] = { 0.0f, 0.0f, 0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 0.6f, 0.7f, 0.8f, 0.9f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
+                            // direct_right: 0 <- , 1 ->
+                            int direct_right = (g / points_per_line) % 2;
+                            int pos = g % points_per_line;
+                            if (direct_right)
+                                pos = points_per_line - 1 - pos;
+
+                            int blk = pos / 5;
+                            if (point.fov == 1 || point.fov == 5)
+                            {
+                                ratio = blk_ratio[blk];
+                            }
+                            else if (point.fov == 2 || point.fov == 6)
+                            {
+                                blk = blks - 1 - blk;
+                                ratio = blk_ratio[blk];
+                            }
+
+                            delta_azi = delta_azi * ratio;
+                            delta_ele = delta_ele * ratio;
+                        }
+
+                        // update pointcloud data
+                        point.ele = point.ele + delta_ele;
+                        point.azi = point.azi + delta_azi;
+                        point.x = point.distance * std::cos(point.ele) * std::sin(point.azi);
+                        point.y = point.distance * std::cos(point.ele) * std::cos(point.azi);
+                        point.z = point.distance * std::sin(point.ele);
+                    }
+                }
+            }
+        }
+    }
 
     zvision::DownSampleMode LidarPointsFilter::GetDownsampleMode(zvision::ScanMode mode)
     {
@@ -393,11 +492,11 @@ namespace zvision
 
                 if (ret)
                 {
-                    LOG_ERROR("Query device configuration info failed.\n");
+                    LOG_F(ERROR, "Query device configuration info failed.");
                     if (data_port_ < 0)
-                        LOG_ERROR("Please specify the data port and retry.\n");
+                        LOG_F(ERROR, "Please specify the data port and retry.");
                     if (join_multicast_)
-                        LOG_ERROR("No multicast group is joined.\n");
+                        LOG_F(ERROR, "No multicast group is joined.");
 
                     return false;
                 }
@@ -406,12 +505,12 @@ namespace zvision
                     if (data_port_ < 0)
                     {
                         data_port_ = cfg.destination_port;
-                        LOG_INFO("Query device destination port ok, port is %d.\n", data_port_);
+                        LOG_F(INFO, "Query device destination port ok, port is %d.", data_port_);
                     }
                     if (join_multicast_ && (!data_dst_ip_.size()))
                     {
                         data_dst_ip_ = cfg.destination_ip;
-                        LOG_INFO("Query device multicast address ok, group is %s.\n", data_dst_ip_.c_str());
+                        LOG_F(INFO, "Query device multicast address ok, group is %s.", data_dst_ip_.c_str());
                     }
                 }
             }
@@ -420,7 +519,7 @@ namespace zvision
             {
                 if (LidarTools::ReadCalibrationData(cal_filename_, *(this->cal_.get())))
                 {
-                    LOG_ERROR("Load calibration file error, %s\n", cal_filename_.c_str());
+                    LOG_F(ERROR, "Load calibration file error, %s", cal_filename_.c_str());
                     return false;
                 }
             }
@@ -431,13 +530,13 @@ namespace zvision
 					zvision::JsonConfigFileParam param;
 					ret = tool.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::read_cali_packets, &param);
 					if (ret != 0) {
-						LOG_ERROR("Get lidar[%s]`s calibration packets error\n", device_ip_.c_str());
+						LOG_F(ERROR, "Get lidar[%s]`s calibration packets error", device_ip_.c_str());
 						return false;
 					}
 
 					zvision::CalibrationPackets cal_pkts = param.temp_recv_packets;
 					if (0 != (ret = LidarTools::GetDeviceCalibrationData(cal_pkts, *(this->cal_.get())))) {
-						LOG_ERROR("Convert lidar[%s]`s calibration packets error\n", device_ip_.c_str());
+						LOG_F(ERROR, "Convert lidar[%s]`s calibration packets error", device_ip_.c_str());
 						return false;
 					}
 				}
@@ -446,11 +545,11 @@ namespace zvision
                     zvision::CalibrationPackets cal_pkts;
                     ret = tool.GetML30sPlusB1DeviceCalibrationPackets(cal_pkts);
                     if (ret != 0) {
-                        LOG_ERROR("Get lidar[%s]`s calibration packets error\n", device_ip_.c_str());
+                        LOG_F(ERROR, "Get lidar[%s]`s calibration packets error", device_ip_.c_str());
                         return false;
                     }
                     if (0 != (ret = LidarTools::GetDeviceCalibrationData(cal_pkts, *(this->cal_.get())))) {
-                        LOG_ERROR("Convert lidar[%s]`s calibration packets error\n", device_ip_.c_str());
+                        LOG_F(ERROR, "Convert lidar[%s]`s calibration packets error", device_ip_.c_str());
                         return false;
                     }
                 }
@@ -501,7 +600,7 @@ namespace zvision
             //}
             //else
             //{
-            //    LOG_ERROR("Unknown scan mode %d.", this->scan_mode_);
+            //    LOG_F(ERROR, "Unknown scan mode %d.", this->scan_mode_);
             //    return;
             //}
         }
@@ -513,7 +612,7 @@ namespace zvision
         int seq = PointCloudPacket::GetPacketSeq(packet);
         if (((-1 != this->last_seq_) && (0 != seq)) && (seq != (this->last_seq_ + 1))) //packet loss
         {
-            LOG_ERROR("Packet loss, last seq [%3d], current seq[%3d]\n", this->last_seq_, seq);
+            LOG_F(ERROR, "Packet loss, last seq [%3d], current seq[%3d].", this->last_seq_, seq);
         }
 
         if (ScanMode::ScanML30SA1Plus_160 == this->scan_mode_)
@@ -522,7 +621,7 @@ namespace zvision
             {
                 int ret = PointCloudPacket::ProcessPacket(packet, *(this->cal_lut_), *points_, &points_filter_);
                 if (0 != ret)
-                    LOG_WARN("ProcessPacket error, %d.\n", ret);
+                    LOG_F(WARNING, "ProcessPacket error, %d.", ret);
 
                 this->ProcessOneSweep();
                 this->last_seq_ = seq;
@@ -538,7 +637,7 @@ namespace zvision
 
         int ret = PointCloudPacket::ProcessPacket(packet, *(this->cal_lut_), *points_, &points_filter_);
         if(0 != ret)
-            LOG_WARN("ProcessPacket error, %d.\n", ret);
+            LOG_F(WARNING, "ProcessPacket error, %d.", ret);
 
         this->last_seq_ = seq;
     }
@@ -577,6 +676,10 @@ namespace zvision
         else {
             ds_points = points_;
         }
+
+        // manu filter
+        LidarPointsFilter::FilterBucklingPointCloud(*(ds_points.get()));
+
 
         //If a new pointcloud processed done, call the callback function.
         int ret = 0;
@@ -634,6 +737,13 @@ namespace zvision
             }
         }
     }
+
+    void PointCloudProducer::InternalProducer()
+    {
+        
+    
+    
+    }
     
     void PointCloudProducer::Consumer()
     {
@@ -641,6 +751,9 @@ namespace zvision
         while (this->packets_->dequeue(packet))
         {
             this->ProcessLidarPacket(packet);
+
+            // process blooming packet
+
         }
     }
 
@@ -660,7 +773,7 @@ namespace zvision
                 //wait_for bug on vs2015&vs2017: https://developercommunity.visualstudio.com/content/problem/438027/unexpected-behaviour-with-stdcondition-variablewai.html
                 if (std::cv_status::timeout == cond_.wait_for(lock, std::chrono::milliseconds(timeout_ms)))
                 {
-                    LOG_WARN("Wait for pointcloud timeout.\n");
+                    LOG_F(WARNING, "Wait for pointcloud timeout.");
                     return Timeout;
                 }
                 else
@@ -672,16 +785,24 @@ namespace zvision
                 }
             }
         }
+
         std::unique_lock<std::mutex> lock(mutex_);
         {
             points = *(this->pointclouds_.front());
             this->pointclouds_.pop_front();
         }
+
+        // match blooming pointcloud
+
+
+
+
+
         return 0;
     }
 
     void PointCloudProducer::setDownsampleMode(zvision::DownSampleMode mode, std::string cfg_path) {
-        points_filter_.Init(mode, cfg_path);
+        points_filter_.Init(mode, cfg_path, zvision::is_ml30splus_b1_ep_mode_enable());
     }
 
     int  PointCloudProducer::Start()/*start the thread which will handle the udp packet one by one*/
@@ -706,16 +827,16 @@ namespace zvision
                     if ((dst_ip_int & 0xF0000000) == 0xE0000000)
                     {
                         this->receiver_->JoinMulticastGroup(data_dst_ip_);
-                        LOG_INFO("Join multicast group %s.\n", data_dst_ip_.c_str());
+                        LOG_F(INFO, "Join multicast group %s.", data_dst_ip_.c_str());
                     }
                     else
                     {
-                        //LOG_WARN("Invalid multicast group ip %s.\n", data_dst_ip_.c_str());
+                        //LOG_F(WARNING, "Invalid multicast group ip %s.", data_dst_ip_.c_str());
                     }
                 }
                 else
                 {
-                    LOG_ERROR("Resolve destination ip address error, %s\n", data_dst_ip_.c_str());
+                    LOG_F(ERROR, "Resolve destination ip address error, %s.", data_dst_ip_.c_str());
                 }
             }
         }
@@ -831,6 +952,46 @@ namespace zvision
             }
         }
 
+        // manu filter
+        LidarPointsFilter::FilterBucklingPointCloud(points);
+
+        // try to get blooming data
+        if (points.is_ptp_mode) 
+        {
+
+            std::vector<BloomingPacket> blo_pkts;
+            // get matched blooming packets and generate blooming pointcloud
+            this->packet_source_->GetBloomingPackets(frame_number, points.timestamp, blo_pkts);
+
+            // process packet
+            if (blo_pkts.size())
+            {
+                if (!points.blooming_frame)
+                    points.blooming_frame = std::make_shared<BloomingFrame>();
+                
+                InternalPacketHeader header;
+                std::string pkt_0((char*)(blo_pkts[0].data), BloomingPacket::PACKET_LEN);
+                if (InternalPacket::GetFrameResolveInfo(pkt_0, header))
+                {
+                    for (unsigned int i = 0; i < blo_pkts.size(); ++i)
+                    {
+                        std::string pkt((char*)(blo_pkts[i].data), BloomingPacket::PACKET_LEN);
+                        if (0 != (ret = BloomingPacket::ProcessPacket(pkt, *(this->cal_lut_.get()), *points.blooming_frame, &header)))
+                        {
+                            break;
+                        }
+
+                        if (i == 0) 
+                        {
+                            int seq = BloomingPacket::GetPacketSeq(pkt);
+                            points.blooming_frame->sys_stamp = blo_pkts[0].sys_stamp - 1e-6 * BloomingPacket::DELTA_PACKRT_US * seq;
+                        }
+                    }
+
+                    points.use_blooming = true;
+                }
+            }
+        }
         return 0;
     }
 
