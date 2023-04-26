@@ -23,15 +23,14 @@
 
 #include "print.h"
 #include "define.h"
-
+#include "version.h"
 namespace zvision
 {
     // For ML30S+B1 EP(40ms) device
     static bool g_zvision_ml30splus_b1_ep_mode = false;
 
     std::string get_sdk_version_string() {
-        std::string ver = "v0.1.13";
-        return ver;
+        return  std::string(ZVLIDAR_VERSION_STRING);;
     }
 
     std::string get_device_type_string(DeviceType tp)

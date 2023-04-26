@@ -166,6 +166,7 @@ namespace zvision
         LidarML30SB1,
         LidarML30SB2,
 		LidarMl30SA1Plus,
+        LidarMl30SA1Factory,
 		LidarMl30SB1Plus,
         LidarMLX,
         LidarMLYA,
@@ -378,10 +379,13 @@ namespace zvision
         int fov = -1;                // [0,3) for ML30B1, [0-8) for ML30S(A/B)
         int point_number = -1;       // [0, max fires) for single echo, [0, max fires x 2] for dual echo
         int fire_number = -1;        // [0, max fires)
+        int groupid = -1;            // fovs group id
+        int line_id = -1;            // scan line id
         int valid = 0;               // if this points is resolved in udp packet, this points is valid
         int echo_num = 0;            // 0 for first, 1 for second
         float ele = 0;               // ele (rad)
         float azi = 0;               // azi (rad)
+        uint16_t channel = 0;        // channel id
         ReturnType return_type = ReturnType::UnknownReturn;
         uint64_t timestamp_ns = 0;   // nano second. UTC time for GPS mode, others for PTP mode
     }Point;

@@ -37,6 +37,34 @@ namespace zvision
 
     class LidarPointsFilter;
 
+    struct FrameTimeStamp
+    {
+        FrameTimeStamp()
+            :timestamp(0)
+            ,sys_stamp(0)
+        {}
+
+        FrameTimeStamp(double stamp_, double sys_stamp_)
+        {
+            timestamp = stamp_;
+            sys_stamp = sys_stamp_;
+        }
+
+        double timestamp;   // from lidar udp data
+        double sys_stamp;   // the time that pc received
+    };
+
+    struct LidarUdpPacket
+    {
+        std::string data;
+        int ip;
+        int ip_dst = 0xffffffff;
+        /* system time (uint:s)*/
+        double sys_stamp = .0f;
+        /* system time (uint:ns)*/
+        uint64_t stamp_ns_;
+    };
+
     class MarkedPacket
     {
     public:
@@ -155,17 +183,11 @@ namespace zvision
         * \param[in] packet          udp data packet
         * \param[in] cal_lut         points' cal data in sin-cos format
         * \param[in] cloud           to store the pointcloud
+        * \param[in] filter
+        * \param[in] stamp_ns_ptr      manu set packet timestamp(uint:ns)
         * \return 0 for ok, others for failure.
         */
-        static int ProcessPacket(std::string& packet, CalibrationDataSinCosTable& cal_lut, PointCloud& cloud, LidarPointsFilter* filter = nullptr);
-
-        /** \brief Process a pointcloud udp packet to points.
-        * \param[in] packet          class PointCloudPacket
-        * \param[in] cal_lut         points' cal data in sin-cos format
-        * \param[in] cloud           to store the pointcloud
-        * \return 0 for ok, others for failure.
-        */
-        static int ProcessPacket(PointCloudPacket& packet, CalibrationDataSinCosTable& cal_lut, PointCloud& cloud);
+        static int ProcessPacket(std::string& packet, CalibrationDataSinCosTable& cal_lut, PointCloud& cloud, LidarPointsFilter* filter = nullptr, uint64_t* stamp_ns_ptr = 0);
 
         /** \brief Convert a point data(4 bytes) to x y z.
         * \param[in]  point           pointer to 4 bytes's point data
@@ -181,6 +203,10 @@ namespace zvision
         */
         char data_[1304];
 
+        /* system time (uint:s)*/
+        double sys_timestamp = 0;
+        /* system time (uint:ns)*/
+        uint64_t stamp_ns_;
     };
 
     // New architecture protocol
@@ -204,8 +230,9 @@ namespace zvision
     struct BloomingFrame
     {
         BloomingPoints points;
-        // second
+        // udp timestamp unit:s
         double timestamp = 0;
+        // system timestamp unit:s
         double sys_stamp = 0;
     };
     typedef std::shared_ptr<BloomingFrame> BloomingFramePtr;
@@ -288,7 +315,7 @@ namespace zvision
         * \param[out] cloud          to store the pointcloud
         * \return 0 for ok, others for failure.
         */
-        static int ProcessPacket(const std::string& packet, const zvision::CalibrationDataSinCosTable& cal_lut, BloomingFrame& frame, InternalPacketHeader* header);
+        static int ProcessPacket(const std::string& packet, const zvision::CalibrationDataSinCosTable& cal_lut, BloomingFrame& frame, InternalPacketHeader* header = nullptr);
 
         static bool IsValidPacket(const std::string& packet);
 

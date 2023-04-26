@@ -87,7 +87,8 @@
 	#define LOGURU_WINTHREADS  0
 	#ifdef __GLIBC__
 		#ifndef LOGURU_STACKTRACES
-			#define LOGURU_STACKTRACES 1
+			//#define LOGURU_STACKTRACES 1
+			#define LOGURU_STACKTRACES 0
 		#endif
 	#else
 		#ifndef LOGURU_STACKTRACES

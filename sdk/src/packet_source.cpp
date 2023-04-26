@@ -110,46 +110,6 @@ namespace zvision
         }
     }
 
-    int PcapReader::Read(std::string& data, int& len)
-    {
-        char buffer[256];
-        unsigned int cap_len = 0;
-        const int PCAP_PKT_HEADER_LEN = 16; /*pcap header 16 bytes for every IP packet*/
-        if (!init_ok_)
-        {
-            return InitFailure;
-        }
-
-        file_.read(buffer, PCAP_PKT_HEADER_LEN); /*16 bytes pcap packet header*/
-        if (file_.fail())
-        {
-            if (file_.eof())
-                return EndOfFile;
-            else
-                return ReadFileError;
-        }
-
-        unsigned int cap_len_network_byte_order = 0;
-        SwapByteOrder(buffer + 8, (char*)&cap_len_network_byte_order);
-        NetworkToHost((const unsigned char*)&cap_len_network_byte_order, (char*)&cap_len);
-
-        if (cap_len > MAX_PCAP_PKT_LEN)
-            return BufferOverflow;
-       
-        data.resize(cap_len);
-        char* data_out = const_cast<char*>(data.c_str());
-
-        file_.read(data_out, cap_len); /*16 bytes pcap packet header*/
-
-        if (file_.fail())
-        {
-            return ReadFileError;
-        }
-
-        len = cap_len;
-        return 0;
-    }
-
     int PcapReader::Read(std::string& data, int& len, std::string& header)
     {
         char buffer[256];
@@ -160,43 +120,243 @@ namespace zvision
             return InitFailure;
         }
 
-        file_.read(buffer, PCAP_PKT_HEADER_LEN); /*16 bytes pcap packet header*/
-        if (file_.fail())
+        // get first udp packet
+        std::string pkt;
+        bool is_fragment = false;
+        uint16_t identification = 0;
+        while (true)
         {
-            if (file_.eof())
-                return EndOfFile;
-            else
+            /*16 bytes pcap packet header*/
+            file_.clear();
+            file_.read(buffer, PCAP_PKT_HEADER_LEN);
+            if (file_.fail())
+            {
+                if (file_.eof())
+                    return EndOfFile;
+                else
+                    return ReadFileError;
+            }
+
+            uint32_t cap_len_network_byte_order = 0;
+            SwapByteOrder(buffer + 8, (char*)&cap_len_network_byte_order);
+            NetworkToHost((const unsigned char*)&cap_len_network_byte_order, (char*)&cap_len);
+
+            if (cap_len > MAX_PCAP_PKT_LEN)
+                return BufferOverflow;
+       
+            pkt.resize(cap_len);
+            char* data_out = const_cast<char*>(pkt.c_str());
+
+            /*get packet data*/
+            file_.clear();
+            file_.read(data_out, cap_len);
+            if (file_.fail())
+            {
                 return ReadFileError;
+            }
+
+            /* get fragment information */
+            uint8_t* pheader = (uint8_t*)pkt.c_str();
+            uint16_t flags = *(pheader + 20) << 8 | *(pheader + 21);
+            identification = *(pheader + 18) << 8 | *(pheader + 19);
+            is_fragment = (flags & 0x4000) != 0x4000;
+            uint16_t fragment_offset = flags & 0x1FFF;
+            /* get first udp packet data when packet is no fragment or fragment_offset is zero */
+            if (is_fragment && (fragment_offset != 0))
+            {
+                continue;
+            }
+            else
+            {
+                break;
+            }
         }
 
         header = std::string(buffer, PCAP_PKT_HEADER_LEN);
-
-        unsigned int cap_len_network_byte_order = 0;
-        SwapByteOrder(buffer + 8, (char*)&cap_len_network_byte_order);
-        NetworkToHost((const unsigned char*)&cap_len_network_byte_order, (char*)&cap_len);
-
-        if (cap_len > MAX_PCAP_PKT_LEN)
-            return BufferOverflow;
-
-        data.resize(cap_len);
-        char* data_out = const_cast<char*>(data.c_str());
-
-        file_.read(data_out, cap_len); /*16 bytes pcap packet header*/
-
-        if (file_.fail())
+        // no fragment packet, return
+        if (!is_fragment)
         {
-            return ReadFileError;
+            data = pkt;
+            len = data.size();
+            return 0;
         }
 
-        len = cap_len;
+        // get fragment packets
+        uint16_t cur_identification = identification;
+        bool cur_is_fragment = is_fragment;
+        std::pair<bool, std::streampos> fpos(false, 0);
+        std::streampos cur_pos = file_.tellg();
+        while (true)
+        {
+            // temp file pos
+            cur_pos = file_.tellg();
 
+            // 16 bytes pcap packet header
+            file_.clear();
+            file_.read(buffer, PCAP_PKT_HEADER_LEN);
+            if (file_.fail())
+            {
+                if (file_.eof())
+                    return EndOfFile;
+                else
+                    return ReadFileError;
+            }
+
+            uint32_t cap_len_network_byte_order = 0;
+            SwapByteOrder(buffer + 8, (char*)&cap_len_network_byte_order);
+            NetworkToHost((const unsigned char*)&cap_len_network_byte_order, (char*)&cap_len);
+
+            if (cap_len > MAX_PCAP_PKT_LEN)
+                return BufferOverflow;
+
+            // get packet data
+            std::string fragment_data;
+            fragment_data.resize(cap_len);
+            char* data_out = const_cast<char*>(fragment_data.c_str());
+            file_.clear();
+            file_.read(data_out, cap_len);
+            if (file_.fail())
+            {
+                return ReadFileError;
+            }
+
+            /* get fragment information */
+            uint8_t* pheader = (uint8_t*)fragment_data.c_str();
+            uint16_t flags = *(pheader + 20) << 8 | *(pheader + 21);
+            cur_is_fragment = (flags & 0x4000) != 0x4000;
+            bool is_more_fragments = (flags & 0x2000) == 0x2000;
+            cur_identification = *(pheader + 18) << 8 | *(pheader + 19);
+
+            // a new packet found, save file pos
+            if (cur_identification != identification)
+            {
+                if (!fpos.first)
+                {
+                    fpos.first = true;
+                    fpos.second = cur_pos;
+                }
+                continue;
+            }
+
+            pkt += fragment_data.substr(34, cap_len - 34);
+            // more fragment?
+            if (!is_more_fragments)
+            {
+                break;
+            }
+        }
+
+        // set file pos
+        if (fpos.first)
+        {
+            int ret = SetFilePosition(fpos.second);
+            if (ret)
+                return ret;
+        }
+
+        data = pkt;
+        len = pkt.size();
         return 0;
     }
+
+    //int PcapReader::Read(std::string& data, int& len, std::string& header)
+    //{
+    //    char buffer[256];
+    //    unsigned int cap_len = 0;
+    //    const int PCAP_PKT_HEADER_LEN = 16; /*pcap header 16 bytes for every IP packet*/
+    //    if (!init_ok_)
+    //    {
+    //        return InitFailure;
+    //    }
+    //
+    //    file_.read(buffer, PCAP_PKT_HEADER_LEN); /*16 bytes pcap packet header*/
+    //    if (file_.fail())
+    //    {
+    //        if (file_.eof())
+    //            return EndOfFile;
+    //        else
+    //            return ReadFileError;
+    //    }
+    //
+    //    header = std::string(buffer, PCAP_PKT_HEADER_LEN);
+    //
+    //    unsigned int cap_len_network_byte_order = 0;
+    //    SwapByteOrder(buffer + 8, (char*)&cap_len_network_byte_order);
+    //    NetworkToHost((const unsigned char*)&cap_len_network_byte_order, (char*)&cap_len);
+    //
+    //    if (cap_len > MAX_PCAP_PKT_LEN)
+    //        return BufferOverflow;
+    //
+    //    data.resize(cap_len);
+    //    char* data_out = const_cast<char*>(data.c_str());
+    //
+    //    file_.read(data_out, cap_len); /*16 bytes pcap packet header*/
+    //
+    //    if (file_.fail())
+    //    {
+    //        return ReadFileError;
+    //    }
+    //
+    //    len = cap_len;
+    //
+    //    // now we check if udp is fragment or not
+    //    uint8_t* pheader = (uint8_t*)data.c_str();
+    //    uint16_t flags = *(pheader + 20) << 8 | *(pheader + 21);
+    //    bool is_fragment = (flags & 0x4000) != 0x4000;
+    //    bool is_more_fragments = (flags & 0x2000) == 0x2000;
+    //    while (is_more_fragments && is_fragment)
+    //    {
+    //        int fragment_len = 0;
+    //        std::string fragment_data;
+    //        file_.read(buffer, PCAP_PKT_HEADER_LEN); /*16 bytes pcap packet header*/
+    //        if (file_.fail())
+    //        {
+    //            if (file_.eof())
+    //                return EndOfFile;
+    //            else
+    //                return ReadFileError;
+    //        }
+    //
+    //        cap_len_network_byte_order = 0;
+    //        SwapByteOrder(buffer + 8, (char*)&cap_len_network_byte_order);
+    //        NetworkToHost((const unsigned char*)&cap_len_network_byte_order, (char*)&cap_len);
+    //
+    //        if (cap_len > MAX_PCAP_PKT_LEN)
+    //            return BufferOverflow;
+    //
+    //        fragment_data.resize(cap_len);
+    //        data_out = const_cast<char*>(fragment_data.c_str());
+    //
+    //        file_.read(data_out, cap_len); /*16 bytes pcap packet header*/
+    //        if (file_.fail())
+    //        {
+    //            return ReadFileError;
+    //        }
+    //
+    //        len += (cap_len - 34);
+    //        data += fragment_data.substr(34, cap_len - 34);
+    //        // more fragment?
+    //        if (!is_more_fragments)
+    //        {
+    //            break;
+    //        }
+    //
+    //        pheader = (uint8_t*)fragment_data.c_str();
+    //        flags = *(pheader + 20) << 8 | *(pheader + 21);
+    //        is_fragment = (flags & 0x4000) != 0x4000;
+    //        is_more_fragments = (flags & 0x2000) == 0x2000;
+    //    }
+    //
+    //    return 0;
+    //}
 
     int PcapReader::SetFilePosition(std::streampos pos)
     {
         if (init_ok_)
         {
+            if (file_.eof())
+                file_.clear();
+
             file_.seekg(pos, file_.beg);
 
             if (file_.fail())
@@ -266,7 +426,8 @@ namespace zvision
                 break;
 
             //int ret = reader->Read(data, len);
-            if (0 != (ret = reader->Read(data, len)))
+            std::string header;
+            if (0 != (ret = reader->Read(data, len, header)))
             {
                 if (EndOfFile == ret)
                 {
@@ -289,7 +450,8 @@ namespace zvision
 
             if (PointCloudPacket::IsValidPacket(packet))
             {
-                if (0 == PointCloudPacket::GetPacketSeq(packet))
+                int seq = PointCloudPacket::GetPacketSeq(packet);
+                if (0 == seq)
                 {
                     this->info_map_[ip].sweep_headers_.push_back(pos);
                     this->info_map_[ip].dev_cfg_.device_ip = ip;
@@ -335,12 +497,13 @@ namespace zvision
             if (!StringToIp(name, uint_ip))
                 continue;
 
+            std::string header;
             // identify the pointcloud packet scan mode
             if (inf.sweep_headers_.size())
             {
                 if (0 != (ret = reader->SetFilePosition(inf.sweep_headers_[0])))
                     continue;
-                if (0 != (ret = reader->Read(data, len)))
+                if (0 != (ret = reader->Read(data, len, header)))
                     continue;
                 std::string packet = data.substr(42, len - 42);
                 tp_in_pointcloud_packet = PointCloudPacket::GetScanMode(packet);
@@ -350,7 +513,7 @@ namespace zvision
             {
                 if (0 != (ret = reader->SetFilePosition(inf.cal_headers_[0])))
                     continue;
-                if (0 != (ret = reader->Read(data, len)))
+                if (0 != (ret = reader->Read(data, len, header)))
                     continue;
                 std::string packet = data.substr(42, len - 42);
                 //tp_in_calibration_packet = CalibrationPacket::GetScanMode(packet);
@@ -380,7 +543,8 @@ namespace zvision
                     if (0 != (ret = reader->GetFilePosition(pos)))
                         break;
 
-                    if (0 != (ret = reader->Read(data, len)))
+                    std::string header;
+                    if (0 != (ret = reader->Read(data, len, header)))
                         break;
 
                     if (packet_found == packets)
@@ -532,6 +696,15 @@ namespace zvision
                 {
                     PointCloudPacket pkt;
                     memcpy(pkt.data_, packet.c_str(), packet.size());
+                    uint32_t stamp_s = 0;
+                    uint32_t stamp_us = 0;
+                    uint32_t tmp_network_byte_order = 0;
+                    SwapByteOrder((char*)(header.c_str() + 0), (char*)&tmp_network_byte_order);
+                    NetworkToHost((const unsigned char*)&tmp_network_byte_order, (char*)&stamp_s);
+                    SwapByteOrder((char*)(header.c_str() + 4), (char*)&tmp_network_byte_order);
+                    NetworkToHost((const unsigned char*)&tmp_network_byte_order, (char*)&stamp_us);
+                    pkt.sys_timestamp = 1.0 * stamp_s + 1e-6 * stamp_us;
+                    pkt.stamp_ns_ = stamp_s * 1e+9 + stamp_us * 1e+3;
                     packets.push_back(pkt);
                     last_seq = seq;
                 }
@@ -541,7 +714,7 @@ namespace zvision
         return ret;
     }
 
-    int PcapUdpSource::GetBloomingPackets(int frame, double stamp, std::vector<BloomingPacket>& packets)
+    int PcapUdpSource::GetBloomingPackets(int frame, double stamp, std::vector<BloomingPacket>& packets, bool use_lidar_time)
     {
         int ret = 0;
         if (!init_ok_)
@@ -564,7 +737,10 @@ namespace zvision
             double last_diff = -1.0;
             while((it >= 0) && (it < this->blooming_position_.size()))
             {
-                double diff = stamp - this->blooming_position_[it].second;
+                double diff = stamp - this->blooming_position_[it].second.sys_stamp;
+                if (use_lidar_time)
+                    diff = stamp - this->blooming_position_[it].second.timestamp;
+
                 if (std::abs(diff) < frame_thre)
                 {
                     // found blooming packets
@@ -761,10 +937,22 @@ namespace zvision
             else if (BloomingPacket::IsValidPacket(packet))
             {
                 int seq = BloomingPacket::GetPacketSeq(packet);
-                double stamp = BloomingPacket::GetTimestamp(packet) - 1e-6 * seq * BloomingPacket::DELTA_PACKRT_US;
+                double stamp = BloomingPacket::GetTimestamp(packet) - 1e-6 * BloomingPacket::DELTA_PACKRT_US * seq;
+                double sys_stamp = -1;
+                {
+                    uint32_t stamp_s = 0;
+                    uint32_t stamp_us = 0;
+                    uint32_t tmp_network_byte_order = 0;
+                    SwapByteOrder((char*)(header.c_str() + 0), (char*)&tmp_network_byte_order);
+                    NetworkToHost((const unsigned char*)&tmp_network_byte_order, (char*)&stamp_s);
+                    SwapByteOrder((char*)(header.c_str() + 4), (char*)&tmp_network_byte_order);
+                    NetworkToHost((const unsigned char*)&tmp_network_byte_order, (char*)&stamp_us);
+                    sys_stamp = 1.0 * stamp_s + 1e-6 * stamp_us - 1e-6 * BloomingPacket::DELTA_PACKRT_US * seq;
+                }
                 if (seq <= last_blooming_seq)
                 {
-                    this->blooming_position_.push_back(std::make_pair(pos, stamp));
+                    FrameTimeStamp frame_stamp(stamp, sys_stamp);
+                    this->blooming_position_.push_back(std::make_pair(pos, frame_stamp));
                     last_blooming_seq = seq;
                 }
                 else
@@ -835,7 +1023,8 @@ namespace zvision
        
         while (1)
         {
-            ret = reader_->Read(data, len);
+            std::string header;
+            ret = reader_->Read(data, len, header);
             if (ret)
                 return ret;
 

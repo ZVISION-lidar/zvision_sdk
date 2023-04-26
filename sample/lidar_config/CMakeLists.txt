@@ -14,16 +14,16 @@ add_executable(${DEMO_NAME}_ml30sp_b1_ep1 sample_ml30sp_b1_ep1.cpp
               )
 
 target_link_libraries(${DEMO_NAME}
-        ${PROJECT_NAME}_static
+        ${SDK_LIBRARY_NAME}
         -lpthread
         )
 
 target_link_libraries(${DEMO_NAME}_ml30sp_b1
-        ${PROJECT_NAME}_static
+        ${SDK_LIBRARY_NAME}
         -lpthread
         )
 
 target_link_libraries(${DEMO_NAME}_ml30sp_b1_ep1
-        ${PROJECT_NAME}_static
+        ${SDK_LIBRARY_NAME}
         -lpthread
         )

@@ -24,7 +24,7 @@
 #include "client.h"
 #include "point_cloud.h"
 #include "lidar_tools.h"
-#include "packet.h"
+//#include "packet.h"
 #include "packet_source.h"
 #include "print.h"
 #include "loguru.hpp"
@@ -439,14 +439,18 @@ namespace zvision
         scan_mode_(ScanUnknown),
         last_seq_(-1),
         data_port_(data_port),
+        internal_port_(2369), // 2468
         data_dst_ip_(mc_group_ip),
         join_multicast_(multicast_en),
         init_ok_(false),
         need_stop_(false),
         pointcloud_cb_(nullptr),
+        use_pointcloud_buffer_(true),
         mutex_(),
         cond_(),
-        max_pointcloud_count_(200)
+        max_pointcloud_count_(200),
+        internal_packets_enable_(false),
+        match_frame_use_lidar_time_(false)
     {
     }
 
@@ -569,10 +573,10 @@ namespace zvision
         return true;
     }
 
-    void PointCloudProducer::ProcessLidarPacket(std::string& packet)
+    void PointCloudProducer::ProcessLidarPacket(LidarUdpPacket& packet)
     {
         //pkt content len: 42 + 1304
-        if (packet.size() != 1304)
+        if (packet.data.size() != 1304)
         {
             return;
         }
@@ -580,46 +584,30 @@ namespace zvision
         //find lidar type
         if (this->scan_mode_ == ScanUnknown)
         {
-            this->device_type_ = PointCloudPacket::GetDeviceType(packet);
-            this->scan_mode_ = PointCloudPacket::GetScanMode(packet);
-            //if (ScanML30B1_100 == this->scan_mode_)
-            //{
-            //    //this->last_seq_ = 124;
-            //}
-            //else if ((ScanMode::ScanML30SA1_160 == this->scan_mode_) || (ScanMode::ScanML30SA1_160_1_2 == this->scan_mode_) || (ScanMode::ScanML30SA1_160_1_4 == this->scan_mode_))
-            //{
-            //    //this->last_seq_ = 159;
-            //}
-            //else if (ScanMode::ScanMLX_160 == this->scan_mode_)
-            //{
-            //    //this->last_seq_ = 399;
-            //}
-            //else if (ScanMode::ScanMLX_190 == this->scan_mode_)
-            //{
-            //    //this->last_seq_ = 474;
-            //}
-            //else
-            //{
-            //    LOG_F(ERROR, "Unknown scan mode %d.", this->scan_mode_);
-            //    return;
-            //}
+            this->device_type_ = PointCloudPacket::GetDeviceType(packet.data);
+            this->scan_mode_ = PointCloudPacket::GetScanMode(packet.data);
         }
 
         //scan mode is unknown or scan mode and calibration data are not matched
         if ((this->scan_mode_ == ScanUnknown) || (this->scan_mode_ != this->cal_->scan_mode))
             return;
 
-        int seq = PointCloudPacket::GetPacketSeq(packet);
+        int seq = PointCloudPacket::GetPacketSeq(packet.data);
         if (((-1 != this->last_seq_) && (0 != seq)) && (seq != (this->last_seq_ + 1))) //packet loss
         {
             LOG_F(ERROR, "Packet loss, last seq [%3d], current seq[%3d].", this->last_seq_, seq);
+        }
+
+        if (!points_->points.size())
+        {
+            points_->sys_stamp = packet.sys_stamp - 1.0f * seq * BloomingPacket::DELTA_PACKRT_US * 1e-6;
         }
 
         if (ScanMode::ScanML30SA1Plus_160 == this->scan_mode_)
         {
             if (((seq < this->last_seq_) && (this->last_seq_ != 159)) || (159 == seq))
             {
-                int ret = PointCloudPacket::ProcessPacket(packet, *(this->cal_lut_), *points_, &points_filter_);
+                int ret = PointCloudPacket::ProcessPacket(packet.data, *(this->cal_lut_), *points_, &points_filter_, &packet.stamp_ns_);
                 if (0 != ret)
                     LOG_F(WARNING, "ProcessPacket error, %d.", ret);
 
@@ -635,11 +623,89 @@ namespace zvision
             this->ProcessOneSweep();
         }
 
-        int ret = PointCloudPacket::ProcessPacket(packet, *(this->cal_lut_), *points_, &points_filter_);
+        int ret = PointCloudPacket::ProcessPacket(packet.data, *(this->cal_lut_), *points_, &points_filter_, &packet.stamp_ns_);
         if(0 != ret)
             LOG_F(WARNING, "ProcessPacket error, %d.", ret);
 
         this->last_seq_ = seq;
+    }
+
+    void PointCloudProducer::ProcessLidarInternalPacket(LidarUdpPacket& packet)
+    {
+        // get packet type
+        PacketType packet_type = Tp_PacketUnknown;
+        ScanMode scan_mode = ScanUnknown;
+        InternalPacket::GetPacketType(packet.data, packet_type, scan_mode);
+        if (packet_type == Tp_PacketUnknown || \
+            scan_mode == ScanUnknown)
+            return;
+
+        //scan mode is unknown or scan mode and calibration data are not matched
+        if ((this->scan_mode_ == ScanUnknown) || (this->scan_mode_ != this->cal_->scan_mode) || (this->scan_mode_ != scan_mode))
+            return;
+
+        // get seq
+        InternalPacketHeader info;
+        if (!InternalPacket::GetFrameResolveInfo(packet.data, info))
+            return;
+
+        // split once frame when packets lost between two frames
+        if (internal_last_seq_.find(packet_type) == internal_last_seq_.end())
+            internal_last_seq_[packet_type] = -1;
+
+        if ((internal_last_seq_[packet_type] != -1) && (info.seq < internal_last_seq_[packet_type]))
+        {
+            this->ProcessInternalOneSweep(packet_type);
+            internal_last_seq_[packet_type] = info.seq;
+        }
+
+        // process packet
+        switch (packet_type)
+        {
+        case zvision::Tp_PointCloudPacket:
+            break;
+        case zvision::Tp_CalibrationPacket:
+            break;
+        case zvision::Tp_BloomingPacket:
+
+            // initial frame system timestamp
+            if (!this->blooming_frame_->points.size())
+            {
+                this->blooming_frame_->sys_stamp = packet.sys_stamp - 1.0f * info.seq * BloomingPacket::DELTA_PACKRT_US * 1e-6;
+            }
+            BloomingPacket::ProcessPacket(
+                packet.data,
+                *this->cal_lut_,
+                *this->blooming_frame_,
+                &info
+            );
+            break;
+        case zvision::Tp_ApdChannelPacket:
+            break;
+        case zvision::Tp_IntensityDisCaliPacket:
+            break;
+        case zvision::Tp_AdcSourcePacket:
+            break;
+        case zvision::Tp_SourceDistancePacket:
+            break;
+        case zvision::Tp_BlockDebugPacket:
+            break;
+        case zvision::Tp_PacketUnknown:
+            break;
+        default:
+            break;
+        }
+
+        // split one frame
+        if (info.seq == (info.resolve_info.udp_count - 1))
+        {
+            this->ProcessInternalOneSweep(packet_type);
+            internal_last_seq_[packet_type] = -1;
+        }
+        else
+        {
+            internal_last_seq_[packet_type] = info.seq;
+        }
     }
 
     void PointCloudProducer::ProcessOneSweep()
@@ -698,7 +764,9 @@ namespace zvision
                     this->pointclouds_.pop_front();
                 }
             }
-            this->pointclouds_.push_back(ds_points);
+
+            if (use_pointcloud_buffer_)
+                this->pointclouds_.push_back(ds_points);
         }
 
         //Allocate a new pointcloud for next one.
@@ -707,7 +775,41 @@ namespace zvision
         //Notify a new pointcloud available.
         cond_.notify_one();
         return;
+    }
 
+    void PointCloudProducer::ProcessInternalOneSweep(PacketType tp)
+    {
+        std::unique_lock<std::mutex> lock(mutex_);
+        switch (tp)
+        {
+        case zvision::Tp_PointCloudPacket:
+            break;
+        case zvision::Tp_CalibrationPacket:
+            break;
+        case zvision::Tp_BloomingPacket:
+        {
+            if (this->blooming_frame_s_.size() > this->max_pointcloud_count_)
+                this->blooming_frame_s_.pop_front();
+            this->blooming_frame_s_.push_back(this->blooming_frame_);
+            this->blooming_frame_.reset(new BloomingFrame);
+            match_blooming_enable_ = true;
+            break;
+        }
+        case zvision::Tp_ApdChannelPacket:
+            break;
+        case zvision::Tp_IntensityDisCaliPacket:
+            break;
+        case zvision::Tp_AdcSourcePacket:
+            break;
+        case zvision::Tp_SourceDistancePacket:
+            break;
+        case zvision::Tp_BlockDebugPacket:
+            break;
+        case zvision::Tp_PacketUnknown:
+            break;
+        default:
+            break;
+        }
     }
 
     void PointCloudProducer::Producer()
@@ -725,8 +827,14 @@ namespace zvision
                 {
                     if ((len > 0) && (ip == this->filter_ip_))
                     {
-                        //std::string* packet = new std::string(data.c_str(), len);
-                        std::string packet = std::string(data.c_str(), len);
+                        LidarUdpPacket packet;
+                        packet.data = std::string(data.c_str(), len);
+                        packet.ip = ip;
+                        std::chrono::time_point<std::chrono::system_clock, std::chrono::microseconds> ptime = \
+                            std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::system_clock::now());
+                        time_t timestamp_us = ptime.time_since_epoch().count();
+                        packet.sys_stamp = 1.0 * timestamp_us * 1e-6;
+                        packet.stamp_ns_ = timestamp_us * 1e+3;
                         this->packets_->enqueue(packet);
                     }
                 }
@@ -740,19 +848,48 @@ namespace zvision
 
     void PointCloudProducer::InternalProducer()
     {
-        
-    
-    
+        if (this->internal_receiver_)
+        {
+            uint32_t ip;
+            int len;
+            int ret = 0;
+            while (!need_stop_)
+            {
+                std::string data(8192, '0');
+                ret = internal_receiver_->SyncRecv(data, len, ip);
+                if (ret >= 0)
+                {
+                    if ((len > 0) && (ip == this->filter_ip_))
+                    {
+                        LidarUdpPacket packet;
+                        packet.data = std::string(data.c_str(), len);
+                        packet.ip = ip;
+                        std::chrono::time_point<std::chrono::system_clock, std::chrono::microseconds> ptime = \
+                            std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::system_clock::now());
+                        time_t timestamp_us = ptime.time_since_epoch().count();
+                        packet.sys_stamp = 1.0 * timestamp_us * 1e-6;
+                        this->packets_->enqueue(packet);
+                    }
+                }
+                else
+                {
+                    return;
+                }
+            }
+        }
     }
     
     void PointCloudProducer::Consumer()
     {
-        std::string packet;
+        LidarUdpPacket packet;
         while (this->packets_->dequeue(packet))
         {
+
             this->ProcessLidarPacket(packet);
 
             // process blooming packet
+            if (internal_packets_enable_)
+                this->ProcessLidarInternalPacket(packet);
 
         }
     }
@@ -761,7 +898,6 @@ namespace zvision
     {
         this->pointcloud_cb_ = cb;
     }
-
 
     int PointCloudProducer::GetPointCloud(PointCloud& points, int timeout_ms)
     {
@@ -786,23 +922,112 @@ namespace zvision
             }
         }
 
+        // disable blooming frame
         std::unique_lock<std::mutex> lock(mutex_);
+        if (!internal_packets_enable_ || !match_blooming_enable_)
         {
             points = *(this->pointclouds_.front());
             this->pointclouds_.pop_front();
+            return 0;
         }
 
-        // match blooming pointcloud
+        // no blooming pointcloud
+        if (!blooming_frame_s_.size())
+        {
+            if (pointclouds_.size() >= 2)
+            {
+                pointclouds_.erase(pointclouds_.begin(), pointclouds_.begin() + pointclouds_.size() - 2);
+                points = *(this->pointclouds_.front());
+                this->pointclouds_.pop_front();
+                return 0;
+            }
+            else
+                return NotMatched;
+        }
 
+        // just process last two frame
+        if (pointclouds_.size() > 2)
+            pointclouds_.erase(pointclouds_.begin(), pointclouds_.begin() + pointclouds_.size() - 2);
 
+        if (blooming_frame_s_.size() > 2)
+            blooming_frame_s_.erase(blooming_frame_s_.begin(), blooming_frame_s_.begin() + blooming_frame_s_.size() - 2);
 
+        // find blooming frame
+        static const double frame_thre = 1e-3 * BloomingPacket::FRAME_THRESHOLD_MS;
+        bool matched = false;
+        for (int p = 0;p< pointclouds_.size();p++)
+        {
+            for (int b = 0; b < blooming_frame_s_.size(); b++)
+            {
+                auto& pointcloud = pointclouds_.at(p);
+                auto& blooming = blooming_frame_s_.at(b);
 
+                // get timestamp diff
+                double diff = std::abs(pointcloud->sys_stamp - blooming->sys_stamp);
+                if(match_frame_use_lidar_time_)
+                    diff = std::abs(pointcloud->timestamp - blooming->timestamp);
 
+                if (diff < frame_thre)
+                {
+                    points = *(this->pointclouds_.at(p));
+                    if(points.is_ptp_mode)
+                    {
+                        matched = true;
+                        points.blooming_frame = blooming;
+                        points.use_blooming = true;
+
+                        // remove old data
+                        pointclouds_.erase(pointclouds_.begin(), pointclouds_.begin() + p + 1);
+                        blooming_frame_s_.erase(blooming_frame_s_.begin(), blooming_frame_s_.begin() + b + 1);
+                    }
+                }
+            }
+        }
+
+        // not matched
+        if (!matched)
+        {
+            if (blooming_frame_s_.size() > 1)
+                blooming_frame_s_.pop_front();
+
+            if (pointclouds_.size() > 1)
+            {
+                points = *(this->pointclouds_.at(0));
+                pointclouds_.pop_front();
+                return 0;
+            }
+            else
+                return NotMatched;
+
+        }
+
+        // matched
         return 0;
     }
 
-    void PointCloudProducer::setDownsampleMode(zvision::DownSampleMode mode, std::string cfg_path) {
+    int PointCloudProducer::GetCalibrationData(CalibrationDataSinCosTable& cal_lut) {
+        if (!cal_lut_)
+        {
+            return -1;
+        }
+        cal_lut = *(cal_lut_.get());
+        return 0;
+    }
+
+    void PointCloudProducer::SetDownsampleMode(zvision::DownSampleMode mode, std::string cfg_path) {
         points_filter_.Init(mode, cfg_path, zvision::is_ml30splus_b1_ep_mode_enable());
+    }
+
+    void PointCloudProducer::SetProcessInternalPacketsEnable(bool en, bool use_lidar_time)
+    {
+        internal_packets_enable_ = en;
+        match_frame_use_lidar_time_ = use_lidar_time;
+    }
+
+    void PointCloudProducer::SetPointcloudBufferEnable(bool en)
+    {
+        std::unique_lock<std::mutex> lock(mutex_);
+        this->use_pointcloud_buffer_ = en;
     }
 
     int  PointCloudProducer::Start()/*start the thread which will handle the udp packet one by one*/
@@ -812,7 +1037,7 @@ namespace zvision
 
         if (!this->packets_)
         {
-            this->packets_.reset(new SynchronizedQueue<std::string>);
+            this->packets_.reset(new SynchronizedQueue<LidarUdpPacket>);
         }
 
         if (!this->receiver_)
@@ -852,6 +1077,25 @@ namespace zvision
             this->producer_ = std::shared_ptr<std::thread>(
                 new std::thread(std::bind(&PointCloudProducer::Producer, this)));
         }
+
+        // internal_receiver_
+        if (internal_packets_enable_)
+        {
+            match_blooming_enable_ = false;
+            if (!this->internal_receiver_)
+            {
+                // default 2468
+                this->internal_receiver_.reset(new UdpReceiver(this->internal_port_, 1000, 8192));
+            }
+            if (!this->internal_producer_)
+            {
+                this->internal_producer_ = std::shared_ptr<std::thread>(
+                    new std::thread(std::bind(&PointCloudProducer::InternalProducer, this)));
+            }
+            this->blooming_frame_.reset(new BloomingFrame);
+        }
+
+
         return 0;
     }
 
@@ -870,16 +1114,27 @@ namespace zvision
             this->consumer_.reset();
         }
 
+        if (this->internal_producer_)
+        {
+            this->internal_producer_->join();
+            this->internal_producer_.reset();
+        }
+
         if (this->producer_)
         {
             this->producer_->join();
             this->producer_.reset();
         }
 
+        if (this->internal_receiver_)
+            this->internal_receiver_.reset();
+
         if (this->receiver_)
         {
             this->receiver_.reset();
         }
+
+        match_blooming_enable_ = false;
     }
 
 
@@ -893,7 +1148,8 @@ namespace zvision
         ///last_seq_(-1),
         data_port_(data_port),
         init_ok_(false),
-        pointcloud_cb_(nullptr)
+        pointcloud_cb_(nullptr),
+        match_frame_use_lidar_time_(false)
     {
 
     }
@@ -946,10 +1202,17 @@ namespace zvision
         //process udp packets and generate poincloud
         for (unsigned int i = 0; i < packets.size(); ++i)
         {
-            if (0 != (ret = PointCloudPacket::ProcessPacket(packets[i], *(this->cal_lut_.get()), points)))
+            std::string pkt(packets[i].data_, sizeof(packets[i].data_) / sizeof(char));
+            ret = PointCloudPacket::ProcessPacket(pkt, *(this->cal_lut_.get()), points, nullptr, &(packets[i].stamp_ns_));
+            if (0 != ret)
             {
                 return ret;
             }
+        }
+
+        {
+            std::string pkt_0((char*)(packets[0].data_), sizeof(packets[0].data_));
+            points.sys_stamp = packets[0].sys_timestamp - 1e-6 * BloomingPacket::DELTA_PACKRT_US * PointCloudPacket::GetPacketSeq(pkt_0);
         }
 
         // manu filter
@@ -958,10 +1221,10 @@ namespace zvision
         // try to get blooming data
         if (points.is_ptp_mode) 
         {
-
             std::vector<BloomingPacket> blo_pkts;
             // get matched blooming packets and generate blooming pointcloud
-            this->packet_source_->GetBloomingPackets(frame_number, points.timestamp, blo_pkts);
+            this->packet_source_->GetBloomingPackets(frame_number, match_frame_use_lidar_time_? \
+                points.timestamp : points.sys_stamp, blo_pkts, match_frame_use_lidar_time_);
 
             // process packet
             if (blo_pkts.size())
@@ -969,27 +1232,22 @@ namespace zvision
                 if (!points.blooming_frame)
                     points.blooming_frame = std::make_shared<BloomingFrame>();
                 
-                InternalPacketHeader header;
-                std::string pkt_0((char*)(blo_pkts[0].data), BloomingPacket::PACKET_LEN);
-                if (InternalPacket::GetFrameResolveInfo(pkt_0, header))
+                for (unsigned int i = 0; i < blo_pkts.size(); ++i)
                 {
-                    for (unsigned int i = 0; i < blo_pkts.size(); ++i)
+                    std::string pkt((char*)(blo_pkts[i].data), BloomingPacket::PACKET_LEN);
+                    if (0 != (ret = BloomingPacket::ProcessPacket(pkt, *(this->cal_lut_.get()), *points.blooming_frame)))
                     {
-                        std::string pkt((char*)(blo_pkts[i].data), BloomingPacket::PACKET_LEN);
-                        if (0 != (ret = BloomingPacket::ProcessPacket(pkt, *(this->cal_lut_.get()), *points.blooming_frame, &header)))
-                        {
-                            break;
-                        }
-
-                        if (i == 0) 
-                        {
-                            int seq = BloomingPacket::GetPacketSeq(pkt);
-                            points.blooming_frame->sys_stamp = blo_pkts[0].sys_stamp - 1e-6 * BloomingPacket::DELTA_PACKRT_US * seq;
-                        }
+                        break;
                     }
-
-                    points.use_blooming = true;
+                    if (i == 0)
+                    {
+                        int seq = BloomingPacket::GetPacketSeq(pkt);
+                        points.blooming_frame->sys_stamp = blo_pkts[0].sys_stamp - 1e-6 * BloomingPacket::DELTA_PACKRT_US * seq;
+                        points.blooming_frame->timestamp = BloomingPacket::GetTimestamp(pkt) - 1e-6 * BloomingPacket::DELTA_PACKRT_US * seq;
+                    }
                 }
+
+                points.use_blooming = true;
             }
         }
         return 0;
@@ -1001,5 +1259,10 @@ namespace zvision
             return -1;
         cal = *(cal_lut_.get());
         return 0;
+    }
+
+    void OfflinePointCloudProducer::SetInternalFrameMatchMethod(bool use_lidar_time)
+    {
+        match_frame_use_lidar_time_ = use_lidar_time;
     }
 }

@@ -81,12 +81,12 @@ namespace zvision
         /** \brief Empty destructor */
         virtual ~PcapReader();
 
-        /** \brief Calls the Read method to reveive data from local udp port.
-        * \param[in] data the buffer to store the data received.
-        * \param[in] len  the length received.
-        * \return 0 for success, others for failure.
-        */
-        virtual int Read(std::string& data, int& len);
+        ///** \brief Calls the Read method to reveive data from local udp port.
+        //* \param[in] data the buffer to store the data received.
+        //* \param[in] len  the length received.
+        //* \return 0 for success, others for failure.
+        //*/
+        //virtual int Read(std::string& data, int& len);
 
         /** \brief Calls the Read method to reveive data from local udp port.
         * \param[in] data    the buffer to store the data received.
@@ -309,7 +309,7 @@ namespace zvision
         * \param[out] packets         the packets which is a full blooming.
         * \return 0 for success, others for failure.
         */
-        int GetBloomingPackets(int frame, double stamp, std::vector<BloomingPacket>& packets);
+        int GetBloomingPackets(int frame, double stamp, std::vector<BloomingPacket>& packets, bool use_lidar_time = false);
 
         /** \brief Calls the ReadFrameInfo method to get the frame information.
         * \param[out] size      return the frame counter in the pcap file.
@@ -352,8 +352,8 @@ namespace zvision
         /** \brief pointcloud frame header position in pcap file. */
         std::vector<std::streampos> position_;
 
-        /** \brief blooming frame header position and ptp timestamp in pcap file. */
-        std::vector<std::pair<std::streampos, double>> blooming_position_;
+        /** \brief blooming frame header position with system timestamp in pcap file and ptp timestamp in udp data. */
+        std::vector<std::pair<std::streampos, FrameTimeStamp>> blooming_position_;
 
         /** \brief Pcap filename. */
         std::string filename_;

@@ -793,7 +793,7 @@ namespace zvision
             int flags = fcntl(this->socket_, F_GETFL);
             if(0 > fcntl(this->socket_, flags & ~O_NONBLOCK))
             {
-                LOG_F(ERROR, ("Set block error, error code  %d.", GetSysErrorCode());
+                LOG_F(ERROR, "Set block error, error code  %d.", GetSysErrorCode());
                 Close();
                 return -1;
             }
@@ -918,7 +918,7 @@ namespace zvision
                 if ((EAGAIN == er) || (EWOULDBLOCK == er))
                 #endif
                 {
-                    //LOG_F(WARNING, ("Recvfrom timeout, error code = %d.", er);
+                    //LOG_F(WARNING, "Recvfrom timeout, error code = %d.", er);
                     len = 0;
                     return 0;
                 }

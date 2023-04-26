@@ -4,7 +4,7 @@ find_package(PCL 1.7 COMPONENTS common io visualization)
 set(DEMO_NAME pointcloud_sample)
 add_executable(${DEMO_NAME} main.cpp)
 
-set(DEMO_LIBS ${PROJECT_NAME}_static)
+set(DEMO_LIBS ${SDK_LIBRARY_NAME})
 message(STATUS "##########")
 if(PCL_FOUND)
     add_definitions(-DUSING_PCL_VISUALIZATION)

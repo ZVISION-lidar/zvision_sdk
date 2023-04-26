@@ -160,12 +160,16 @@ void sample_online_pointcloud(const PlayParam& param)
     zvision::PointCloudProducer player(param.port_, param.lidar_ip_, param.calfilename_, param.mc_en_, param.mc_ip_, param.tp_);
 
     // manu set downsample mode if necessary
-    player.setDownsampleMode(param.downsample_, param.downsample_cfg_file_);
+    player.SetDownsampleMode(param.downsample_, param.downsample_cfg_file_);
 
     //Step 2 (Optioncal): Regist a callback function.
     //If a callback function registered, the callback function will be called when a new pointcloud is ready.
     //Otherwise, you can call PointCloudProducer's member function "GetPointCloud" to get the pointcloud.
     player.RegisterPointCloudCallback(sample_pointcloud_callback);
+
+    // we need blooming frame?
+    bool use_lidar_time = false;
+    player.SetProcessInternalPacketsEnable(true, use_lidar_time);
 
     //Step 3 : Start to receive the pointcloud packet and process it.
     int ret = player.Start();
@@ -180,12 +184,21 @@ void sample_online_pointcloud(const PlayParam& param)
         zvision::PointCloud cloud;
 
         //Step 3 : Wait the pointcloud for 200 ms. this function return when get poincloud ok or timeout. 
-        if (ret = player.GetPointCloud(cloud, 200))
+        if (ret = player.GetPointCloud(cloud, 20000))
              LOG_F(ERROR, "GetPointCloud error, ret = %d.", ret);
         else
         {
              LOG_F(2, "GetPointCloud ok.");
 #ifdef USING_PCL_VISUALIZATION
+
+             if (cloud.use_blooming)
+             {
+                 if (use_lidar_time)
+                     LOG_F(2, "use_lidar_time:[%d], matched: %f, %f ", use_lidar_time, cloud.timestamp, cloud.blooming_frame->timestamp);
+                 else
+                     LOG_F(2, "use_lidar_time:[%d], matched: %f, %f ", use_lidar_time, cloud.sys_stamp, cloud.blooming_frame->sys_stamp);
+             }
+
             pcl::PointCloud<pcl::PointXYZRGBA>::Ptr  pcl_cloud = point_cloud_convert(cloud);
             if (!(viewer->updatePointCloud(pcl_cloud, "cloud")))
             {
@@ -217,6 +230,10 @@ void sample_offline_pointcloud(std::string lidar_ip = "192.168.10.108", int port
     //Step 2 : Specify the pcap file, calibtation file to play.
     //The ip address and udp destination port is used to filter the pcap file to play the special lidar data. 
     zvision::OfflinePointCloudProducer player(pcap_filename, cal_filename, lidar_ip, port);
+
+    // auto detect blooming frame
+    bool use_lidar_time = false;
+    player.SetInternalFrameMatchMethod(use_lidar_time);
 
     int size = 0;
     zvision::DeviceType type = zvision::LidarUnknown;
@@ -258,6 +275,13 @@ void sample_offline_pointcloud(std::string lidar_ip = "192.168.10.108", int port
                             point_valid++;
                     }
                      LOG_F(2, "GetPointCloud ok, frame number is %d, valid points %d.", i, point_valid);
+                     if (pointcloud.use_blooming)
+                     {
+                         if (use_lidar_time)
+                             LOG_F(2, "use_lidar_time:[%d], matched: %f, %f ", use_lidar_time, pointcloud.timestamp, pointcloud.blooming_frame->timestamp);
+                         else
+                             LOG_F(2, "use_lidar_time:[%d], matched: %f, %f ", use_lidar_time, pointcloud.sys_stamp, pointcloud.blooming_frame->sys_stamp);
+                     }
     #ifdef USING_PCL_VISUALIZATION
                     pcl::PointCloud<pcl::PointXYZRGBA>::Ptr  pcl_cloud = point_cloud_convert(pointcloud);
                     if (!(viewer->updatePointCloud(pcl_cloud, "cloud")))

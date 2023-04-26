@@ -253,6 +253,10 @@ namespace zvision
         {
             return LidarML30SA1;
         }
+        else if ((0x0b == value) || (0x0c == value))
+        {
+            return LidarMl30SA1Plus;
+        }
         else if (0x05 == value)
         {
             return LidarMLX;
@@ -471,7 +475,7 @@ namespace zvision
         }
     }
 
-    int PointCloudPacket::ProcessPacket(std::string& packet, CalibrationDataSinCosTable& cal_lut, PointCloud& cloud, LidarPointsFilter* filter)
+    int PointCloudPacket::ProcessPacket(std::string& packet, CalibrationDataSinCosTable& cal_lut, PointCloud& cloud, LidarPointsFilter* filter, uint64_t* stamp_ns_ptr)
     {
         unsigned char* data = const_cast<unsigned char*>((unsigned char*)packet.c_str());
 
@@ -489,8 +493,6 @@ namespace zvision
             //std::cout << "Scan mode is " << scan_mode << " calibration mode is " << cal_lut.scan_mode << std::endl;
             return NotMatched;
         }
-
-        cloud.scan_mode = scan_mode;
 
         //device is unknown or device type and calibration data are not matched
         if (scan_mode == ScanUnknown)
@@ -562,9 +564,11 @@ namespace zvision
 
         //fire interval
         double fire_interval_us = 0.0;
-
+        // other
+        int points_per_line = -1;
         if (ScanML30B1_100 == scan_mode)
         {
+            points_per_line = 100 * echo_cnt;
             groups_in_one_udp = 80;
             points_in_one_group = 3;
             point_position_in_group = 4;
@@ -587,21 +591,25 @@ namespace zvision
             {
                 fires = 51200;
                 fire_interval_us = 1.5625 / 2.0; // 0.00000078125
+                points_per_line = 80 * echo_cnt;
             }
             else if (ScanML30SA1_160_1_2 == scan_mode)
             {
                 fires = 51200 / 2;
                 fire_interval_us = 1.5625;
+                points_per_line = 40 * echo_cnt;
             }
             else if (ScanML30SA1_160_1_4 == scan_mode)
             {
                 fires = 51200 / 4;
                 fire_interval_us = 1.5625 * 2;  // not smooth
+                points_per_line = 20 * echo_cnt;
             }
             else // 190 lines
             {
                 fires = 60800;
                 fire_interval_us = 1.5625 / 2.0; // 0.00000078125
+                points_per_line = 80 * echo_cnt;
             }
 
             if (1 == echo_cnt)
@@ -627,6 +635,7 @@ namespace zvision
         }
         else if (ScanMLX_190 == scan_mode)
         {
+            points_per_line = 200 * echo_cnt;
             groups_in_one_udp = 80;
             points_in_one_group = 3;
             point_position_in_group = 0;
@@ -645,6 +654,7 @@ namespace zvision
         }
         else if (ScanMLYA_190 == scan_mode)
         {
+            points_per_line = 200 * echo_cnt;
             groups_in_one_udp = 80;
             points_in_one_group = 3;
             point_position_in_group = 4;
@@ -664,6 +674,7 @@ namespace zvision
         }
         else if (ScanMLYB_190 == scan_mode)
         {
+            points_per_line = -1; // not support
             groups_in_one_udp = 80;
             points_in_one_group = 3;
             point_position_in_group = 4;
@@ -683,6 +694,7 @@ namespace zvision
         }
         else if (ScanMLXS_180 == scan_mode)
         {
+            points_per_line = 200 * echo_cnt;
             groups_in_one_udp = 80;
             points_in_one_group = 3;
             point_position_in_group = 4;
@@ -707,16 +719,19 @@ namespace zvision
 			{
 				fires = 51200;
 				fire_interval_us = 1.5625 / 2.0;
+                points_per_line = 80 * echo_cnt;
 			}
 			else if (ScanML30SA1Plus_160_1_2 == scan_mode)
 			{
 				fires = 51200 / 2;
 				fire_interval_us = 1.5625;
+                points_per_line = 40 * echo_cnt;
 			}
 			else if (ScanML30SA1Plus_160_1_4 == scan_mode)
 			{
 				fires = 51200 / 4;
 				fire_interval_us = 1.5625 * 2.0;
+                points_per_line = 20 * echo_cnt;
 			}
 
 			if (1 == echo_cnt)
@@ -790,6 +805,38 @@ namespace zvision
             cloud.is_ptp_mode = PointCloudPacket::IsPtpMode(packet);
             cloud.timestamp = PointCloudPacket::GetTimestamp(packet) - 1.0 * seq * PointCloudPacket::GetPacketSendInterval(scan_mode);
         }
+
+        {
+            int packets = points / (points_in_one_group * groups_in_one_udp);
+            if (cloud.packets.size() < packets)
+            {
+                cloud.packets.resize(packets);
+            }
+
+            std::chrono::time_point<std::chrono::system_clock, std::chrono::nanoseconds> sys_time_ns = \
+                std::chrono::time_point_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now());
+            if (seq >= 0 && seq < packets)
+            {
+                if (stamp_ns_ptr)
+                    cloud.packets.at(seq).stamp_ns = *stamp_ns_ptr;
+                else
+                    cloud.packets.at(seq).stamp_ns = sys_time_ns.time_since_epoch().count();
+
+                cloud.packets.at(seq).data = packet;
+            }
+
+            // Set point cloud type and timestamp with the first udp packet.
+            if (cloud.scan_mode != scan_mode)
+            {
+                if (stamp_ns_ptr)
+                    cloud.stamp_ns = *stamp_ns_ptr;
+                else
+                    cloud.stamp_ns = sys_time_ns.time_since_epoch().count();
+                cloud.scan_mode = scan_mode;
+                cloud.dev_type = GetDeviceType(packet);
+            }
+        }
+
 
         // downsample
         DownsampleMode downsample = DownsampleMode::DownsampleUnknown;
@@ -872,6 +919,37 @@ namespace zvision
                 point_data.reflectivity = reflectivity & 0xFF;
                 point_data.point_number = point_number;
                 point_data.fire_number = fire_number;
+                point_data.groupid = fire_number / (points_in_one_group / echo_cnt);
+
+                int lines_offset = 0;
+                if (ScanML30SA1Plus_160 == scan_mode || ScanML30SA1Plus_160_1_2 == scan_mode || ScanML30SA1Plus_160_1_4 == scan_mode)
+                {
+                    if (fire_number >= (fires / 2)) {
+                        point_data.groupid = point_data.groupid - (fires / 2) / (points_in_one_group / echo_cnt);
+                    }
+                    if (fov_number > 3)
+                    {
+                        lines_offset = 80;
+                    }
+                }
+
+                if (ScanML30SA1_160 == scan_mode || ScanML30SA1_160_1_2 == scan_mode || ScanML30SA1_160_1_4 == scan_mode)
+                {
+                    if (fov_number > 3)
+                    {
+                        lines_offset = 80;
+                    }
+                }
+
+                // get line id
+                if (points_per_line <= 0)
+                {
+                    point_data.line_id = -1;
+                }
+                else
+                {
+                    point_data.line_id = point_data.groupid / points_per_line + lines_offset;
+                }
                 point_data.fov = fov_number;
                 point_data.valid = 1;
                 point_data.echo_num = echo;
@@ -883,12 +961,6 @@ namespace zvision
 
         return 0;
 
-    }
-
-    int PointCloudPacket::ProcessPacket(PointCloudPacket& packet, CalibrationDataSinCosTable& cal_lut, PointCloud& cloud)
-    {
-        std::string pkt(packet.data_, sizeof(packet.data_) / sizeof(char));
-        return PointCloudPacket::ProcessPacket(pkt, cal_lut, cloud);
     }
 
     void PointCloudPacket::ResolvePoint(const unsigned char* point, ReturnType& return_type, float& dis, int& ref, int dis_bit, int ref_bit)
