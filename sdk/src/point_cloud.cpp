@@ -853,6 +853,7 @@ namespace zvision
             uint32_t ip;
             int len;
             int ret = 0;
+            std::this_thread::sleep_for(std::chrono::milliseconds(2000));
             while (!need_stop_)
             {
                 std::string data(8192, '0');

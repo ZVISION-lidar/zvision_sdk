@@ -1011,7 +1011,7 @@ namespace zvision
     }
 
     // New architecture protocol
-    const float InternalPacket::DISTANCE_UNITS = 0.0015f;
+    const float InternalPacket::DISTANCE_UNITS = 0.0015f * 125;
     void InternalPacket::GetPacketType(const std::string& packet, PacketType& type, ScanMode& mode)
     {
         int pkt_len = packet.size();
@@ -1331,12 +1331,12 @@ namespace zvision
                 // get point data
                 uint8_t* point_ptr = pdata + pos;
                 point.peak = *point_ptr;
-                point.pulse_width = static_cast<float>(*(point_ptr + 2)) + static_cast<float>(*(point_ptr + 1)) / 256.0f;
+                point.pulse_width = (static_cast<float>(*(point_ptr + 2)) + static_cast<float>(*(point_ptr + 1)) / 256.0f) * 1.25f;
                 point.pulse_width_ori = (*(point_ptr + 2)) << 8 | (*(point_ptr + 1));
                 point.gain = *(point_ptr + 3);
                 
                 uint32_t* d19_r13 = (uint32_t*)(point_ptr + 4);
-                point.distance = DISTANCE_UNITS * static_cast<int>(*d19_r13 >> (32 - DISTANCE_BITS));
+                point.distance = DISTANCE_UNITS * static_cast<int>(*d19_r13 >> (32 - DISTANCE_BITS)) / 256;
                 point.reserved = (*d19_r13 & 0x1F00) >> 8;
                 point.reflectivity = *d19_r13 & 0xFF;
                 point.reflectivity_13bits = *d19_r13 & 0x1FFF;
@@ -1346,7 +1346,8 @@ namespace zvision
                 point.direct_current_ori = (*(point_ptr + 11)) << 8 | (*(point_ptr + 10));
                 
                 uint32_t* reserved_ftof = (uint32_t*) (point_ptr + 12);
-                point.ftof = (*reserved_ftof) & 0xFFF;
+                uint16_t ftof = (*reserved_ftof) & 0xFFF;
+                point.ftof = DISTANCE_UNITS * ftof;
                 point.ftof_max = (*reserved_ftof >> 12) & 0xFF;
 
 

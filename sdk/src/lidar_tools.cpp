@@ -6926,6 +6926,20 @@ namespace zvision
         return GetML30sPlusB1DeviceQueryString(packet, out);
     }
 
+    int LidarTools::ResetML30sPlusB1DevicePtpParam()
+    {
+        if (!CheckConnection())
+            return TcpConnTimeout;
+
+        const int send_len = 10;
+        char cmd[send_len] = { (char)0xBA, (char)0x00, (char)0x01, (char)0x00, (char)0x03, (char)0x09, (char)0x03,\
+            (char)0x01, (char)0x00, (char)0x00 };
+
+        std::string cmd_str(cmd, send_len);
+        std::string out;
+        return GetML30sPlusB1DeviceQueryString(cmd_str, out);
+    }
+
     int LidarTools::SetML30sPlusB1DeviceFrameSyncEnable(bool en)
     {
         if (!CheckConnection())

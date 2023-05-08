@@ -550,6 +550,8 @@ namespace zvision
 
         int SetML30sPlusB1DevicePtpConfiguration(std::string filename);
 
+        int ResetML30sPlusB1DevicePtpParam();
+
         int GetML30sPlusB1DevicePtpConfigurationToFile(std::string& save_file_name);
 
         int SetML30sPlusB1DeviceFrameSyncEnable(bool en);

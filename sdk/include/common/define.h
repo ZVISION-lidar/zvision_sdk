@@ -405,7 +405,7 @@ namespace zvision
         float y = .0f;
         float z = .0f;
         uint8_t peak = 0;
-        float  pulse_width = .0f;
+        float  pulse_width = .0f;       // uint: ns
         uint16_t pulse_width_ori = 0;
         uint8_t gain = 0;
         uint8_t reserved = 0;            // 5 bits
@@ -417,7 +417,7 @@ namespace zvision
         uint16_t direct_current_ori = 0;
 
         uint8_t ftof_max = 0;
-        uint16_t ftof = 0;
+        float ftof = 0;
         int valid = 0;
     }BloomingPoint;
 
