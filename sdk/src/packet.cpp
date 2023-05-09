@@ -1224,6 +1224,12 @@ namespace zvision
             info.points_per_group = 4 * info.echo;
             info.points_offset_bytes_in_group.resize(info.points_per_group, 0);
             info.groups_per_udp = 80 / info.echo;
+            if (zvision::is_ml30splus_b1_ep_mode_enable())
+            {
+                info.points_per_group = 8 * info.echo;
+                info.points_offset_bytes_in_group.resize(info.points_per_group, 0);
+                info.groups_per_udp = 40 / info.echo;
+            }
 
             info.udp_count = 160 * info.echo / ds;
             info.npoints = 51200 * info.echo / ds;
@@ -1315,10 +1321,17 @@ namespace zvision
                 // get point descrption
                 if (header_.scan_mode == ScanML30SA1Plus_160)
                 {
-                    if (point_id < (info.npoints / 2))
+                    if (zvision::is_ml30splus_b1_ep_mode_enable())
+                    {
                         point.fov_id = info.fov_id_in_group.at(p);
+                    }
                     else
-                        point.fov_id = info.fov_id_in_group.at(p + (info.fov_id_in_group.size() / 2));
+                    {
+                        if (point_id < (info.npoints / 2))
+                            point.fov_id = info.fov_id_in_group.at(p);
+                        else
+                            point.fov_id = info.fov_id_in_group.at(p + (info.fov_id_in_group.size() / 2));
+                    }
                 }
                 else
                     point.fov_id = info.fov_id_in_group.at(p);
