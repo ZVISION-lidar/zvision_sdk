@@ -34,7 +34,7 @@
 #include <condition_variable>
 #include "define.h"
 #include "protocol/packet.h"
-
+#include "packet_source.h"
 
 namespace zvision
 {
@@ -362,31 +362,32 @@ namespace zvision
         void SetInternalFrameMatchMethod(bool use_lidar_time);
 
     private:
+      std::shared_ptr<zvision::PcapAnalyzer> ana_;
 
-        /*offline pcap filename */
-        std::string pcap_filename_;
+      /*offline pcap filename */
+      std::string pcap_filename_;
 
-        std::shared_ptr<PcapUdpSource> packet_source_;
+      std::shared_ptr<PcapUdpSource> packet_source_;
 
-        /*store the points' calibration data(elevation and azimuth's sin cos)*/
-        std::shared_ptr<CalibrationDataSinCosTable> cal_lut_;
+      /*store the points' calibration data(elevation and azimuth's sin cos)*/
+      std::shared_ptr<CalibrationDataSinCosTable> cal_lut_;
 
-        /*store the lidar pointcoud data*/
-        std::shared_ptr<PointCloud> points_;
+      /*store the lidar pointcoud data*/
+      std::shared_ptr<PointCloud> points_;
 
-        std::string cal_filename_;
-        DeviceType device_type_;
-        int count_;
+      std::string cal_filename_;
+      DeviceType device_type_;
+      int count_;
 
-        std::string device_ip_;
+      std::string device_ip_;
 
-        int data_port_;
+      int data_port_;
 
-        bool init_ok_;
+      bool init_ok_;
 
-        PointCloudCallback pointcloud_cb_;
+      PointCloudCallback pointcloud_cb_;
 
-        bool match_frame_use_lidar_time_ = false;
+      bool match_frame_use_lidar_time_ = false;
     };
 
 }

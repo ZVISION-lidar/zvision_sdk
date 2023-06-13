@@ -257,14 +257,15 @@ void sample_offline_pointcloud(std::string lidar_ip = "192.168.10.108", int port
         viewer.reset(new pcl::visualization::PCLVisualizer("cloudviewtest"));
 #endif
         //Step 4: Iterate the pointcloud.
-        while (true)
+        int i = 1;
+        while (i--)
         {
             for (int i = 0; i < size-1; ++i)
             {
                 zvision::PointCloud pointcloud;
                 if (ret = player.GetPointCloud(i, pointcloud))
                 {
-                     LOG_F(ERROR, "GetPointCloud error, frame number is %d, ret = %d.", i, ret);
+                    //  LOG_F(ERROR, "GetPointCloud error, frame number is %d, ret = %d.", i, ret);
                 }
                 else
                 {
@@ -295,7 +296,7 @@ void sample_offline_pointcloud(std::string lidar_ip = "192.168.10.108", int port
             }
         }
     }
-    getchar();
+    // getchar();
 }
 
 static void export_point_cloud(zvision::PointCloud& points, std::string filename)
@@ -583,61 +584,73 @@ int main(int argc, char** argv)
 	}
 #endif
 
-    std::cout << "############################# USER GUIDE ################################\n\n"
-        << "Online sample param:\n"
-        << "        -online (required)\n"
-        << "        -ip lidar_ip_address(required)\n"
-        << "        -p  pointcloud_udp_port(optional)\n"
-        << "        -c  calibration_file_name(optional)\n"
-        << "        -j  (optional for online)\n"
-        << "        -g  multicast_group_ip_address(optional, valid when -j is set)\n"
-		<< "        -30sp (optional, special for ML30S+ lidar)\n"
-        << "        -30spb1 (optional, special for ML30S+B1 lidar)\n"
-        << "        -30spb1ep1 (optional, special for ML30S+B1 EP1 lidar)\n"
-        << "        -d  downsample mode(none, 1/2 or 1/4, optional,only valid for ScanML30SA1_160)\n"
-        << "        -dcfg  downsample mode(downsample config file path, optional, only valid for ScanML30SA1_160)\n"
-        << "\n"
-        << "Online sample 1 : -online -ip 192.168.10.108\n"
-		<< "Online sample 2 : -online -ip 192.168.10.108 -30sp\n"
-        << "Online sample 3 : -online -ip 192.168.10.108 -30spb1\n"
-        << "Online sample 4 : -online -ip 192.168.10.108 -30spb1ep1\n"
-        << "Online sample 5 : -online -ip 192.168.10.108 -p 2368\n"
-        << "Online sample 6 : -online -ip 192.168.10.108 -c xxxx.cal\n"
-        << "Online sample 7 : -online -ip 192.168.10.108 -p 2368 -c xxxx.cal\n"
-        << "Online sample 8 : -online -ip 192.168.10.108 -j\n"
-        << "Online sample 9 : -online -ip 192.168.10.108 -j 239.0.0.1\n"
-        << "Online sample 10 : -online -ip 192.168.10.108 -d 1/2\n"
-        << "Online sample 11 : -online -ip 192.168.10.108 -dcfg xxxx.txt\n"
-        << "\n"
+        std::cout
+            << "############################# USER GUIDE "
+               "################################\n\n"
+            << "Online sample param:\n"
+            << "        -online (required)\n"
+            << "        -ip lidar_ip_address(required)\n"
+            << "        -p  pointcloud_udp_port(optional)\n"
+            << "        -c  calibration_file_name(optional)\n"
+            << "        -j  (optional for online)\n"
+            << "        -g  multicast_group_ip_address(optional, valid when -j "
+               "is set)\n"
+            << "        -30sp (optional, special for ML30S+ lidar)\n"
+            << "        -30spb1 (optional, special for ML30S+B1 lidar)\n"
+            << "        -30spb1ep1 (optional, special for ML30S+B1 EP1 lidar)\n"
+            << "        -d  downsample mode(none, 1/2 or 1/4, optional,only "
+               "valid for ScanML30SA1_160)\n"
+            << "        -dcfg  downsample mode(downsample config file path, "
+               "optional, only valid for ScanML30SA1_160)\n"
+            << "\n"
+            << "Online sample 1 : -online -ip 192.168.10.108\n"
+            << "Online sample 2 : -online -ip 192.168.10.108 -30sp\n"
+            << "Online sample 3 : -online -ip 192.168.10.108 -30spb1\n"
+            << "Online sample 4 : -online -ip 192.168.10.108 -30spb1ep1\n"
+            << "Online sample 5 : -online -ip 192.168.10.108 -p 2368\n"
+            << "Online sample 6 : -online -ip 192.168.10.108 -c xxxx.cal\n"
+            << "Online sample 7 : -online -ip 192.168.10.108 -p 2368 -c "
+               "xxxx.cal\n"
+            << "Online sample 8 : -online -ip 192.168.10.108 -j\n"
+            << "Online sample 9 : -online -ip 192.168.10.108 -j 239.0.0.1\n"
+            << "Online sample 10 : -online -ip 192.168.10.108 -d 1/2\n"
+            << "Online sample 11 : -online -ip 192.168.10.108 -dcfg xxxx.txt\n"
+            << "\n"
 
-        << "Offline sample param:\n"
-        << "        -offline (required)\n"
-        << "        -ip lidar_ip_address(required)\n"
-        << "        -p  pointcloud_udp_port(required)\n"
-        << "        -f  pcap_file_name(required)\n"
-        << "        -c  calibration_file_name(required)\n"
-        << "        -30spb1ep1 (optional, special for ML30S+B1 EP1 lidar)\n"
-        << "\n"
-        << "Offline sample 1 : -offline -ip 192.168.10.108 -p 2368 -f xxxx.pcap -c xxxx.cal\n"
-        << "Offline sample 2 : -offline -ip 192.168.10.108 -p 2368 -f xxxx.pcap -c xxxx.cal -30spb1ep1\n"
+            << "Offline sample param:\n"
+            << "        -offline (required)\n"
+            << "        -ip lidar_ip_address(required)\n"
+            << "        -p  pointcloud_udp_port(required)\n"
+            << "        -f  pcap_file_name(required)\n"
+            << "        -c  calibration_file_name(required)\n"
+            << "        -30spb1ep1 (optional, special for ML30S+B1 EP1 lidar)\n"
+            << "\n"
+            << "Offline sample 1 : -offline -ip 192.168.10.108 -p 2368 -f "
+               "xxxx.pcap -c xxxx.cal\n"
+            << "Offline sample 2 (cal in pcap): -offline -ip 192.168.10.108 -p "
+               "2368 -f xxxx.pcap -c \"\"\n"
+            << "Offline sample 3 : -offline -ip 192.168.10.108 -p 2368 -f "
+               "xxxx.pcap -c xxxx.cal -30spb1ep1\n"
 
 #ifdef USING_PCL_VISUALIZATION
-        << "\n"
-		<< "Offline pcap to pcd sample param:\n"
-		<< "        -offline2pcd (required)\n"
-		<< "        -ip lidar_ip_address(required)\n"
-		<< "        -p  pointcloud_udp_port(required)\n"
-		<< "        -f  pcap_file_name(required)\n"
-		<< "        -cali_dir  calibration_file_name(required)\n"
-        << "        -30spb1ep1 (optional, special for ML30S+B1 EP1 lidar)\n"
-		<< "\n"
-		<< "Offline sample 1 : -offline2pcd -ip 192.168.10.108 -p 2368 -f xxxx.pcap -cali_dir /home/data/cali\n"
-        << "Offline sample 2 : -offline2pcd -ip 192.168.10.108 -p 2368 -f xxxx.pcap -cali_dir /home/data/cali -30spb1ep1\n"
+            << "\n"
+            << "Offline pcap to pcd sample param:\n"
+            << "        -offline2pcd (required)\n"
+            << "        -ip lidar_ip_address(required)\n"
+            << "        -p  pointcloud_udp_port(required)\n"
+            << "        -f  pcap_file_name(required)\n"
+            << "        -cali_dir  calibration_file_name(required)\n"
+            << "        -30spb1ep1 (optional, special for ML30S+B1 EP1 lidar)\n"
+            << "\n"
+            << "Offline sample 1 : -offline2pcd -ip 192.168.10.108 -p 2368 -f "
+               "xxxx.pcap -cali_dir /home/data/cali\n"
+            << "Offline sample 2 : -offline2pcd -ip 192.168.10.108 -p 2368 -f "
+               "xxxx.pcap -cali_dir /home/data/cali -30spb1ep1\n"
 
 #endif
 
-        << "############################# END  GUIDE ################################\n\n"
-        ;
+            << "############################# END  GUIDE "
+               "################################\n\n";
     getchar();
 
     return zvision::InvalidParameter; 

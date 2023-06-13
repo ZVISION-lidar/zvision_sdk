@@ -146,43 +146,49 @@ namespace zvision
           */
 		int GetDeviceCalibrationData(CalibrationData& cal);
 
-        /** \brief Get calibration data from lidar.
-        * \param[out] pkts          return device's calibration packets
-        */
-        int GetDeviceCalibrationPackets(CalibrationPackets& pkts,std::string cmd = "");
 
-        /** \brief Get mlxs calibration data from lidar.
-        * \param[out] cal          return device's calibration data
-        */
-        int GetMLXSDeviceCalibrationData(CalibrationData& cal);
+    /** \brief Get calibration data from lidar.
+    * \param[out] pkts          return device's calibration
+    * packets
+    */
+    int GetDeviceCalibrationPackets(CalibrationPackets &pkts,
+                                                    std::string cmd = "");
 
-        /** \brief Get calibration data from calibration packet.
-        * \param[in]  pkts          the whole calibration packets.
-        * \param[out] cal           return device's calibration data.
-        * \return 0 for ok, others for failure.
-        */
-        static int GetDeviceCalibrationData(const CalibrationPackets& pkts, CalibrationData& cal);
+    /** \brief Get mlxs calibration data from lidar.
+     * \param[out] cal          return device's calibration data
+     */
+    int GetMLXSDeviceCalibrationData(CalibrationData &cal);   
+    /** \brief Get calibration data from calibration packet.
+     * \param[in]  pkts          the whole calibration packets.
+     * \param[out] cal           return device's calibration data.
+     * \return 0 for ok, others for failure.
+     */
+    static int GetDeviceCalibrationData(const CalibrationPackets &pkts,
+                                         CalibrationData &cal);
 
-        /** \brief Get calibration data from lidar and save to file.
-          * \param[in] filename       the file to store the calibration data
-          * \param[in] tp             lidar type
-          */
-        int GetDeviceCalibrationDataToFile(std::string filename, zvision::DeviceType tp = zvision::DeviceType::LidarUnknown);
+                /** \brief Get calibration data from lidar and save to file.
+                 * \param[in] filename       the file to store the calibration
+                 * data \param[in] tp             lidar type
+                 */
+                int GetDeviceCalibrationDataToFile(
+                    std::string filename,
+                    zvision::DeviceType tp = zvision::DeviceType::LidarUnknown);
 
-        /** \brief Get mlxs calibration data from lidar and save to file.
-          * \param[in] filename       the file to store the calibration data
-          */
-        int GetMLXSDeviceCalibrationDataToFile(std::string filename);
+                /** \brief Get mlxs calibration data from lidar and save to
+                 * file. \param[in] filename       the file to store the
+                 * calibration data
+                 */
+                int GetMLXSDeviceCalibrationDataToFile(std::string filename);
 
-        /** \brief Reboot MLXS device.
-        * \return 0 for ok, others for failure.
-        */
-        int RebootMLXSDevice();
+                /** \brief Reboot MLXS device.
+                 * \return 0 for ok, others for failure.
+                 */
+                int RebootMLXSDevice();
 
-        /** \brief shutdown device.
-        * \return 0 for ok, others for failure.
-        */
-        int ShutdownMLXSDevice();
+                /** \brief shutdown device.
+                 * \return 0 for ok, others for failure.
+                 */
+                int ShutdownMLXSDevice();
 
 		/** \brief Set calibration data to lidar.
 		* \param[in] filename       calibration file path

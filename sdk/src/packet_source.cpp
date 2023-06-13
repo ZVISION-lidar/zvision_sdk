@@ -1020,7 +1020,7 @@ namespace zvision
                 if (0 != (ret = this->Open()))
                 return ret;
         }
-       
+        std::cout << "len: " << len << std::endl;
         while (1)
         {
             std::string header;
@@ -1046,8 +1046,9 @@ namespace zvision
             NetworkToHost(pc + 14 + 12, (char*)&ip_host_order);
             NetworkToHostShort(pc + 36 + 0, (char*)&port);
 
-            //std::cout << "read: " << std::hex << ip << std::dec << " port :" << port << std::endl;
-            //std::cout << "wanted: " << std::hex << this->filter_ip_ << std::dec << " port :" << this->destination_port_ << std::endl;
+            // std::cout << "read: " << std::hex << filter_ip_ << std::dec
+            //           << " port :" << port << std::endl;
+            // std::cout << "wanted: " << std::hex << this->filter_ip_ << std::dec << " port :" << this->destination_port_ << std::endl;
             if ((ip_host_order == this->filter_ip_) && (port == this->destination_port_))
                 return 0;
             else
@@ -1096,13 +1097,13 @@ namespace zvision
         }
         this->reader_->Close();
         init_ok_ = false;
-
+        std::cout << "cal_pkt_valid" << cal_pkt_valid << std::endl;
         if (cal_pkt_valid != cal_pkt_cnt){
- 	    if (EndOfFile == ret)
+ 	        if (EndOfFile == ret)
                 return NotEnoughData;
             else
                 return ret;
-	}
+	    }
            
 
         for (auto& p : packets)

@@ -22,6 +22,7 @@
 
 
 #include "client.h"
+#include "define.h"
 #include "point_cloud.h"
 #include "lidar_tools.h"
 //#include "packet.h"
@@ -1175,12 +1176,31 @@ namespace zvision
         if (0 != (ret = this->packet_source_->ReadFrameInfo(count_, type)))
             return ret;
 
-        if (cal_filename_.size())
+        if (!cal_filename_.empty())
         {
             CalibrationData cal;
             if (0 != (ret = LidarTools::ReadCalibrationData(cal_filename_, cal)))
                 return ret;
             LidarTools::ComputeCalibrationSinCos(cal, *(this->cal_lut_.get()));
+        }
+        else{
+            CalibrationData cal;
+            CalibrationPackets cal_pkts;
+            this->ana_.reset(new PcapAnalyzer(pcap_filename_));
+            this->ana_->Analyze();
+            if (this->ana_->GetDetailInfo().size() == 0){
+                std::cout << "not enough data" << std::endl;
+                return NotEnoughData;
+            }
+            for (auto &it : this->ana_->GetDetailInfo()) {
+                if (!it.second.cal_pkts_.size())
+                    return NotEnoughData;
+
+                cal_pkts = it.second.cal_pkts_;
+            }
+            LidarTools::GetDeviceCalibrationData(cal_pkts,cal);
+            LidarTools::ComputeCalibrationSinCos(
+                cal, *(this->cal_lut_.get()));
         }
 
         size = count_;
@@ -1193,7 +1213,7 @@ namespace zvision
     {
         if (!init_ok_)
             return NotInit;
-
+        
         //get one full pointcloud's udp packets
         std::vector<PointCloudPacket> packets;
         int ret = 0;
