@@ -257,15 +257,14 @@ void sample_offline_pointcloud(std::string lidar_ip = "192.168.10.108", int port
         viewer.reset(new pcl::visualization::PCLVisualizer("cloudviewtest"));
 #endif
         //Step 4: Iterate the pointcloud.
-        int i = 1;
-        while (i--)
+        while (1)
         {
             for (int i = 0; i < size-1; ++i)
             {
                 zvision::PointCloud pointcloud;
                 if (ret = player.GetPointCloud(i, pointcloud))
                 {
-                    //  LOG_F(ERROR, "GetPointCloud error, frame number is %d, ret = %d.", i, ret);
+                     LOG_F(ERROR, "GetPointCloud error, frame number is %d, ret = %d.", i, ret);
                 }
                 else
                 {
