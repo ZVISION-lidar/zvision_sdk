@@ -3,7 +3,7 @@
 ZVISION SDK developed based on c++ provide a convenient way to use the zvision production. You can communicate with the device and get the device's info, including but not limited to pointcloud and configuration.
 
 ## Prerequisites
-* Ubuntu 14.04/Ubuntu 16.04/Ubuntu 18.04, both x86 and ARM (Nvidia TX2)
+* Ubuntu 14.04/Ubuntu 16.04/Ubuntu 18.04/Ubuntu 20.04, both x86 and ARM (Nvidia TX2)
 * Windows 7/10, Visual Studio 2015 Update3
 * C++11 compiler
 
@@ -18,7 +18,7 @@ For user's reference, SAMPLE tell you how to set device's parameter, how to get 
 # 4 INSTALL SDK
 
 ## 4.1 Installation
-### 4.1.1 Ubuntu 18.04/16.04/14.04 LTS
+### 4.1.1 Ubuntu 20.04/18.04/16.04/14.04 LTS
 #### Dependencies
 [CMake 3.0.0+](https://cmake.org/) is required. You can install these packages using apt:
 ```
@@ -55,8 +55,8 @@ You can now compile the SDK in Visual Studio.
 ## 4.2 Run Sample
 Two samples are provided in sample/lidar_config and Sample/pointcloud
 
-### 4.2.1 Ubuntu 18.04/16.04 /14.04 LTS
-For Ubuntun 18.04/16.04/14.04 LTS, run the *pointcloud_sample* if connect with the LiDAR
+### 4.2.1 Ubuntu 20.04/18.04/16.04 /14.04 LTS
+For Ubuntun 20.04/18.04/16.04/14.04 LTS, run the *pointcloud_sample* if connect with the LiDAR
 ```
 cd sample/pointcloud && ./pointcloud_sample
 ```
