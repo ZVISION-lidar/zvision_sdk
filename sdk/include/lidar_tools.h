@@ -131,14 +131,11 @@ namespace zvision
           */
         int QueryDeviceConfigurationInfo(DeviceConfigurationInfo& info);
 
-<<<<<<< HEAD
-=======
         /** \brief Get MLXS device network configuration data from lidar.
           * \param[out] info          return configuration info
           */
         int QueryMLXSDeviceNetworkConfigurationInfo(MLXSDeviceNetworkConfigurationInfo& info);
 
->>>>>>> gitlab/master
 		/** \brief Get device algorithm parameters from lidar.
 		* \param[out] info          return algorithm parameters
 		*/
@@ -397,8 +394,6 @@ namespace zvision
 		*/
 		int SetDeviceFactoryMac(std::string& mac);
 
-<<<<<<< HEAD
-=======
         /** \brief Get lidar's Channel data to file.
         * \param[in] path            file path
         * \param[in] origin          origin
@@ -581,7 +576,6 @@ namespace zvision
         int RebootML30sPlusB1Device();
 
 		/*****************************************************************/
->>>>>>> gitlab/master
 	protected:
 		/********************* only for ml30s+ *********************/
 		/** \brief denerate ml30s+ cmd string.
