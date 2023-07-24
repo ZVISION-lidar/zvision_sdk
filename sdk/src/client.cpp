@@ -60,6 +60,7 @@
 //#include <cstdarg>
 
 #include "client.h"
+#include "loguru.hpp"
 
 #define BUFFERSIZE 2048
 #define PROTOPORT 5193 // Default port number
@@ -287,13 +288,11 @@ namespace zvision
     static void PrintError(const char *msg)
     {
 #ifdef WIN32
-        printf("%s: %d\n", msg, WSAGetLastError());
+        LOG_F(ERROR, "%s: %d", msg, WSAGetLastError());
 #else
         perror(msg);
 #endif
     }
-
-
 
     //////////////////////////////////////////////////////////////////////////////////////////////
     Env::Env():
@@ -314,7 +313,7 @@ namespace zvision
             int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
             if (iResult != 0)
             {
-                LOG_ERROR("Error at WSASturtup: ret = %d\n", iResult);
+                LOG_F(ERROR, "Error at WSASturtup: ret = %d", iResult);
                 env.socket_env_status_ = (int)ReturnCode::InitFailure;
             }
             else
@@ -354,12 +353,12 @@ namespace zvision
         if (!Env::Ok())
             return -1;
 
-        LOG_DEBUG("Connect to %s:%d.\n", dst_ip.c_str(), dst_port);
+        LOG_F(2, "Connect to %s:%d.", dst_ip.c_str(), dst_port);
         // Socket creation
         this->socket_ = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
         if (this->socket_ == INVALID_SOCKET)
         {
-            LOG_ERROR("Socket creation failed.\n");
+            LOG_F(ERROR, "Socket creation failed.");
             return -1;
         }
 
@@ -375,7 +374,7 @@ namespace zvision
         u_long block = 1;
         if (ioctlsocket(this->socket_, FIONBIO, &block) == SOCKET_ERROR)
         {
-            LOG_ERROR("Set nonblock error, error code = %d.\n", GetSysErrorCode());
+            LOG_F(ERROR, "Set nonblock error, error code = %d.", GetSysErrorCode());
             Close();
             return -1;
         }
@@ -389,7 +388,7 @@ namespace zvision
             int ret = GetSysErrorCode();
             if (ret != WSAEWOULDBLOCK)
             {
-                LOG_ERROR("Connect error, error code = %d.\n", ret);
+                LOG_F(ERROR, "Connect error, error code = %d.", ret);
                 Close();
                 return -1;
             }
@@ -402,15 +401,15 @@ namespace zvision
             FD_ZERO(&setE);
             FD_SET(this->socket_, &setE);
 
-            LOG_DEBUG("Set connect timeout to %d seconds %d usec.\n", time_out.tv_sec, time_out.tv_usec);
+            LOG_F(2, "Set connect timeout to %d seconds %d usec.", time_out.tv_sec, time_out.tv_usec);
             ret = select(0, NULL, &setW, &setE, &time_out);
             if (ret <= 0)
             {
                 // https://docs.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-select
                 if(0 == ret)
-                    LOG_ERROR("Connect timeout.\n");
+                    LOG_F(ERROR, "Connect timeout.");
                 else
-                    LOG_ERROR("Select error, ret = %d error code = %d.\n", ret, this->GetSysErrorCode());
+                    LOG_F(ERROR, "Select error, ret = %d error code = %d.", ret, this->GetSysErrorCode());
                 Close();
                 return -1;
             }
@@ -419,7 +418,7 @@ namespace zvision
             if (ret)
             {
                 // connection failed
-                LOG_ERROR("FD_ISSET error: ret = %d, error code = %d.\n", ret, this->GetSysErrorCode());
+                LOG_F(ERROR, "FD_ISSET error: ret = %d, error code = %d.", ret, this->GetSysErrorCode());
                 Close();
                 return -1;
             }
@@ -430,7 +429,7 @@ namespace zvision
         // return value reference: https://docs.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-ioctlsocket
         if (ioctlsocket(this->socket_, FIONBIO, &block) == SOCKET_ERROR)
         {
-            LOG_ERROR("Set block mode error, error code = %d.\n",this->GetSysErrorCode());
+            LOG_F(ERROR, "Set block mode error, error code = %d.",this->GetSysErrorCode());
             Close();
             return -1;
         }
@@ -439,25 +438,25 @@ namespace zvision
         int timeout = this->send_timeout_ms_;
         if (0 != setsockopt(this->socket_, SOL_SOCKET, SO_SNDTIMEO, (const char *)&timeout, sizeof(timeout)))
         {
-            LOG_ERROR("Set send timeout error, error code = %d.\n", this->GetSysErrorCode());
+            LOG_F(ERROR, "Set send timeout error, error code = %d.", this->GetSysErrorCode());
             Close();
             return -1;
         }
         else
         {
-            LOG_DEBUG("Set send timeout ok, %d ms\n", timeout);
+            LOG_F(2, "Set send timeout ok, %d ms", timeout);
         }
 
         timeout = this->recv_timeout_ms_;
         if (0 != setsockopt(this->socket_, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout, sizeof(timeout)))
         {
-            LOG_ERROR("Set receive timeout error, error code = %d.\n ", timeout);
+            LOG_F(ERROR, "Set receive timeout error, error code = %d. ", timeout);
             Close();
             return -1;
         }
         else
         {
-            LOG_DEBUG("Set receive timeout ok, %d ms\n", timeout);
+            LOG_F(2, "Set receive timeout ok, %d ms", timeout);
         }
 
         return 0;
@@ -472,7 +471,7 @@ namespace zvision
 
         if(0 > (ret = fcntl(this->socket_, F_SETFL, O_NONBLOCK)))
         {
-            LOG_ERROR("Set non-block mode error, error code = %d.\n", GetSysErrorCode());
+            LOG_F(ERROR, "Set non-block mode error, error code = %d.", GetSysErrorCode());
             Close();
             return -1;
         }
@@ -499,21 +498,21 @@ namespace zvision
                     }
                     else
                     {
-                        LOG_ERROR("Connect error, error code = %d\n", so_error);
+                        LOG_F(ERROR, "Connect error, error code = %d", so_error);
                         Close();
                         return -1;
                     }
                 }
                 else
                 {
-                    LOG_ERROR("Connect error, error code = %d.\n", this->GetSysErrorCode());
+                    LOG_F(ERROR, "Connect error, error code = %d.", this->GetSysErrorCode());
                     Close();
                     return -1;
                 }
             }
             else
             {
-                LOG_ERROR("Connect error, error code = %d.\n", err);
+                LOG_F(ERROR, "Connect error, error code = %d.", err);
                 Close();
                 return -1;
             }
@@ -521,12 +520,12 @@ namespace zvision
 
         }
 
-        LOG_DEBUG("Connect to %s ok.\n", dst_ip.c_str());;
+        LOG_F(2, "Connect to %s ok.", dst_ip.c_str());;
 
         int flag = fcntl(this->socket_, F_GETFL, 0);
         if(0 > (ret = fcntl(this->socket_, F_SETFL, flag & ~O_NONBLOCK)))
         {
-            LOG_ERROR("Set block mode error, error code = %d.\n", GetSysErrorCode());
+            LOG_F(ERROR, "Set block mode error, error code = %d.", GetSysErrorCode());
             Close();
             return -1;
         }
@@ -535,26 +534,26 @@ namespace zvision
         time_out.tv_usec = (this->send_timeout_ms_ % 1000) * 1000;
         if (0 != setsockopt(this->socket_, SOL_SOCKET, SO_SNDTIMEO, (const char*)&time_out, sizeof(time_out)))
         {
-            LOG_ERROR("Set send timeout error, error code = %d.\n", this->GetSysErrorCode());
+            LOG_F(ERROR, "Set send timeout error, error code = %d.", this->GetSysErrorCode());
             Close();
             return -1;
         }
         else
         {
-            LOG_DEBUG("Set send timeout ok, %d ms\n", timeout);
+            LOG_F(2, "Set send timeout ok, %d ms", timeout);
         }
 
         time_out.tv_sec = this->recv_timeout_ms_ / 1000;
         time_out.tv_usec = (this->recv_timeout_ms_ % 1000) * 1000;
         if (0 != setsockopt(this->socket_, SOL_SOCKET, SO_RCVTIMEO, (const char*)&time_out, sizeof(time_out)))
         {
-            LOG_ERROR("Set receive timeout error, error code = %d.\n ", timeout);
+            LOG_F(ERROR, "Set receive timeout error, error code = %d. ", timeout);
             Close();
             return -1;
         }
         else
         {
-            LOG_DEBUG("Set receive timeout ok, %d ms\n", timeout);
+            LOG_F(2, "Set receive timeout ok, %d ms", timeout);
         }
         return 0;
 #endif
@@ -576,12 +575,12 @@ namespace zvision
             ret = send(this->socket_, buf + count, len - count, flags);
             if (SOCKET_ERROR == ret)
             {
-                LOG_ERROR("send error, return value is %d", GetSysErrorCode());
+                LOG_F(ERROR, "send error, return value is %d", GetSysErrorCode());
                 return -1;
             }
             else if (0 == ret)
             {
-                LOG_ERROR("The connection has been gracefully closed, send return");
+                LOG_F(ERROR, "The connection has been gracefully closed, send return");
                 return -1;
             }
 
@@ -624,12 +623,12 @@ namespace zvision
             int ret = recv(this->socket_, move, need_read, flags);
             if (SOCKET_ERROR == ret)
             {
-                LOG_ERROR("Recv error, value is %d", GetSysErrorCode());
+                LOG_F(ERROR, "Recv error, value is %d", GetSysErrorCode());
                 return -1;
             }
             else if (0 == ret)
             {
-                LOG_ERROR("The connection has been gracefully closed, recv return");
+                LOG_F(ERROR, "The connection has been gracefully closed, recv return");
                 return -2;
             }
             else
@@ -661,12 +660,12 @@ namespace zvision
             int ret = recv(this->socket_, buf, need_read, flags);
             if (SOCKET_ERROR == ret)
             {
-                LOG_ERROR("Recv error, value is %d", GetSysErrorCode());
+                LOG_F(ERROR, "Recv error, value is %d", GetSysErrorCode());
                 return -1;
             }
             else if (0 == ret)
             {
-                LOG_ERROR("The connection has been gracefully closed, recv return");
+                LOG_F(ERROR, "The connection has been gracefully closed, recv return");
                 return -2;
             }
             else
@@ -733,9 +732,10 @@ namespace zvision
     }
 
     //////////////////////////////////////////////////////////////////////////////////////////////
-    UdpReceiver::UdpReceiver(int port, int recv_timeout):
+    UdpReceiver::UdpReceiver(int port, int recv_timeout, int recv_buffer_len):
         local_port_(port),
         recv_timeout_ms_(recv_timeout),
+        recv_buffer_len_(recv_buffer_len),
         socket_(INVALID_SOCKET),
         init_ok_(false)
     {
@@ -767,7 +767,7 @@ namespace zvision
             this->socket_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
             if (INVALID_SOCKET == this->socket_)
             {
-                PrintError("Socket creation failed.\n");
+                LOG_F(ERROR, "Socket creation failed.");
                 return -1;
             }
 
@@ -783,7 +783,7 @@ namespace zvision
             u_long block = 0;
             if (ioctlsocket(this->socket_, FIONBIO, &block) == SOCKET_ERROR)
             {
-                PrintError("Set nonblock error ");
+                LOG_F(ERROR, "Set nonblock error");
                 Close();
                 return -1;
             }
@@ -793,7 +793,7 @@ namespace zvision
             int flags = fcntl(this->socket_, F_GETFL);
             if(0 > fcntl(this->socket_, flags & ~O_NONBLOCK))
             {
-                LOG_ERROR("Set block error, error code  %d.\n", GetSysErrorCode());
+                LOG_F(ERROR, "Set block error, error code  %d.", GetSysErrorCode());
                 Close();
                 return -1;
             }
@@ -803,7 +803,7 @@ namespace zvision
             int reuseaddr = 1;
             if (0 != setsockopt(this->socket_, SOL_SOCKET, SO_REUSEADDR, (const char *)&reuseaddr, sizeof(reuseaddr)))
             {
-                LOG_ERROR("Set reuse addr error, error code = %d.\n", GetSysErrorCode());
+                LOG_F(ERROR, "Set reuse addr error, error code = %d.", GetSysErrorCode());
                 Close();
                 return -1;
             }
@@ -823,31 +823,31 @@ namespace zvision
             // return value reference: https://docs.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-setsockopt
             if (0 != setsockopt(this->socket_, SOL_SOCKET, SO_RCVTIMEO, (const char *)&recv_timeout, sizeof(recv_timeout)))
             {
-                LOG_ERROR("Set receive timeout %d ms error, error code = %d.\n", this->recv_timeout_ms_, GetSysErrorCode());
+                LOG_F(ERROR, "Set receive timeout %d ms error, error code = %d.", this->recv_timeout_ms_, GetSysErrorCode());
                 Close();
                 return -1;
             }
             else
             {
-                LOG_DEBUG("Set receive timeout ok, %d ms.\n", this->recv_timeout_ms_);
+                LOG_F(2, "Set receive timeout ok, %d ms.", this->recv_timeout_ms_);
             }
 
             int recv_buffer_size = 1024 * 1000;
             if (0 != setsockopt(this->socket_, SOL_SOCKET, SO_RCVBUF, (const char *)&recv_buffer_size, sizeof(recv_buffer_size)))
             {
-                LOG_ERROR("Set receive buffer size %d byte(s) error, error code = %d.\n", recv_buffer_size, GetSysErrorCode());
+                LOG_F(ERROR, "Set receive buffer size %d byte(s) error, error code = %d.", recv_buffer_size, GetSysErrorCode());
                 Close();
                 return -1;
             }
             else
             {
-                LOG_DEBUG("Set receive buffer size ok, %d byte(s).\n", recv_buffer_size);
+                LOG_F(2, "Set receive buffer size ok, %d byte(s).", recv_buffer_size);
             }
 
             // return value reference: https://docs.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-bind
             if (bind(this->socket_, (struct sockaddr*)&addr, sizeof(addr)))
             {
-                LOG_ERROR("Bind error, error code = %d.\n", GetSysErrorCode());
+                LOG_F(ERROR, "Bind error, error code = %d.", GetSysErrorCode());
                 Close();
                 return -1;
             }
@@ -861,7 +861,7 @@ namespace zvision
                 if (0 != setsockopt(this->socket_, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char*)&mreq, sizeof(mreq)))
                 {
                     // "error 19: No such device.", https://stackoverflow.com/questions/3187919/error-no-such-device-in-call-setsockopt-when-joining-multicast-group
-                    LOG_ERROR("Join multicast group %s error, error code = %d.\n", multicast_ip_.c_str(), GetSysErrorCode());
+                    LOG_F(ERROR, "Join multicast group %s error, error code = %d.", multicast_ip_.c_str(), GetSysErrorCode());
                     Close();
                     return -1;
                 }
@@ -883,13 +883,20 @@ namespace zvision
         {
             int ret = 0;
             if(0 != (ret = this->Bind()))
-                LOG_ERROR("Bind error.\n");
+                LOG_F(ERROR, "Bind error.");
         }
 
         if(init_ok_)
         {
             int flags = 0;
-            const int buffer_len = 2048;
+            //const int buffer_len = 1024*32;//2048
+            int buffer_len = 2048;
+            if (recv_buffer_len_ >= 2048 && recv_buffer_len_ <= (1024*32))
+            {
+                //if (recv_buffer_len_ % 1024 == 0)
+                buffer_len = recv_buffer_len_;
+            }
+
             data = std::string(buffer_len, '0');
             char *buf = const_cast<char*>(data.c_str());
 
@@ -911,15 +918,16 @@ namespace zvision
                 if ((EAGAIN == er) || (EWOULDBLOCK == er))
                 #endif
                 {
+                    //LOG_F(WARNING, "Recvfrom timeout, error code = %d.", er);
                     len = 0;
                     return 0;
                 }
-                LOG_ERROR(" Recvfrom error, error code = %d.\n", er);
+                LOG_F(ERROR, " Recvfrom error, error code = %d.", er);
                 return -1;
             }
             else if (0 == ret)
             {
-                LOG_ERROR("The connection has been gracefully closed, recv return.\n");
+                LOG_F(ERROR, "The connection has been gracefully closed, recv return.");
                 return -2;
             }
             else
@@ -950,7 +958,7 @@ namespace zvision
             if (0 != setsockopt(this->socket_, IPPROTO_IP, IP_DROP_MEMBERSHIP, (char*)&mreq, sizeof(mreq)))
             {
                 // "error 19: No such device.", https://stackoverflow.com/questions/3187919/error-no-such-device-in-call-setsockopt-when-joining-multicast-group
-                LOG_ERROR("Drop multicast group %s error, error code = %d.\n", multicast_ip_.c_str(), GetSysErrorCode());
+                LOG_F(ERROR, "Drop multicast group %s error, error code = %d.", multicast_ip_.c_str(), GetSysErrorCode());
                 //Close();
             }
         }

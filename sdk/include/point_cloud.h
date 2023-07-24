@@ -30,14 +30,19 @@
 #include <thread>
 #include <mutex>
 #include <deque>
+#include <unordered_map>
 #include <condition_variable>
 #include "define.h"
-
+#include "protocol/packet.h"
+#include "packet_source.h"
 
 namespace zvision
 {
     class UdpReceiver;
     class PcapUdpSource;
+    //struct BloomingFrame;
+    //struct LidarUdpPacket;
+    //typedef std::shared_ptr<BloomingFrame> BloomingFramePtr;
 
     template <typename T>
     class SynchronizedQueue;
@@ -45,10 +50,85 @@ namespace zvision
     class PointCloud
     {
     public:
+        struct packet
+        {
+            packet()
+                :stamp_ns(0)
+            {}
+            uint64_t stamp_ns;
+            std::string data;
+        };
+
+        PointCloud()
+            :dev_type(DeviceType::LidarUnknown)
+            , scan_mode(ScanMode::ScanUnknown)
+            , stamp_ns(0)
+        {}
+
+        //  device type
+        DeviceType dev_type;
         std::vector<Point> points;
-        
+        // lidar packets
+        std::vector<packet> packets;
+        zvision::ScanMode scan_mode;
+        bool is_ptp_mode = false;
+        double timestamp = .0;
+        double sys_stamp = .0;
+        uint64_t stamp_ns;
+        bool use_blooming = false;
+        BloomingFramePtr blooming_frame;
     };
 
+    //////////////////////////////////////////////////////////////////////////////////////////////
+    /** \brief filter lidar's pointcloud data.
+    */
+    class LidarPointsFilter
+    {
+    public:
+        LidarPointsFilter();
+        ~LidarPointsFilter();
+
+        /** \brief filter buckling pointcloud(only for ml30s device).
+        */
+        static void FilterBucklingPointCloud(PointCloud& cloud);
+
+        /** \brief init filter parameter(only for ml30s device).
+        */
+        void Init(zvision::DownSampleMode mode, std::string cfg_path = "", bool is_ml30sp_b1_ep = false);
+
+        /** \brief get filter downsample mode.
+        * \return downsample mode
+        */
+        zvision::DownSampleMode GetDownsampleMode(zvision::ScanMode mode);
+        /** \brief get filter scan mode.
+        * \return scan mode
+        */
+        zvision::ScanMode GetScanMode();
+
+        /** \brief get filtered points count.
+        * \return points count
+        */
+        int GetPointsCoutFromCfgFile(int& cnt);
+
+        /** \brief query covered point by id.
+        * \return cover state
+        */
+        bool IsLidarPointCovered(uint32_t id);
+
+        /** \brief func hexstring to uint8_t.
+        * \return uint8_t
+        */
+        uint8_t hex2uint8(char h);
+
+    private:
+
+        zvision::DownSampleMode downsample_;
+        zvision::ScanMode scan_mode_;
+        std::string cfg_file_path_;
+        bool init_;
+        std::vector<uint8_t> cover_table_;
+        int uncover_cnt_;
+    };
 
     //////////////////////////////////////////////////////////////////////////////////////////////
     /** \brief PointCloudProducer for get lidar's pointcloud data.
@@ -67,7 +147,7 @@ namespace zvision
         * \param[in] multicast_en    enbale join multicast group
         * \param[in] mc_group_ip     multicast group ip address (224.0.0.0 -- 239.255.255.255)
         */
-        PointCloudProducer(int data_port, std::string lidar_ip, std::string cal_filename = "", bool multicast_en = false, std::string mc_group_ip = "");
+        PointCloudProducer(int data_port, std::string lidar_ip, std::string cal_filename = "", bool multicast_en = false, std::string mc_group_ip = "", DeviceType tp = DeviceType::LidarUnknown);
 
 
         PointCloudProducer() = delete;
@@ -83,6 +163,22 @@ namespace zvision
         */
         void RegisterPointCloudCallback(PointCloudCallback cb);
 
+        /** \brief set pointcloud downsample mode.
+        * \param[in] mode              downsample mode
+        * \param[in] cfg_path          user defined config file path
+        */
+        void SetDownsampleMode(zvision::DownSampleMode mode, std::string cfg_path);
+
+        /** \brief Enable internal packets processing.
+        * \param[in] en              enable or disable
+        */
+        void SetProcessInternalPacketsEnable(bool en, bool use_lidar_time = false);
+
+        /** \brief enable or disable saving the lidar pointcoud data .
+        * \param[in] en              enable or disable
+        */
+        void SetPointcloudBufferEnable(bool en);
+
         /*start the udp handler(ThreadLoop) thread, pop up udp data in queue and process*/
         int Start();
 
@@ -96,6 +192,12 @@ namespace zvision
         */
         int GetPointCloud(PointCloud& points, int timeout_ms);
 
+        /** \brief get calibration data.
+        * \param[out] points         store the points' calibration data(elevation and azimuth's sin cos).
+        * \return 0 for success, others for failure.
+        */
+        int GetCalibrationData(CalibrationDataSinCosTable& cal_lut);
+
     protected:
 
         /** \brief Check the connection to device, if connection is not established, try to connect.
@@ -106,14 +208,26 @@ namespace zvision
         /** \brief Process lidar pointcloud udp packet to pointcloud.
         * \param[in]  packet          lidar pointcloud udp packet
         */
-        void ProcessLidarPacket(std::string& packet);
+        void ProcessLidarPacket(LidarUdpPacket& packet);
+
+        /** \brief Process lidar internal udp packet(blooming ...).
+        * \param[in]  packet          lidar pointcloud udp packet
+        */
+        void ProcessLidarInternalPacket(LidarUdpPacket& packet);
 
         /** \brief Call this function to notify to handle the new pointcloud data(store the data and notify the callback function).
         */
         void ProcessOneSweep();
 
+        /** \brief Call this function to notify to handle the new internal pointcloud data.
+*/
+        void ProcessInternalOneSweep(PacketType tp);
+
         /*thread function: get lidar udp packet*/
         void Producer();
+
+        /*thread function: get lidar internel udp packet*/
+        void InternalProducer();
 
         /*thread function: get packet and process to pointcloud**/
         void Consumer();
@@ -128,7 +242,7 @@ namespace zvision
         std::shared_ptr<CalibrationDataSinCosTable> cal_lut_;
 
         /** \brief store the lidar udp pcaket*/
-        std::shared_ptr<SynchronizedQueue<std::string*> > packets_;
+        std::shared_ptr<SynchronizedQueue<LidarUdpPacket> > packets_;
 
         /** \brief store the lidar pointcoud data*/
         std::shared_ptr<PointCloud> points_;
@@ -144,17 +258,36 @@ namespace zvision
 
         /** \brief receive udp data packet */
         std::shared_ptr<UdpReceiver> receiver_;
+
+        /// internal
+        bool internal_packets_enable_;
+        /** \brief Thread: receive internal lidar packet*/
+        std::shared_ptr<std::thread> internal_producer_;
+
+        /** \brief receive internal udp data packet */
+        std::shared_ptr<UdpReceiver> internal_receiver_;
+        int internal_port_;
+        std::unordered_map<PacketType, int> internal_last_seq_;
+        /*internal-blooming*/
+        bool match_blooming_enable_ = false;
+        bool match_frame_use_lidar_time_ = false;
+        std::deque<BloomingFramePtr> blooming_frame_s_;
+        BloomingFramePtr blooming_frame_;
+
+        bool use_pointcloud_buffer_;
         std::string device_ip_;
         std::string cal_filename_;
         DeviceType device_type_;
         ScanMode scan_mode_;
+		DeviceType device_type_usr_;
+
         int last_seq_;
 
-        /** \brief end of a full pointcloud's udp seq. It depends on lidar type*/
-        ///int end_seq_;
+        LidarPointsFilter points_filter_;
 
         unsigned int filter_ip_;
         int data_port_;
+
 
         /** \brief lidar data udp destination ip address */
         std::string data_dst_ip_;
@@ -217,34 +350,44 @@ namespace zvision
         */
         int GetPointCloud(int frame_number, PointCloud& points);
 
+        /** \brief get sin cos calibration table.
+        * \param[out]  calibration data
+        * \return 0 for success, others for failure.
+        */
+        int GetCalibrationDataSinCosTable(zvision::CalibrationDataSinCosTable&);
+
+        /** \brief set internal frames(blooming) match method.
+        * \param[in]  use_lidar_time        if value is true use lidar time or use packet timestamp.
+        */
+        void SetInternalFrameMatchMethod(bool use_lidar_time);
+
     private:
+      std::shared_ptr<zvision::PcapAnalyzer> ana_;
 
-        /*offline pcap filename */
-        std::string pcap_filename_;
+      /*offline pcap filename */
+      std::string pcap_filename_;
 
-        std::shared_ptr<PcapUdpSource> packet_source_;
+      std::shared_ptr<PcapUdpSource> packet_source_;
 
-        /*store the points' calibration data(elevation and azimuth's sin cos)*/
-        std::shared_ptr<CalibrationDataSinCosTable> cal_lut_;
+      /*store the points' calibration data(elevation and azimuth's sin cos)*/
+      std::shared_ptr<CalibrationDataSinCosTable> cal_lut_;
 
-        /*store the lidar pointcoud data*/
-        std::shared_ptr<PointCloud> points_;
+      /*store the lidar pointcoud data*/
+      std::shared_ptr<PointCloud> points_;
 
-        std::string cal_filename_;
-        DeviceType device_type_;
-        int count_;
+      std::string cal_filename_;
+      DeviceType device_type_;
+      int count_;
 
-        std::string device_ip_;
-        ///int last_seq_;
+      std::string device_ip_;
 
-        ///int filter_ip_;
-        int data_port_;
+      int data_port_;
 
-        bool init_ok_;
+      bool init_ok_;
 
-        PointCloudCallback pointcloud_cb_;
+      PointCloudCallback pointcloud_cb_;
 
-
+      bool match_frame_use_lidar_time_ = false;
     };
 
 }
