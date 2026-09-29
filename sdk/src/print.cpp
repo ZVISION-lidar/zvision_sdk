@@ -26,6 +26,7 @@
 #include <string>
 #include <time.h>
 #include <chrono>
+
 #if defined _WIN32
 # include <windows.h>
 
@@ -72,6 +73,16 @@ convertAttributesColor(int attribute, int fg, int bg = 0)
 void zvision::log::print(LogLevel level, const char *format, ...)
 {
     FILE *stream = (level == Warn || level == Error) ? stderr : stdout;
+
+    // get timestamp
+    auto now = std::chrono::system_clock::now();
+    auto timestamp_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(now);
+    auto epoch_ms = timestamp_ms.time_since_epoch().count();
+
+    // get str
+    std::string timestamp_str = "[timestamp(ms):" + std::to_string(epoch_ms) + "] ";
+
+    // set text color
     switch (level)
     {
     case Debug:
@@ -88,20 +99,14 @@ void zvision::log::print(LogLevel level, const char *format, ...)
         break;
     }
 
-	// add timestamp  ->
-	std::chrono::time_point<std::chrono::system_clock, std::chrono::milliseconds> ptime = \
-		std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
-	time_t timestamp_ms = ptime.time_since_epoch().count();
-
-	std::string tstmp = std::string("timestamp(ms):") + std::to_string(timestamp_ms)+"\n";
-	printf("%s", tstmp.data());
-	// <-
-
-
+    // format text
     va_list ap;
-
     va_start(ap, format);
+
+    // print timestamp and log
+    fprintf(stream, "%s", timestamp_str.c_str());
     vfprintf(stream, format, ap);
+
     va_end(ap);
 
     reset_text_color(stream);
@@ -113,7 +118,7 @@ void zvision::log::change_text_color(FILE *stream, int attribute, int fg)
     HANDLE h = GetStdHandle((stream == stdout) ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
     SetConsoleTextAttribute(h, convertAttributesColor(attribute, fg));
 #else
-    char command[13];
+    char command[26];
     // Command is the control command to the terminal
     sprintf(command, "%c[%d;%dm", 0x1B, attribute, fg + 30);
     fprintf(stream, "%s", command);
@@ -126,7 +131,7 @@ void zvision::log::reset_text_color(FILE *stream)
     HANDLE h = GetStdHandle((stream == stdout) ? STD_OUTPUT_HANDLE : STD_ERROR_HANDLE);
     SetConsoleTextAttribute(h, convertAttributesColor(0, White, Black));
 #else
-    char command[13];
+    char command[26];
     // Command is the control command to the terminal
     sprintf(command, "%c[0;m", 0x1B);
     fprintf(stream, "%s", command);

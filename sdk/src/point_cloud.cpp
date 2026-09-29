@@ -23,16 +23,22 @@
 
 #include "client.h"
 #include "define.h"
+#include "packet.h"
 #include "point_cloud.h"
-#include "lidar_tools.h"
-//#include "packet.h"
-#include "packet_source.h"
+#include "tcp_ez6_b2.h"
+#include "tcp_nz1_a2.h"
+#include "tcp_tools.h"
+#include "packet_ez6_b2.h"
+#include "packet_nz1_a2.h"
+#include "packet_mrz16.h"
+#include "serial_client.h"
 #include "print.h"
 #include "loguru.hpp"
 #include <iostream>
 #include <functional>
 #include <fstream>
 #include <thread>
+#include <chrono>
 #include <queue>
 #include <mutex>
 #include <cmath>
@@ -40,6 +46,12 @@
 
 namespace zvision
 {
+    float speed_light = SPEED_US;
+
+    /**
+    *@ brief thread safe queue, used to store LiDAR UDP packets
+    *The data types stored in the tparam T queue
+    */
     template <typename T>
     class SynchronizedQueue/*store the lidar udp packet*/
     {
@@ -52,7 +64,11 @@ namespace zvision
             enqueue_data_(true)
         {
         }
-
+        /**
+        *@ brief Join the team operation, put the data into the queue
+        *@ param data: Data waiting to join the team
+        *@ return true indicates successful joining of the queue, false indicates the queue has stopped receiving data
+        */
         bool enqueue(const T& data)
         {
             std::unique_lock<std::mutex> lock(mutex_);
@@ -68,7 +84,11 @@ namespace zvision
                 return false;
             }
         }
-
+        /**
+        *@ brief team out operation, retrieve an element from the queue
+        *Location of data storage for param result team departure
+        *@ return true indicates successful data retrieval, false indicates queue has stopped
+        */
         bool dequeue(T& result)
         {
             std::unique_lock<std::mutex> lock(mutex_);
@@ -89,20 +109,28 @@ namespace zvision
 
             return true;
         }
-
+        /**
+        *@ brief Stop queue, wake up waiting thread and clear queue
+        */
         void stopQueue()
         {
             std::unique_lock<std::mutex> lock(mutex_);
             request_to_end_ = true;
             cond_.notify_one();
         }
-
+        /**
+        *@ brief Get the current size of the queue
+        *The number of elements in the return queue
+        */
         unsigned int size()
         {
             std::unique_lock<std::mutex> lock(mutex_);
             return static_cast<unsigned int>(queue_.size());
         }
-
+        /**
+        *@ brief Check if the queue is empty
+        *@ return true means the queue is empty, false means it is not empty
+        */
         bool isEmpty() const
         {
             std::unique_lock<std::mutex> lock(mutex_);
@@ -110,6 +138,9 @@ namespace zvision
         }
 
     private:
+        /**
+        *Clean up operation at the end of the @ brief queue
+        */
         void doEndActions()
         {
             enqueue_data_ = false;
@@ -128,330 +159,28 @@ namespace zvision
         bool enqueue_data_;
     };
 
-    LidarPointsFilter::LidarPointsFilter()
-        :downsample_(zvision::DownSampleMode::DownsampleUnknown)
-        , scan_mode_(zvision::ScanMode::ScanUnknown)
-        , cfg_file_path_("")
-        , init_(false)
-        , uncover_cnt_(-1)
-    {}
-
-    LidarPointsFilter::~LidarPointsFilter()
-    {}
-
-    void LidarPointsFilter::FilterBucklingPointCloud(PointCloud& cloud)
-    {        
-        if (cloud.scan_mode != ScanMode::ScanML30SA1Plus_160)
-            return;
-        bool is_ml30splus_b1_ep_mode = zvision::is_ml30splus_b1_ep_mode_enable();
-        // for ml30s+b1 ep1 fov0-fov7
-        int npoints = 51200;
-        int points_per_group = 8;
-        int points_per_line = 80;
-        if (!is_ml30splus_b1_ep_mode)
-        {
-            points_per_group = 4;
-        }
-        static const int blks = 16;
-        static float RMS[4][3] = { 0.0433094, -0.016089,  0.0151864,
-                                    0.0398198, -0.0177786, -0.0101136,
-                                   -0.0398198, -0.0177786, -0.0101136,
-                                   -0.0433094, -0.016089,  0.0151864 };
-        static float rms_mod[4] = { 0 };
-        if (rms_mod[0] < 1e-5)
-        {
-            for (int i = 0; i < 4; i++)
-            {
-                rms_mod[i] = std::sqrt(std::pow(RMS[i][0], 2) + std::pow(RMS[i][1], 2) + std::pow(RMS[i][2], 2));
-            }
-        }
-
-        static int fov_rm_id[8] = { 0,1,2,3,0,1,2,3 };
-        if (cloud.points.size() == npoints)
-        {
-            int groups = npoints / points_per_group;
-            for (int g = 0; g < groups; g++)
-            {
-                for (int p = 0; p < points_per_group; p++)
-                {
-                    int id = g * points_per_group + p;
-                    auto& point = cloud.points.at(id);
-
-                    if (point.distance < 3)
-                        continue;
-
-                    // calculate
-                    int rm_id = fov_rm_id[p];
-                    float mult_p_rm = RMS[rm_id][0] * point.x \
-                        + RMS[rm_id][1] * point.y \
-                        + RMS[rm_id][2] * point.z;
-
-                    float theta = std::acos((mult_p_rm) / (rms_mod[rm_id] * point.distance));
-                    float delta_azi = 0;
-                    float delta_ele = 0;
-                    {
-                        float sig = 1.0f;
-                        if (rm_id >= 2)
-                            sig = -1.0f;
-
-                        delta_azi = sig * rms_mod[rm_id] * (1.0 / 2 - 1.0 / point.distance) * std::sin(theta) * std::cos(point.ele);
-                        delta_ele = sig * rms_mod[rm_id] * (1.0 / 2 - 1.0 / point.distance) * std::sin(theta) * std::sin(point.ele);
-
-                        // repair layer
-                        if (point.fov == 1 || point.fov == 5 || point.fov == 2 || point.fov == 6)
-                        {
-                            float ratio = 1.0f;
-                            static float blk_ratio[blks] = { 0.0f, 0.0f, 0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 0.6f, 0.7f, 0.8f, 0.9f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
-                            // direct_right: 0 <- , 1 ->
-                            int direct_right = (g / points_per_line) % 2;
-                            int pos = g % points_per_line;
-                            if (direct_right)
-                                pos = points_per_line - 1 - pos;
-
-                            int blk = pos / 5;
-                            if (point.fov == 1 || point.fov == 5)
-                            {
-                                ratio = blk_ratio[blk];
-                            }
-                            else if (point.fov == 2 || point.fov == 6)
-                            {
-                                blk = blks - 1 - blk;
-                                ratio = blk_ratio[blk];
-                            }
-
-                            delta_azi = delta_azi * ratio;
-                            delta_ele = delta_ele * ratio;
-                        }
-
-                        // update pointcloud data
-                        point.ele = point.ele + delta_ele;
-                        point.azi = point.azi + delta_azi;
-                        point.x = point.distance * std::cos(point.ele) * std::sin(point.azi);
-                        point.y = point.distance * std::cos(point.ele) * std::cos(point.azi);
-                        point.z = point.distance * std::sin(point.ele);
-                    }
-                }
-            }
-        }
-    }
-
-    zvision::DownSampleMode LidarPointsFilter::GetDownsampleMode(zvision::ScanMode mode)
-    {
-        if (downsample_ == zvision::Downsample_cfg_file)
-        {
-            if (mode != scan_mode_)
-            {
-                return zvision::DownsampleUnknown;
-            }
-        }
-
-        return downsample_;
-    }
-
-    void LidarPointsFilter::Init(zvision::DownSampleMode mode, std::string cfg_path, bool is_ml30sp_b1_ep) {
-
-        init_ = true;
-        if (mode != zvision::DownSampleMode::Downsample_cfg_file) {
-            downsample_ = mode;
-            scan_mode_ = zvision::ScanML30SA1_160;
-            return;
-        }
-
-        if (cfg_path.empty())
-            return;
-
-        // load cfg file data
-        const int table_size = 51200;
-        const int total_lines = 640;
-        const int bytes_per_line = 10;
-        const int lines_per_fov = 80;
-        const int points_in_fov = 6400;
-
-        try {
-            // for ml30s/ml30splus device, update cover table
-            cover_table_.resize(table_size, 1);
-            uncover_cnt_ = table_size;
-
-            // get file type
-            int header_lines = 0;
-            {
-                std::ifstream in(cfg_path.c_str(), std::ios::in);
-                if (!in.is_open())
-                    return;
-                std::string line;
-                std::string ml30s_tag = "Mode ML30S_160";
-                std::string ml30sp_tag = "Mode ML30SPlus_160";
-                while (std::getline(in, line))
-                {
-                    header_lines++;
-                    if (line.compare(0, ml30s_tag.size(), ml30s_tag.c_str(), 0, ml30s_tag.size()) == 0)
-                    {
-                        scan_mode_ = zvision::ScanML30SA1_160;
-                        break;
-                    }
-                    else if (line.compare(0, ml30sp_tag.size(), ml30sp_tag.c_str(), 0, ml30sp_tag.size()) == 0)
-                    {
-                        scan_mode_ = zvision::ScanML30SA1Plus_160;
-                        break;
-                    }
-                }
-                in.close();
-                if (scan_mode_ == zvision::ScanUnknown)
-                    header_lines = 0;
-            }
-
-
-            std::ifstream in(cfg_path.c_str(), std::ios::in);
-            if (!in.is_open())
-                return;
-
-            uint8_t flg = 0x80;
-            uint8_t fov_in_group[8] = { 0, 2, 4, 6, 5, 7, 1, 3 };
-            uint8_t fov_in_group_30sp_b1_ep[8] = { 0, 1, 2, 3, 4, 5, 6, 7};
-            std::string line;
-            int id = 0;
-            int header_id = 0;
-            while (std::getline(in, line))
-            {
-                if ((header_lines > 0) && (header_id < header_lines))
-                {
-                    header_id++;
-                    continue;
-                }
-
-                // check
-                if (line.size() == 0)
-                    continue;
-                if (line.at(0) == '#')
-                    continue;
-
-                if (line.size() < 20)
-                    break;
-
-                if (id >= total_lines)
-                    break;
-
-                // get value
-                uint8_t masks[10] = { 0xFF };
-                for (int b = 0; b < 10; b++) {
-                    char h = line.at(b * 2);
-                    char l = line.at(b * 2 + 1);
-                    masks[b] = hex2uint8(h) << 4 | hex2uint8(l);
-                }
-
-                // update
-                for (int j = 0; j < bytes_per_line; j++) {
-                    for (int k = 0; k < 8; k++) {
-                        flg = 0x80 >> k;
-                        if ((flg & masks[j]) != flg) {
-                            int fov = id / lines_per_fov;
-                            int point_id = -1;
-                            if (scan_mode_ == zvision::ScanML30SA1Plus_160)
-                            {
-                                if (is_ml30sp_b1_ep)
-                                {
-                                    int group = (id * bytes_per_line * 8 + j * 8 + k) % points_in_fov;
-                                    point_id = group * 8 + fov_in_group_30sp_b1_ep[fov];
-                                }
-                                else
-                                {
-                                    int group = (id * bytes_per_line * 8 + j * 8 + k) % points_in_fov;
-                                    if (fov < 4)
-                                        point_id = group * 4 + fov;
-                                    else
-                                        point_id = group * 4 + table_size / 2 + fov - 4;
-                                }
-                            }
-                            else
-                            {
-                                int group = (id * bytes_per_line * 8 + j * 8 + k) % points_in_fov;
-                                point_id = group * 8 + fov_in_group[fov];
-                            }
-                            if (point_id >= table_size || point_id < 0)
-                                continue;
-                            cover_table_.at(point_id) = 0;
-                            uncover_cnt_--;
-                        }
-                    }
-                }
-                id++;
-            }
-
-            in.close();
-            if (id != total_lines) {
-                cover_table_.resize(table_size, 1);
-                uncover_cnt_ = table_size;
-            }
-            else
-            {
-                // not found version tag, default ScanML30SA1_160
-                if (scan_mode_ == zvision::ScanUnknown)
-                    scan_mode_ = zvision::ScanML30SA1_160;
-            }
-        }
-        catch (std::exception e)
-        {
-            cover_table_.resize(table_size, 1);
-            uncover_cnt_ = table_size;
-            return;
-        }
-
-        downsample_ = mode;
-        cfg_file_path_ = cfg_path;
-    }
-
-    zvision::ScanMode LidarPointsFilter::GetScanMode() {
-        return scan_mode_;
-    }
-
-    int LidarPointsFilter::GetPointsCoutFromCfgFile(int& cnt) {
-        if (init_ && uncover_cnt_ > 0)
-            cnt = uncover_cnt_;
-        return 0;
-    }
-
-    bool LidarPointsFilter::IsLidarPointCovered(uint32_t id) {
-        if (!init_ || id >= cover_table_.size())
-            return false;
-
-        // get point cover state
-        return cover_table_.at(id) == 0;
-    }
-
-    uint8_t LidarPointsFilter::hex2uint8(char c) {
-
-        uint8_t val = 0x0F;
-        if (c >= 'A' && c <= 'Z')
-            val = c - 'A' + 10;
-        else if (c >= 'a' && c <= 'z')
-            val = c - 'a' + 10;
-        else if (c >= '0' && c <= '9')
-            val = c - '0';
-        return val;
-    }
-
-    PointCloudProducer::PointCloudProducer(int data_port, std::string lidar_ip, std::string cal_filename, bool multicast_en, std::string mc_group_ip, DeviceType tp) :
-        cal_(new CalibrationData()),
+    PointCloudProducer::PointCloudProducer(int pc_dst_port, std::string lidar_ip, std::string angle_comp_filename, bool multicast_en, std::string mc_group_ip, DeviceType tp) :
+        angle_comp_filename_(angle_comp_filename),
+        angle_comp_(new angle_comp_t()),
         points_(new PointCloud()),
-        device_ip_(lidar_ip),
-        cal_filename_(cal_filename),
-        device_type_(LidarUnknown),
-		device_type_usr_(tp),
-        scan_mode_(ScanUnknown),
-        last_seq_(-1),
-        data_port_(data_port),
-        internal_port_(2369), // 2468
-        data_dst_ip_(mc_group_ip),
+        lidar_ip_(lidar_ip),
+        pc_dst_ip_(mc_group_ip),
+        pc_dst_port_(pc_dst_port),
+        device_type_usr_(tp),
         join_multicast_(multicast_en),
+        device_type_(LidarUnknown),
+        scan_mode_(ScanUnknown),
+        use_pointcloud_buffer_(true),
+        last_seq_(-1),
         init_ok_(false),
         need_stop_(false),
         pointcloud_cb_(nullptr),
-        use_pointcloud_buffer_(true),
         mutex_(),
         cond_(),
+        imu_mutex_(),
+        imu_cond_(),
         max_pointcloud_count_(200),
-        internal_packets_enable_(false),
-        match_frame_use_lidar_time_(false)
+        max_imudata_count_(200)
     {
     }
 
@@ -460,46 +189,85 @@ namespace zvision
         Stop();
     }
 
+    PointCloudProducer::PointCloudProducer(std::string port_send, std::string port_recv,
+                                           std::string angle_comp_filename, DeviceType tp,
+                                           int baud_send, int baud_recv) :
+        angle_comp_filename_(angle_comp_filename),
+        angle_comp_(new angle_comp_t()),
+        points_(new PointCloud()),
+        lidar_ip_(),
+        pc_dst_ip_(),
+        pc_dst_port_(0),
+        device_type_usr_(tp),
+        join_multicast_(false),
+        device_type_(LidarUnknown),
+        scan_mode_(ScanUnknown),
+        use_pointcloud_buffer_(true),
+        last_seq_(-1),
+        init_ok_(false),
+        need_stop_(false),
+        pointcloud_cb_(nullptr),
+        mutex_(),
+        cond_(),
+        imu_mutex_(),
+        imu_cond_(),
+        max_pointcloud_count_(200),
+        max_imudata_count_(200),
+        serial_client_(),
+        serial_port_send_(port_send),
+        serial_port_recv_(port_recv),
+        serial_baud_send_(baud_send),
+        serial_baud_recv_(baud_recv),
+        serial_rx_stream_()
+    {
+    }
+    /**
+    *@ brief initialization check, establish TCP connection and obtain device configuration
+    *@ return true indicates successful initialization, false indicates failure
+    */
     bool PointCloudProducer::CheckInit()
     {
         if (!init_ok_)
         {
-            if (!StringToIp(device_ip_, filter_ip_))
+            // MRZ16 works over dual serial ports, no network / tcp_tool involved.
+            if (device_type_usr_ == LidarMRZ16)
             {
-                return false;
+                return CheckInitSerial();
             }
 
-            LidarTools tool(this->device_ip_, 5000, 5000, 5000);
+            if (!StringToIp(lidar_ip_, filter_ip_))
+            {
+                LOG_F(INFO, "stringtoip error\n");
+                return false;
+            }
+            
+            std::unique_ptr<zvision::tcp_tools> tcp_tool;
+            if(device_type_usr_ == LidarEZ6_B2)
+            {
+                tcp_tool = std::make_unique<zvision::tcp_ez6_b2>(lidar_ip_, 5000, 5000, 5000);
+            }
+            else if(device_type_usr_ == LidarNZ1_A2)
+            {
+                tcp_tool = std::make_unique<zvision::tcp_nz1_a2>(lidar_ip_, 5000, 5000, 5000);
+            }
+            else
+            {
+                LOG_F(INFO, "device type error");
+                return false;
+            }   
+
             DeviceConfigurationInfo cfg;
-
-            if (!StringToIp(device_ip_, filter_ip_))
-            {
-                return false;
-            }
-
 			int ret = -1;
+
             // if port is negative or auto join multicast, we need to get the cfg from lidar by tcp connection
-            if ((data_port_ < 0) || (join_multicast_ && (!data_dst_ip_.size())))
+            if ((pc_dst_port_ < 0) || (join_multicast_ && (!pc_dst_ip_.size())))
             {
-                // get the cfg from lidar by tcp
-
-				if (device_type_usr_ == DeviceType::LidarMl30SA1Plus)
-                {
-					ret = tool.QueryML30sPlusDeviceConfigurationInfo(cfg);
-				}
-                else if (device_type_usr_ == DeviceType::LidarMl30SB1Plus)
-                {
-                    ret = tool.QueryML30sPlusB1DeviceConfigurationInfo(cfg);
-                }
-				else {
-					ret = tool.QueryDeviceConfigurationInfo(cfg);
-				}
-
+                ret = tcp_tool->get_basic_info(cfg);
                 if (ret)
                 {
-                    LOG_F(ERROR, "Query device configuration info failed.");
-                    if (data_port_ < 0)
-                        LOG_F(ERROR, "Please specify the data port and retry.");
+                    LOG_F(ERROR, "get network info failed.");
+                    if (pc_dst_port_ < 0)
+                        LOG_F(ERROR, "Please specify the pc dest port and retry.");
                     if (join_multicast_)
                         LOG_F(ERROR, "No multicast group is joined.");
 
@@ -507,246 +275,291 @@ namespace zvision
                 }
                 else
                 {
-                    if (data_port_ < 0)
+                    if (pc_dst_port_ < 0)
                     {
-                        data_port_ = cfg.destination_port;
-                        LOG_F(INFO, "Query device destination port ok, port is %d.", data_port_);
+                        pc_dst_port_ = cfg.destination_port;
+                        LOG_F(INFO, "get lidar destination port ok, port is %d.", pc_dst_port_);
                     }
-                    if (join_multicast_ && (!data_dst_ip_.size()))
+                    if (join_multicast_ && (!pc_dst_ip_.size()))
                     {
-                        data_dst_ip_ = cfg.destination_ip;
-                        LOG_F(INFO, "Query device multicast address ok, group is %s.", data_dst_ip_.c_str());
+                        pc_dst_ip_ = cfg.destination_ip;
+                        LOG_F(INFO, "get lidar multicast address ok, group is %s.", pc_dst_ip_.c_str());
                     }
                 }
             }
 
-            if (cal_filename_.size())
+            if (angle_comp_filename_.size())
             {
-                if (LidarTools::ReadCalibrationData(cal_filename_, *(this->cal_.get())))
+                if (tcp_tool->read_comp_from_csv(angle_comp_filename_,*(this->angle_comp_.get())))
                 {
-                    LOG_F(ERROR, "Load calibration file error, %s", cal_filename_.c_str());
+                    LOG_F(ERROR, "Load calibration file error, %s", angle_comp_filename_.c_str());
                     return false;
+                }
+                else
+                {
+                    if(device_type_usr_ == LidarEZ6_B2)
+                    {
+                        LOG_F(INFO, "angle 0 = %f %f",angle_comp_->azi[0],angle_comp_->ele[0]);
+                        LOG_F(INFO, "angle 192 = %f %f",angle_comp_->azi[191],angle_comp_->ele[191]);
+                    }
+                    else if(device_type_usr_ == LidarNZ1_A2)
+                    {
+                        LOG_F(INFO, "angle 0 = %f %f",angle_comp_->azi[0],angle_comp_->ele[0]);
+                        LOG_F(INFO, "angle 46080 = %f %f",angle_comp_->azi[46079],angle_comp_->ele[46079]);
+                    }
                 }
             }
             else
             {
-				if (device_type_usr_ == DeviceType::LidarMl30SA1Plus)
+                ret = tcp_tool->get_angle_comp(*(this->angle_comp_.get()));
+                if(ret != 0)
                 {
-					zvision::JsonConfigFileParam param;
-					ret = tool.RunML30sPlusDeviceManager(zvision::EML30SPlusCmd::read_cali_packets, &param);
-					if (ret != 0) {
-						LOG_F(ERROR, "Get lidar[%s]`s calibration packets error", device_ip_.c_str());
-						return false;
-					}
-
-					zvision::CalibrationPackets cal_pkts = param.temp_recv_packets;
-					if (0 != (ret = LidarTools::GetDeviceCalibrationData(cal_pkts, *(this->cal_.get())))) {
-						LOG_F(ERROR, "Convert lidar[%s]`s calibration packets error", device_ip_.c_str());
-						return false;
-					}
-				}
-                else if (device_type_usr_ == DeviceType::LidarMl30SB1Plus)
-                {
-                    zvision::CalibrationPackets cal_pkts;
-                    ret = tool.GetML30sPlusB1DeviceCalibrationPackets(cal_pkts);
-                    if (ret != 0) {
-                        LOG_F(ERROR, "Get lidar[%s]`s calibration packets error", device_ip_.c_str());
-                        return false;
-                    }
-                    if (0 != (ret = LidarTools::GetDeviceCalibrationData(cal_pkts, *(this->cal_.get())))) {
-                        LOG_F(ERROR, "Convert lidar[%s]`s calibration packets error", device_ip_.c_str());
-                        return false;
-                    }
+                    LOG_F(ERROR,"Get lidar[%s]`s comp data error, use default", lidar_ip_.c_str());
+                    return false;
                 }
-				else {
-					if (tool.GetDeviceCalibrationData(*(this->cal_.get())))
-						return false;
-				}
             }
 
-            if (!this->cal_lut_)
-                this->cal_lut_.reset(new CalibrationDataSinCosTable());
-            LidarTools::ComputeCalibrationSinCos(*(this->cal_.get()), *(this->cal_lut_.get()));
+            if(device_type_usr_ == LidarEZ6_B2)
+            {
+                pkg_parse = std::make_unique<zvision::pkg_parse_ez6_b2>(); 
+            }
+            else if(device_type_usr_ == LidarNZ1_A2)
+            {
+                pkg_parse = std::make_unique<zvision::pkg_parse_nz1_a2>(); 
+            }
+
             init_ok_ = true;
-            return true;    
+            return true;
         }
 
         return true;
     }
-
-    void PointCloudProducer::ProcessLidarPacket(LidarUdpPacket& packet)
+    /**
+    *@ brief initialization check for offline replay.
+    * Creates the packet parser for the configured device type and, when a calibration
+    * file is given, loads the per-channel angles from it. This is the hardware-free
+    * counterpart of CheckInit(): that one opens the MRZ16 serial ports or a TCP
+    * connection to the lidar, and returns false (leaving pkg_parse empty) whenever the
+    * hardware is absent - which is always the case when replaying a pcap.
+    * The angle table embedded in the recording is applied later through
+    * update_angle_comp().
+    * @ return true indicates successful initialization, false indicates failure
+    */
+    bool PointCloudProducer::CheckInitOffline()
     {
-        //pkt content len: 42 + 1304
-        if (packet.data.size() != 1304)
+        if (init_ok_)
         {
-            return;
+            return true;
         }
 
-        //find lidar type
-        if (this->scan_mode_ == ScanUnknown)
+        if (device_type_usr_ == LidarEZ6_B2)
         {
-            this->device_type_ = PointCloudPacket::GetDeviceType(packet.data);
-            this->scan_mode_ = PointCloudPacket::GetScanMode(packet.data);
-        }
-
-        //scan mode is unknown or scan mode and calibration data are not matched
-        if ((this->scan_mode_ == ScanUnknown) || (this->scan_mode_ != this->cal_->scan_mode))
-            return;
-
-        int seq = PointCloudPacket::GetPacketSeq(packet.data);
-        if (((-1 != this->last_seq_) && (0 != seq)) && (seq != (this->last_seq_ + 1))) //packet loss
-        {
-            LOG_F(ERROR, "Packet loss, last seq [%3d], current seq[%3d].", this->last_seq_, seq);
-        }
-
-        if (!points_->points.size())
-        {
-            points_->sys_stamp = packet.sys_stamp - 1.0f * seq * BloomingPacket::DELTA_PACKRT_US * 1e-6;
-        }
-
-        if (ScanMode::ScanML30SA1Plus_160 == this->scan_mode_)
-        {
-            if (((seq < this->last_seq_) && (this->last_seq_ != 159)) || (159 == seq))
+            pkg_parse = std::make_unique<zvision::pkg_parse_ez6_b2>();
+            if (angle_comp_filename_.size())
             {
-                int ret = PointCloudPacket::ProcessPacket(packet.data, *(this->cal_lut_), *points_, &points_filter_, &packet.stamp_ns_);
-                if (0 != ret)
-                    LOG_F(WARNING, "ProcessPacket error, %d.", ret);
-
-                this->ProcessOneSweep();
-                this->last_seq_ = seq;
-                return;
-            }
-
-        }
-        // we get last packet by seq, but 10Hz has a 50ms delay issues
-        else if (seq < this->last_seq_)/*we have get one total frame*/
-        {
-            this->ProcessOneSweep();
-        }
-
-        int ret = PointCloudPacket::ProcessPacket(packet.data, *(this->cal_lut_), *points_, &points_filter_, &packet.stamp_ns_);
-        if(0 != ret)
-            LOG_F(WARNING, "ProcessPacket error, %d.", ret);
-
-        this->last_seq_ = seq;
-    }
-
-    void PointCloudProducer::ProcessLidarInternalPacket(LidarUdpPacket& packet)
-    {
-        // get packet type
-        PacketType packet_type = Tp_PacketUnknown;
-        ScanMode scan_mode = ScanUnknown;
-        InternalPacket::GetPacketType(packet.data, packet_type, scan_mode);
-        if (packet_type == Tp_PacketUnknown || \
-            scan_mode == ScanUnknown)
-            return;
-
-        //scan mode is unknown or scan mode and calibration data are not matched
-        if ((this->scan_mode_ == ScanUnknown) || (this->scan_mode_ != this->cal_->scan_mode) || (this->scan_mode_ != scan_mode))
-            return;
-
-        // get seq
-        InternalPacketHeader info;
-        if (!InternalPacket::GetFrameResolveInfo(packet.data, info))
-            return;
-
-        // split once frame when packets lost between two frames
-        if (internal_last_seq_.find(packet_type) == internal_last_seq_.end())
-            internal_last_seq_[packet_type] = -1;
-
-        if ((internal_last_seq_[packet_type] != -1) && (info.seq < internal_last_seq_[packet_type]))
-        {
-            this->ProcessInternalOneSweep(packet_type);
-            internal_last_seq_[packet_type] = info.seq;
-        }
-
-        // process packet
-        switch (packet_type)
-        {
-        case zvision::Tp_PointCloudPacket:
-            break;
-        case zvision::Tp_CalibrationPacket:
-            break;
-        case zvision::Tp_BloomingPacket:
-
-            // initial frame system timestamp
-            if (!this->blooming_frame_->points.size())
-            {
-                this->blooming_frame_->sys_stamp = packet.sys_stamp - 1.0f * info.seq * BloomingPacket::DELTA_PACKRT_US * 1e-6;
-            }
-            BloomingPacket::ProcessPacket(
-                packet.data,
-                *this->cal_lut_,
-                *this->blooming_frame_,
-                &info
-            );
-            break;
-        case zvision::Tp_ApdChannelPacket:
-            break;
-        case zvision::Tp_IntensityDisCaliPacket:
-            break;
-        case zvision::Tp_AdcSourcePacket:
-            break;
-        case zvision::Tp_SourceDistancePacket:
-            break;
-        case zvision::Tp_BlockDebugPacket:
-            break;
-        case zvision::Tp_PacketUnknown:
-            break;
-        default:
-            break;
-        }
-
-        // split one frame
-        if (info.seq == (info.resolve_info.udp_count - 1))
-        {
-            this->ProcessInternalOneSweep(packet_type);
-            internal_last_seq_[packet_type] = -1;
-        }
-        else
-        {
-            internal_last_seq_[packet_type] = info.seq;
-        }
-    }
-
-    void PointCloudProducer::ProcessOneSweep()
-    {
-        // manu downsample
-        std::shared_ptr<PointCloud> ds_points;
-        if ((points_filter_.GetDownsampleMode(this->scan_mode_) == Downsample_1_2 || \
-            points_filter_.GetDownsampleMode(this->scan_mode_) == Downsample_1_4 || \
-            points_filter_.GetDownsampleMode(this->scan_mode_) == Downsample_cfg_file) && \
-            ((ScanML30SA1_160 == this->scan_mode_ || ScanML30SA1Plus_160 == this->scan_mode_) && (this->points_->points.size() == 51200)))
-        {
-            ds_points.reset(new PointCloud());
-            if (points_filter_.GetDownsampleMode(this->scan_mode_) == Downsample_1_2)
-                ds_points->points.resize(51200 / 2);
-            else if (points_filter_.GetDownsampleMode(this->scan_mode_) == Downsample_1_4)
-                ds_points->points.resize(51200 / 4);
-            else if (points_filter_.GetDownsampleMode(this->scan_mode_) == Downsample_cfg_file) {
-                int cnt = 51200;
-                points_filter_.GetPointsCoutFromCfgFile(cnt);
-                ds_points->points.resize(cnt);
-            }
-
-            int id = 0;
-            for (int i = 0; i < this->points_->points.size(); i++) {
-                if (this->points_->points[i].valid == 1) {
-                    if (id >= ds_points->points.size())
-                        break;
-
-                    ds_points->points[id] = this->points_->points[i];
-                    id++;
+                // read_comp_from_csv() is pure file I/O: the tcp_tools instance only
+                // supplies the CSV format, no connection is attempted.
+                zvision::tcp_ez6_b2 csv_reader(lidar_ip_, 5000, 5000, 5000);
+                if (csv_reader.read_comp_from_csv(angle_comp_filename_, *angle_comp_) != 0)
+                {
+                    LOG_F(ERROR, "offline replay: load calibration file %s failed",
+                          angle_comp_filename_.c_str());
                 }
             }
         }
-        else {
-            ds_points = points_;
+        else if (device_type_usr_ == LidarNZ1_A2)
+        {
+            pkg_parse = std::make_unique<zvision::pkg_parse_nz1_a2>();
+            if (angle_comp_filename_.size())
+            {
+                zvision::tcp_nz1_a2 csv_reader(lidar_ip_, 5000, 5000, 5000);
+                if (csv_reader.read_comp_from_csv(angle_comp_filename_, *angle_comp_) != 0)
+                {
+                    LOG_F(ERROR, "offline replay: load calibration file %s failed",
+                          angle_comp_filename_.c_str());
+                }
+            }
+        }
+        else if (device_type_usr_ == LidarMRZ16)
+        {
+            auto parse = std::make_unique<zvision::pkg_parse_mrz16>();
+            if (angle_comp_filename_.size())
+            {
+                std::string err;
+                if (!parse->LoadChannelAnglesFile(angle_comp_filename_, angle_comp_.get(), &err))
+                {
+                    LOG_F(ERROR, "offline replay: load MRZ16 channel angles %s failed: %s",
+                          angle_comp_filename_.c_str(), err.c_str());
+                }
+            }
+            pkg_parse = std::move(parse);
+        }
+        else
+        {
+            LOG_F(ERROR, "offline replay: unsupported device type %d",
+                  static_cast<int>(device_type_usr_));
+            return false;
         }
 
-        // manu filter
-        LidarPointsFilter::FilterBucklingPointCloud(*(ds_points.get()));
+        init_ok_ = true;
+        return true;
+    }
+    /**
+    *@ brief CheckInit for the MRZ16 serial lidar.
+    * Open both serial ports, then resolve the per-channel angles:
+    * an angle file wins when provided, otherwise a $LDCMD/$LDACK exchange.
+    * @ return true indicates successful initialization, false indicates failure
+    */
+    bool PointCloudProducer::CheckInitSerial()
+    {
+        if (!this->serial_client_)
+        {
+            this->serial_client_.reset(new zvision::SerialClient(1000, 100));
+        }
 
+        if (this->serial_client_->Connect(serial_port_send_, serial_port_recv_,
+                                          serial_baud_send_, serial_baud_recv_) != 0)
+        {
+            LOG_F(ERROR, "open MRZ16 serial ports failed. cmd=%s@%d data=%s@%d",
+                  serial_port_send_.c_str(), serial_baud_send_,
+                  serial_port_recv_.c_str(), serial_baud_recv_);
+            this->serial_client_.reset();
+            return false;
+        }
+        LOG_F(INFO, "open MRZ16 serial ports ok, cmd=%s@%d data=%s@%d",
+              serial_port_send_.c_str(), serial_baud_send_,
+              serial_port_recv_.c_str(), serial_baud_recv_);
+
+        auto parse = std::make_unique<zvision::pkg_parse_mrz16>();
+
+        // The per-channel table lives in this producer, exactly like the NZ1/EZ6 TCP
+        // path (read_comp_from_csv / get_angle_comp) and the offline pcap path
+        // (Offline_update_angle_comp): the loaders write straight into angle_comp_, so
+        // "load succeeded" and "table available for rendering" cannot diverge.
+        angle_comp_t* angles = this->angle_comp_.get();
+
+        std::string err;
+        bool angles_ok = false;
+        if (angle_comp_filename_.size())
+        {
+            if (parse->LoadChannelAnglesFile(angle_comp_filename_, angles, &err))
+            {
+                angles_ok = true;
+            }
+            else
+            {
+                LOG_F(WARNING, "load MRZ16 channel angles file %s failed: %s, fallback to $LDCMD",
+                      angle_comp_filename_.c_str(), err.c_str());
+            }
+        }
+
+        if (!angles_ok)
+        {
+            if (!parse->FetchChannelAnglesOverSerial(this->serial_client_.get(), angles, &err))
+            {
+                LOG_F(ERROR, "get MRZ16 channel angles from $LDCMD failed: %s, continue with flat angles",
+                      err.c_str());
+            }
+        }
+
+        pkg_parse = std::move(parse);
+        init_ok_ = true;
+        return true;
+    }
+    /**
+    *@ brief updates angle compensation data
+    *@ paramangle_comp new angle compensation data
+    */
+    void PointCloudProducer::update_angle_comp(angle_comp_t &angle_comp)
+    {
+        angle_comp_->azi = angle_comp.azi;
+        angle_comp_->ele = angle_comp.ele;
+    }
+    /**
+    *@ brief Reset point cloud cache
+    */
+    void PointCloudProducer::reset_points()
+    {
+        points_.reset(new zvision::PointCloud);
+    }
+
+    void PointCloudProducer::reset_parser_state()
+    {
+        if (pkg_parse)
+        {
+            pkg_parse->ResetParserState();
+        }
+    }
+    /**
+    *@ brief handles LiDAR UDP packets
+    *@ param packet Input LiDAR UDP packet
+    */
+    void PointCloudProducer::ProcessLidarPacket(LidarUdpPacket& packet)
+    {
+        if (!pkg_parse)
+        {
+            // No parser means CheckInit()/CheckInitOffline() failed; dropping the packet
+            // keeps the caller alive instead of dereferencing a null parser.
+            return;
+        }
+
+        zvision::PointCloud cloud;
+
+        /* process point pkg */
+        int ret = pkg_parse->IsValidPacket(packet.data);
+        if(ret == true)
+        {
+            ret = pkg_parse->ProcessPacket(packet.data, angle_comp_.get(),*points_);
+            if(ret == 1)
+            {
+                this->ProcessOneFrame();
+                this->points_.reset(new zvision::PointCloud);
+            }
+            else if(ret == 2)
+            {
+                if (points_->points.size() != 0) 
+                {
+                    this->ProcessOneFrame(); 
+                }
+                this->points_.reset(new zvision::PointCloud);
+                pkg_parse->ProcessPacket(packet.data, angle_comp_.get(),*points_);
+            }
+            else
+            {}        
+
+            return;                                                      
+        }
+        /* process imu pkg */
+        ret = pkg_parse->IsValidImuPacket(packet.data);
+        if (ret == true)
+        {
+            auto imu_ptr = std::make_shared<imu_data_t>();
+            ret = pkg_parse->ParseImuPkg(packet.data, *imu_ptr);
+
+            std::unique_lock<std::mutex> lock(this->imu_mutex_);
+             {
+                if (this->max_imudata_count_ > 0)
+                {
+                    while (this->imu_datas_.size() >= this->max_imudata_count_)
+                    {
+                        this->imu_datas_.pop_front();
+                    }
+                }
+
+                this->imu_datas_.push_back(imu_ptr);
+            }
+
+            imu_cond_.notify_one();
+        }
+
+        return;
+    }
+    /**
+    *@ brief processes a frame of point cloud data, triggers a callback, and stores it in the cache
+    */
+    void PointCloudProducer::ProcessOneFrame()
+    {
+        std::shared_ptr<PointCloud> ds_points = points_;
 
         //If a new pointcloud processed done, call the callback function.
         int ret = 0;
@@ -777,44 +590,88 @@ namespace zvision
         cond_.notify_one();
         return;
     }
-
-    void PointCloudProducer::ProcessInternalOneSweep(PacketType tp)
+    bool PointCloudProducer::ReconnectSerial()
     {
-        std::unique_lock<std::mutex> lock(mutex_);
-        switch (tp)
+        // The external serial link dropped. Tear down the stale connection and
+        // keep trying to reopen the same ports so the viewer recovers as soon as
+        // the hardware is plugged back in. A transient link loss must never kill
+        // the producer thread.
+        LOG_F(WARNING, "MRZ16 serial link lost, waiting to reconnect...");
+        if (this->serial_client_)
         {
-        case zvision::Tp_PointCloudPacket:
-            break;
-        case zvision::Tp_CalibrationPacket:
-            break;
-        case zvision::Tp_BloomingPacket:
+            this->serial_client_->Close();
+        }
+        this->serial_rx_stream_.clear();
+
+        while (!need_stop_)
         {
-            if (this->blooming_frame_s_.size() > this->max_pointcloud_count_)
-                this->blooming_frame_s_.pop_front();
-            this->blooming_frame_s_.push_back(this->blooming_frame_);
-            this->blooming_frame_.reset(new BloomingFrame);
-            match_blooming_enable_ = true;
-            break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            if (this->serial_client_ &&
+                this->serial_client_->Connect(serial_port_send_, serial_port_recv_,
+                                              serial_baud_send_, serial_baud_recv_) == 0)
+            {
+                LOG_F(INFO, "MRZ16 serial reconnected.");
+                return true;
+            }
+            LOG_F(INFO, "MRZ16 serial reconnect failed, will retry...");
         }
-        case zvision::Tp_ApdChannelPacket:
-            break;
-        case zvision::Tp_IntensityDisCaliPacket:
-            break;
-        case zvision::Tp_AdcSourcePacket:
-            break;
-        case zvision::Tp_SourceDistancePacket:
-            break;
-        case zvision::Tp_BlockDebugPacket:
-            break;
-        case zvision::Tp_PacketUnknown:
-            break;
-        default:
-            break;
-        }
+        return false;
     }
 
+    /**
+    *The @ brief producer thread function receives UDP data and joins the queue
+    */
     void PointCloudProducer::Producer()
     {
+        // MRZ16 reads a continuous EE FF byte stream from the serial data port.
+        // Raw frames are sliced here so that every enqueued item is exactly one
+        // complete 80-byte point-cloud frame or one 34-byte IMU frame, i.e. the
+        // same "one packet per queue item" contract as the UDP path.
+        if (device_type_usr_ == LidarMRZ16)
+        {
+            if (!this->serial_client_)
+            {
+                return;
+            }
+
+            std::string data;
+            int len = 0;
+            while (!need_stop_)
+            {
+                data.clear();
+                const int ret = this->serial_client_->SyncRecv(data, len);
+                if (ret < 0)
+                {
+                    if (!ReconnectSerial())
+                    {
+                        return;
+                    }
+                    continue;
+                }
+                if (len <= 0)
+                {
+                    continue;
+                }
+
+                this->serial_rx_stream_.append(data.data(), static_cast<size_t>(len));
+
+                std::string frame;
+                while (zvision::pkg_parse_mrz16::ExtractNextFrame(this->serial_rx_stream_, &frame))
+                {
+                    // 原始帧先交给外部录制器（如封装成 UDP 记录写入 pcap），再入队解析。
+                    if (this->raw_frame_cb_)
+                    {
+                        this->raw_frame_cb_(frame);
+                    }
+                    LidarUdpPacket packet;
+                    packet.data = std::move(frame);
+                    packet.ip = 0;
+                    this->packets_->enqueue(packet);
+                }
+            }
+            return;
+        }
+
         if (this->receiver_)
         {
             uint32_t ip;
@@ -822,43 +679,9 @@ namespace zvision
             int ret = 0;
             while (!need_stop_)
             {
-                std::string data(2048, '0');
+                std::string data(12000, '0');
                 ret = receiver_->SyncRecv(data, len, ip);
-                if (ret >= 0)
-                {
-                    if ((len > 0) && (ip == this->filter_ip_))
-                    {
-                        LidarUdpPacket packet;
-                        packet.data = std::string(data.c_str(), len);
-                        packet.ip = ip;
-                        std::chrono::time_point<std::chrono::system_clock, std::chrono::microseconds> ptime = \
-                            std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::system_clock::now());
-                        time_t timestamp_us = ptime.time_since_epoch().count();
-                        packet.sys_stamp = 1.0 * timestamp_us * 1e-6;
-                        packet.stamp_ns_ = timestamp_us * 1e+3;
-                        this->packets_->enqueue(packet);
-                    }
-                }
-                else
-                {
-                    return;
-                }
-            }
-        }
-    }
 
-    void PointCloudProducer::InternalProducer()
-    {
-        if (this->internal_receiver_)
-        {
-            uint32_t ip;
-            int len;
-            int ret = 0;
-            std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-            while (!need_stop_)
-            {
-                std::string data(8192, '0');
-                ret = internal_receiver_->SyncRecv(data, len, ip);
                 if (ret >= 0)
                 {
                     if ((len > 0) && (ip == this->filter_ip_))
@@ -866,10 +689,6 @@ namespace zvision
                         LidarUdpPacket packet;
                         packet.data = std::string(data.c_str(), len);
                         packet.ip = ip;
-                        std::chrono::time_point<std::chrono::system_clock, std::chrono::microseconds> ptime = \
-                            std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::system_clock::now());
-                        time_t timestamp_us = ptime.time_since_epoch().count();
-                        packet.sys_stamp = 1.0 * timestamp_us * 1e-6;
                         this->packets_->enqueue(packet);
                     }
                 }
@@ -881,37 +700,51 @@ namespace zvision
         }
     }
     
+    /**
+    *The @ brief consumer thread function retrieves data from the queue and parses it
+    */
     void PointCloudProducer::Consumer()
     {
         LidarUdpPacket packet;
         while (this->packets_->dequeue(packet))
         {
-
             this->ProcessLidarPacket(packet);
-
-            // process blooming packet
-            if (internal_packets_enable_)
-                this->ProcessLidarInternalPacket(packet);
-
         }
     }
-
+    /**
+    *@ brief Register Point Cloud callback function
+    *@ paramcb callback function pointer
+    */
     void PointCloudProducer::RegisterPointCloudCallback(PointCloudCallback cb)
     {
         this->pointcloud_cb_ = cb;
     }
-
+    /**
+    *@ brief Register a raw-frame sink (one complete frame per call, MRZ16 serial only)
+    *@ paramcb callback function pointer
+    */
+    void PointCloudProducer::RegisterRawFrameCallback(std::function<void(const std::string &)> cb)
+    {
+        this->raw_frame_cb_ = std::move(cb);
+    }
+    /**
+    *@ brief Get a frame of point cloud data
+    *@ param points Output point cloud data
+    *@ paramtimeouts timeout (milliseconds)
+    *@ return 0 indicates success, Timeout indicates timeout, Unknown indicates unknown error
+    */
     int PointCloudProducer::GetPointCloud(PointCloud& points, int timeout_ms)
     {
         {
             std::unique_lock<std::mutex> lock(mutex_);
 
+            // std::cout << " Su -------------------> this->pointclouds_.empty() = " << this->pointclouds_.empty() << std::endl;
             if (this->pointclouds_.empty())
             {
                 //wait_for bug on vs2015&vs2017: https://developercommunity.visualstudio.com/content/problem/438027/unexpected-behaviour-with-stdcondition-variablewai.html
                 if (std::cv_status::timeout == cond_.wait_for(lock, std::chrono::milliseconds(timeout_ms)))
                 {
-                    LOG_F(WARNING, "Wait for pointcloud timeout.");
+                  //  LOG_F(WARNING, "Wait for pointcloud timeout.");
                     return Timeout;
                 }
                 else
@@ -926,135 +759,97 @@ namespace zvision
 
         // disable blooming frame
         std::unique_lock<std::mutex> lock(mutex_);
-        if (!internal_packets_enable_ || !match_blooming_enable_)
-        {
-            points = *(this->pointclouds_.front());
-            this->pointclouds_.pop_front();
-            return 0;
-        }
 
-        // no blooming pointcloud
-        if (!blooming_frame_s_.size())
+        points = *(this->pointclouds_.front());
+        this->pointclouds_.pop_front();
+        return 0;
+    }
+    /**
+    *@ brief Get one frame of IMU data
+    *@ paramimu_data outputs IMU data
+    *@ paramtimeouts timeout (milliseconds)
+    *@ return 0 indicates success, Timeout indicates timeout, Unknown indicates unknown error
+    */
+    int PointCloudProducer::GetImuData(imu_data_t &imu_data, int timeout_ms)
+    {
         {
-            if (pointclouds_.size() >= 2)
+            std::unique_lock<std::mutex> lock(imu_mutex_);
+
+            if (this->imu_datas_.empty())
             {
-                pointclouds_.erase(pointclouds_.begin(), pointclouds_.begin() + pointclouds_.size() - 2);
-                points = *(this->pointclouds_.front());
-                this->pointclouds_.pop_front();
-                return 0;
-            }
-            else
-                return NotMatched;
-        }
-
-        // just process last two frame
-        if (pointclouds_.size() > 2)
-            pointclouds_.erase(pointclouds_.begin(), pointclouds_.begin() + pointclouds_.size() - 2);
-
-        if (blooming_frame_s_.size() > 2)
-            blooming_frame_s_.erase(blooming_frame_s_.begin(), blooming_frame_s_.begin() + blooming_frame_s_.size() - 2);
-
-        // find blooming frame
-        static const double frame_thre = 1e-3 * BloomingPacket::FRAME_THRESHOLD_MS;
-        bool matched = false;
-        for (int p = 0;p< pointclouds_.size();p++)
-        {
-            for (int b = 0; b < blooming_frame_s_.size(); b++)
-            {
-                auto& pointcloud = pointclouds_.at(p);
-                auto& blooming = blooming_frame_s_.at(b);
-
-                // get timestamp diff
-                double diff = std::abs(pointcloud->sys_stamp - blooming->sys_stamp);
-                if(match_frame_use_lidar_time_)
-                    diff = std::abs(pointcloud->timestamp - blooming->timestamp);
-
-                if (diff < frame_thre)
+                //wait_for bug on vs2015&vs2017: https://developercommunity.visualstudio.com/content/problem/438027/unexpected-behaviour-with-stdcondition-variablewai.html
+                if (std::cv_status::timeout == imu_cond_.wait_for(lock, std::chrono::milliseconds(timeout_ms)))
                 {
-                    points = *(this->pointclouds_.at(p));
-                    if(points.is_ptp_mode)
+                   // LOG_F(WARNING, "Wait for imudata timeout.");
+                    return Timeout;
+                }
+                else
+                {
+                    if (this->imu_datas_.empty())
                     {
-                        matched = true;
-                        points.blooming_frame = blooming;
-                        points.use_blooming = true;
-
-                        // remove old data
-                        pointclouds_.erase(pointclouds_.begin(), pointclouds_.begin() + p + 1);
-                        blooming_frame_s_.erase(blooming_frame_s_.begin(), blooming_frame_s_.begin() + b + 1);
+                        return Unknown;
                     }
                 }
             }
         }
 
-        // not matched
-        if (!matched)
-        {
-            if (blooming_frame_s_.size() > 1)
-                blooming_frame_s_.pop_front();
+        // disable blooming frame
+        std::unique_lock<std::mutex> lock(imu_mutex_);
 
-            if (pointclouds_.size() > 1)
-            {
-                points = *(this->pointclouds_.at(0));
-                pointclouds_.pop_front();
-                return 0;
-            }
-            else
-                return NotMatched;
-
-        }
-
-        // matched
+        imu_data = *(this->imu_datas_.front());
+        this->imu_datas_.pop_front();
         return 0;
     }
 
-    int PointCloudProducer::GetCalibrationData(CalibrationDataSinCosTable& cal_lut) {
-        if (!cal_lut_)
-        {
-            return -1;
-        }
-        cal_lut = *(cal_lut_.get());
-        return 0;
-    }
-
-    void PointCloudProducer::SetDownsampleMode(zvision::DownSampleMode mode, std::string cfg_path) {
-        points_filter_.Init(mode, cfg_path, zvision::is_ml30splus_b1_ep_mode_enable());
-    }
-
-    void PointCloudProducer::SetProcessInternalPacketsEnable(bool en, bool use_lidar_time)
+    bool PointCloudProducer::GetAngleMetaRecord(std::vector<uint8_t>& out) const
     {
-        internal_packets_enable_ = en;
-        match_frame_use_lidar_time_ = use_lidar_time;
+        if (pkg_parse)
+        {
+            return pkg_parse->GetAngleMetaRecord(*angle_comp_, out);
+        }
+        return false;
     }
 
+    /**
+    *@ brief Set whether point cloud caching is enabled
+    *@ param en true means enabled, false means disabled
+    */
     void PointCloudProducer::SetPointcloudBufferEnable(bool en)
     {
         std::unique_lock<std::mutex> lock(mutex_);
         this->use_pointcloud_buffer_ = en;
     }
-
+    /**
+    *@ brief Start point cloud producer, create producer and consumer threads
+    *@ return 0 indicates success, InitFailure indicates initialization failure
+    */
     int  PointCloudProducer::Start()/*start the thread which will handle the udp packet one by one*/
     {
-        if (!CheckInit())
-            return InitFailure;
-
+        //std::cout << " CheckInit error " << std::endl;
+        if (!CheckInit())       
+        {
+            return InitFailure;  
+        } 
+            
         if (!this->packets_)
         {
             this->packets_.reset(new SynchronizedQueue<LidarUdpPacket>);
         }
 
-        if (!this->receiver_)
+        if ((!this->receiver_) && (device_type_usr_ != LidarMRZ16))
         {
-            this->receiver_.reset(new UdpReceiver(this->data_port_, 1000));
+            this->receiver_.reset(new UdpReceiver(this->pc_dst_port_, 1000, 12000));
 
-            if (join_multicast_ && data_dst_ip_.size())
+            if (join_multicast_ && pc_dst_ip_.size())
             {
                 unsigned int dst_ip_int = 0;
-                if (StringToIp(data_dst_ip_, dst_ip_int))
+                if (StringToIp(pc_dst_ip_, dst_ip_int))
                 {
+                    
                     if ((dst_ip_int & 0xF0000000) == 0xE0000000)
                     {
-                        this->receiver_->JoinMulticastGroup(data_dst_ip_);
-                        LOG_F(INFO, "Join multicast group %s.", data_dst_ip_.c_str());
+                        this->receiver_->JoinMulticastGroup(pc_dst_ip_);
+                        LOG_F(INFO, "Join multicast group %s.", pc_dst_ip_.c_str());
                     }
                     else
                     {
@@ -1063,7 +858,7 @@ namespace zvision
                 }
                 else
                 {
-                    LOG_F(ERROR, "Resolve destination ip address error, %s.", data_dst_ip_.c_str());
+                    LOG_F(ERROR, "Resolve destination ip address error, %s.", pc_dst_ip_.c_str());
                 }
             }
         }
@@ -1079,28 +874,12 @@ namespace zvision
             this->producer_ = std::shared_ptr<std::thread>(
                 new std::thread(std::bind(&PointCloudProducer::Producer, this)));
         }
-
-        // internal_receiver_
-        if (internal_packets_enable_)
-        {
-            match_blooming_enable_ = false;
-            if (!this->internal_receiver_)
-            {
-                // default 2468
-                this->internal_receiver_.reset(new UdpReceiver(this->internal_port_, 1000, 8192));
-            }
-            if (!this->internal_producer_)
-            {
-                this->internal_producer_ = std::shared_ptr<std::thread>(
-                    new std::thread(std::bind(&PointCloudProducer::InternalProducer, this)));
-            }
-            this->blooming_frame_.reset(new BloomingFrame);
-        }
-
-
+        
         return 0;
     }
-
+    /**
+    *@ brief Stop point cloud producer, close threads and receivers
+    */
     void PointCloudProducer::Stop()/*start the thread*/
     {
         this->need_stop_ = true;
@@ -1116,174 +895,21 @@ namespace zvision
             this->consumer_.reset();
         }
 
-        if (this->internal_producer_)
-        {
-            this->internal_producer_->join();
-            this->internal_producer_.reset();
-        }
-
         if (this->producer_)
         {
             this->producer_->join();
             this->producer_.reset();
         }
 
-        if (this->internal_receiver_)
-            this->internal_receiver_.reset();
-
         if (this->receiver_)
         {
             this->receiver_.reset();
         }
 
-        match_blooming_enable_ = false;
-    }
-
-
-    OfflinePointCloudProducer::OfflinePointCloudProducer(std::string pcap_filename, std::string cal_filename, std::string lidar_ip, int data_port):
-        pcap_filename_(pcap_filename),
-        cal_lut_(new CalibrationDataSinCosTable()),
-        cal_filename_(cal_filename),
-        device_type_(LidarUnknown),
-        count_(0),
-        device_ip_(lidar_ip),
-        ///last_seq_(-1),
-        data_port_(data_port),
-        init_ok_(false),
-        pointcloud_cb_(nullptr),
-        match_frame_use_lidar_time_(false)
-    {
-
-    }
-
-    OfflinePointCloudProducer::~OfflinePointCloudProducer()
-    {
-
-    }
-
-    int OfflinePointCloudProducer::GetPointCloudInfo(int& size, DeviceType& type)
-    {
-        if (init_ok_)
+        if (this->serial_client_)
         {
-            type = this->device_type_;
-            size = this->count_;
-            return 0;
+            this->serial_client_.reset();
         }
-
-        this->packet_source_.reset(new PcapUdpSource(this->device_ip_, this->data_port_, this->pcap_filename_));
-
-        int ret = 0;
-        if (0 != (ret = this->packet_source_->ReadFrameInfo(count_, type)))
-            return ret;
-
-        if (!cal_filename_.empty())
-        {
-            CalibrationData cal;
-            if (0 != (ret = LidarTools::ReadCalibrationData(cal_filename_, cal)))
-                return ret;
-            LidarTools::ComputeCalibrationSinCos(cal, *(this->cal_lut_.get()));
-        }
-        else{
-            CalibrationData cal;
-            CalibrationPackets cal_pkts;
-            this->ana_.reset(new PcapAnalyzer(pcap_filename_));
-            this->ana_->Analyze();
-            if (this->ana_->GetDetailInfo().size() == 0){
-                std::cout << "not enough data" << std::endl;
-                return NotEnoughData;
-            }
-            for (auto &it : this->ana_->GetDetailInfo()) {
-                if (!it.second.cal_pkts_.size())
-                    return NotEnoughData;
-
-                cal_pkts = it.second.cal_pkts_;
-            }
-            LidarTools::GetDeviceCalibrationData(cal_pkts,cal);
-            LidarTools::ComputeCalibrationSinCos(
-                cal, *(this->cal_lut_.get()));
-        }
-
-        size = count_;
-        this->device_type_ = type;
-        init_ok_ = true;
-        return 0;
-    }
-
-    int OfflinePointCloudProducer::GetPointCloud(int frame_number, PointCloud& points)
-    {
-        if (!init_ok_)
-            return NotInit;
-        
-        //get one full pointcloud's udp packets
-        std::vector<PointCloudPacket> packets;
-        int ret = 0;
-        if (0 != (ret = this->packet_source_->GetPointCloudPackets(frame_number, packets)))
-            return ret;
-
-        //process udp packets and generate poincloud
-        for (unsigned int i = 0; i < packets.size(); ++i)
-        {
-            std::string pkt(packets[i].data_, sizeof(packets[i].data_) / sizeof(char));
-            ret = PointCloudPacket::ProcessPacket(pkt, *(this->cal_lut_.get()), points, nullptr, &(packets[i].stamp_ns_));
-            if (0 != ret)
-            {
-                return ret;
-            }
-        }
-
-        {
-            std::string pkt_0((char*)(packets[0].data_), sizeof(packets[0].data_));
-            points.sys_stamp = packets[0].sys_timestamp - 1e-6 * BloomingPacket::DELTA_PACKRT_US * PointCloudPacket::GetPacketSeq(pkt_0);
-        }
-
-        // manu filter
-        LidarPointsFilter::FilterBucklingPointCloud(points);
-
-        // try to get blooming data
-        if (points.is_ptp_mode) 
-        {
-            std::vector<BloomingPacket> blo_pkts;
-            // get matched blooming packets and generate blooming pointcloud
-            this->packet_source_->GetBloomingPackets(frame_number, match_frame_use_lidar_time_? \
-                points.timestamp : points.sys_stamp, blo_pkts, match_frame_use_lidar_time_);
-
-            // process packet
-            if (blo_pkts.size())
-            {
-                if (!points.blooming_frame)
-                    points.blooming_frame = std::make_shared<BloomingFrame>();
-                
-                for (unsigned int i = 0; i < blo_pkts.size(); ++i)
-                {
-                    std::string pkt((char*)(blo_pkts[i].data), BloomingPacket::PACKET_LEN);
-                    if (0 != (ret = BloomingPacket::ProcessPacket(pkt, *(this->cal_lut_.get()), *points.blooming_frame)))
-                    {
-                        break;
-                    }
-                    if (i == 0)
-                    {
-                        int seq = BloomingPacket::GetPacketSeq(pkt);
-                        points.blooming_frame->sys_stamp = blo_pkts[0].sys_stamp - 1e-6 * BloomingPacket::DELTA_PACKRT_US * seq;
-                        points.blooming_frame->timestamp = BloomingPacket::GetTimestamp(pkt) - 1e-6 * BloomingPacket::DELTA_PACKRT_US * seq;
-                    }
-                }
-
-                points.use_blooming = true;
-            }
-        }
-        return 0;
-    }
-
-    int OfflinePointCloudProducer::GetCalibrationDataSinCosTable(zvision::CalibrationDataSinCosTable& cal)
-    {
-       if (!cal_lut_)
-            return -1;
-        cal = *(cal_lut_.get());
-        return 0;
-    }
-
-    void OfflinePointCloudProducer::SetInternalFrameMatchMethod(bool use_lidar_time)
-    {
-        match_frame_use_lidar_time_ = use_lidar_time;
+        this->serial_rx_stream_.clear();
     }
 }

@@ -1406,7 +1406,7 @@ namespace loguru
 			file = filename(file);
 		}
 
-		char level_buff[8];
+		char level_buff[15];
 		const char* custom_level_name = get_verbosity_name(verbosity);
 		if (custom_level_name) {
 			snprintf(level_buff, sizeof(level_buff) - 1, "%s", custom_level_name);
@@ -1446,7 +1446,7 @@ namespace loguru
 		}
 		if (g_preamble_file && pos < out_buff_size) {
 			std::string mask_file(file);
-			for (int i = 0; i < mask_file.size() / 2; i++)
+			for (uint64_t i = 0; i < mask_file.size() / 2; i++)
 				mask_file.at(i * 2) = '*';
 
 			char shortened_filename[LOGURU_FILENAME_WIDTH + 1];

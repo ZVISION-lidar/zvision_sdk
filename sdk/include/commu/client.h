@@ -44,6 +44,7 @@ namespace zvision
     */
     void AssemblePort(int port, char* addr);
 
+    void AssemblePort_2byte(int port, char* addr);
     /** \brief Convert the mac address string("%hhx-%hhx-%hhx-%hhx-%hhx-%hhx") to 6 bytes char array.
     * \param[in] mac   mac address in the string format
     * \param[in] addr  destination address for the char array

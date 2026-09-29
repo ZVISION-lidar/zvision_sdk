@@ -1,8 +1,16 @@
 cmake_minimum_required(VERSION 3.0)
 
-project(zvision_sdk VERSION 1.0.1)
+project(zvision_sdk VERSION 1.23)
+message(STATUS "zvision_sdk version: ${PROJECT_VERSION}")
 
-add_compile_options(-std=c++11 -std=c++14)
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED OFF)
+
+if (WIN32)
+    add_compile_options(/utf-8 /Wall)
+else()
+    add_compile_options(-Wall -g)
+endif()
 
 if (CMAKE_CROSSCOMPILING)
 	set(THREADS_PTHREAD_ARG

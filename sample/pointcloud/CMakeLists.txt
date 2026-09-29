@@ -1,8 +1,9 @@
 cmake_minimum_required(VERSION 3.0)
+
 find_package(PCL 1.7 COMPONENTS common io visualization)
 
-set(DEMO_NAME pointcloud_sample)
-add_executable(${DEMO_NAME} main.cpp)
+set(DEMO_NAME pointcloud_demo)
+add_executable(${DEMO_NAME} pointcloud_demo.cpp)
 
 set(DEMO_LIBS ${SDK_LIBRARY_NAME})
 message(STATUS "##########")

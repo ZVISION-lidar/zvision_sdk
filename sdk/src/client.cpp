@@ -84,6 +84,13 @@ typedef int				SOCKET;
 
 namespace zvision
 {
+    /**
+    *@Short converts an IP string (such as "192.168.1.1") into a 4-byte binary representation.
+    *
+    *@Input the IP address string for 'param ip'.
+    *@The output buffer of paramaddr (at least 4 bytes) is used to store binary IP addresses.
+    *@If the conversion is successful, return true; otherwise, return false.
+    */
     bool AssembleIpString(std::string ip, char* addr)
     {
         try
@@ -97,43 +104,84 @@ namespace zvision
         }
         return true;
     }
-
+    /**
+    * @brief Assemble a 32-bit port number into network byte order (4 bytes).
+    * @param port Port number in host byte order.
+    * @param addr Output buffer (4 bytes).
+    */
     void AssemblePort(int port, char* addr)
     {
         int value = htonl(port);
         memcpy(addr, &value, sizeof(value));
     }
-
+    /**
+     * @brief Assemble a 16-bit port number into network byte order (2 bytes).
+     * @param port Port number in host byte order.
+     * @param addr Output buffer (2 bytes).
+     */
+    void AssemblePort_2byte(int port, char* addr)
+    {
+        uint16_t value = htons(port);
+        memcpy(addr, &value, 2);
+    }
+    /**
+     * @brief Parse a MAC address string ("AA-BB-CC-DD-EE-FF") into 6 bytes.
+     * @param mac  Input MAC string.
+     * @param addr Output buffer (6 bytes).
+     * @return true if parsing succeeds, false otherwise.
+     */
     bool AssembleMacAddress(std::string mac, char* addr)
     {
         return (6 == sscanf_s(mac.c_str(), "%hhx-%hhx-%hhx-%hhx-%hhx-%hhx", (unsigned char*)&addr[0], (unsigned char*)&addr[1], (unsigned char*)&addr[2], (unsigned char*)&addr[3], (unsigned char*)&addr[4], (unsigned char*)&addr[5]));
     }
-
+    /**
+     * @brief Parse a factory MAC string ("AABBCCDDEEFF") into 6 bytes.
+     * @param mac  Input MAC string.
+     * @param addr Output buffer (6 bytes).
+     * @return true if parsing succeeds, false otherwise.
+     */
 	bool AssembleFactoryMacAddress(std::string mac, char* addr)
 	{
 		return (6 == sscanf_s(mac.c_str(), "%02hhx%02hhx%02hhx%02hhx%02hhx%02hhx", (unsigned char*)&addr[0], (unsigned char*)&addr[1], (unsigned char*)&addr[2], (unsigned char*)&addr[3], (unsigned char*)&addr[4], (unsigned char*)&addr[5]));
 	}
-
+    /**
+     * @brief Convert a 4-byte binary IP into a dotted string.
+     * @param addr Input binary IP (4 bytes).
+     * @param ip   Output string.
+     */
     void ResolveIpString(const unsigned char* addr, std::string& ip)
     {
         char cip[128] = "";
         sprintf_s(cip, "%u.%u.%u.%u", addr[0], addr[1], addr[2], addr[3]);
         ip = std::string(cip);
     }
-
+    /**
+     * @brief Convert a 4-byte binary port into host byte order.
+     * @param addr Input buffer (4 bytes).
+     * @param port Output port number.
+     */
     void ResolvePort(const unsigned char* addr, int& port)
     {
         int* old = (int*)(addr);
         port = ntohl(*old);
     }
-
+    /**
+     * @brief Convert a 6-byte MAC into a string ("AA-BB-CC-DD-EE-FF").
+     * @param addr Input buffer (6 bytes).
+     * @param mac  Output string.
+     */
     void ResolveMacAddress(const unsigned char* addr, std::string& mac)
     {
         char cmac[128] = "";
         sprintf_s(cmac, "%02X-%02X-%02X-%02X-%02X-%02X", addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]);
         mac = std::string(cmac);
     }
-
+    /**
+     * @brief Convert IP string to integer (host byte order).
+     * @param ip  Input IP string.
+     * @param iip Output integer IP.
+     * @return true if conversion succeeds, false otherwise.
+     */
     bool StringToIp(std::string ip, unsigned int& iip)
     {
         try
@@ -147,7 +195,11 @@ namespace zvision
         }
         return true;
     }
-
+    /**
+     * @brief Convert integer IP (host byte order) to dotted string.
+     * @param ip Input integer IP.
+     * @return IP string.
+     */
     std::string IpToString(int ip)
     {
         char cip[128] = "";
@@ -156,7 +208,12 @@ namespace zvision
         sprintf_s(cip, "%u.%u.%u.%u", addr[0], addr[1], addr[2], addr[3]);
         return std::string(cip);
     }
-
+    /**
+     * @brief Convert 32-bit integers from network byte order to host byte order.
+     * @param net  Input buffer.
+     * @param host Output buffer.
+     * @param len  Length in bytes (must be multiple of 4).
+     */
     void NetworkToHost(const unsigned char* net, char* host, int len)
     {
         for (int i = 0; i < len / 4; i++)
@@ -166,7 +223,12 @@ namespace zvision
             *now = ntohl(ori);
         }
     }
-
+    /**
+     * @brief Convert 16-bit integers from network byte order to host byte order.
+     * @param net  Input buffer.
+     * @param host Output buffer.
+     * @param len  Length in bytes (must be multiple of 2).
+     */
     void NetworkToHostShort(const unsigned char* net, char* host, int len)
     {
         for (int i = 0; i < len / 2; i++)
@@ -176,7 +238,12 @@ namespace zvision
             *now = ntohs(ori);
         }
     }
-
+    /**
+     * @brief Convert 32-bit integers from host byte order to network byte order.
+     * @param host Input buffer.
+     * @param net  Output buffer.
+     * @param len  Length in bytes (must be multiple of 4).
+     */
     void HostToNetwork(const unsigned char* host, char* net, int len)
     {
         for (int i = 0; i < len / 4; i++)
@@ -186,7 +253,12 @@ namespace zvision
             *now = htonl(ori);
         }
     }
-
+    /**
+     * @brief Swap byte order of 32-bit integers.
+     * @param src Input buffer.
+     * @param dst Output buffer.
+     * @param len Length in bytes (must be multiple of 4).
+     */
     void SwapByteOrder(char* src, char* dst, int len)
     {
         for (int i = 0; i < len / 4; i++)
@@ -195,7 +267,10 @@ namespace zvision
                 dst[i * 4 + j] = src[i * 4 + (3 - j)];
         }
     }
-
+    /**
+    * @brief Get last system error code (cross-platform).
+    * @return Error code.
+    */
     int GetSysErrorCode()
     {
         int err = 0;
@@ -295,6 +370,9 @@ namespace zvision
     }
 
     //////////////////////////////////////////////////////////////////////////////////////////////
+    /**
+    * @brief Construct Env object, initialize socket environment status as failure.
+    */
     Env::Env():
         socket_env_status_((int)ReturnCode::InitFailure)
     {
@@ -302,6 +380,13 @@ namespace zvision
     }
 
     //////////////////////////////////////////////////////////////////////////////////////////////
+    /**
+    * @brief Initialize socket environment if not already done.
+    * 
+    * On Windows, calls WSAStartup. On Linux/Unix, always returns success.
+    * 
+    * @return true if socket environment is ready, false otherwise.
+    */
     bool Env::Ok()
     {
         static Env env;
@@ -328,6 +413,13 @@ namespace zvision
     }
 
     //////////////////////////////////////////////////////////////////////////////////////////////
+    /**
+     * @brief Construct a TcpClient with timeout settings.
+     * 
+     * @param connect_timeout Connection timeout in milliseconds.
+     * @param send_timeout    Send timeout in milliseconds.
+     * @param recv_timeout    Receive timeout in milliseconds.
+     */
     TcpClient::TcpClient(int connect_timeout, int send_timeout, int recv_timeout) :
         conn_timeout_ms_(connect_timeout),
         send_timeout_ms_(send_timeout),
@@ -348,6 +440,13 @@ namespace zvision
     }
 
     //////////////////////////////////////////////////////////////////////////////////////////////
+    /**
+     * @brief Connect to a remote server.
+     * 
+     * @param dst_ip   Destination IP address string.
+     * @param dst_port Destination port number.
+     * @return 0 on success, -1 on failure.
+     */
     int TcpClient::Connect(std::string dst_ip, int dst_port)
     {
         if (!Env::Ok())
@@ -562,6 +661,13 @@ namespace zvision
     }
 
     //////////////////////////////////////////////////////////////////////////////////////////////
+    /**
+     * @brief Send data synchronously.
+     * 
+     * @param data Data buffer (string).
+     * @param len  Number of bytes to send.
+     * @return 0 on success, -1 on error.
+     */
     int TcpClient::SyncSend(std::string& data, int len)
     {
         int ret = 0;
@@ -589,7 +695,11 @@ namespace zvision
 
         return 0;
     }
-
+    /**
+     * @brief Get number of bytes available to read without blocking.
+     * 
+     * @return Number of bytes available, or -1 on error.
+     */
 	int TcpClient::GetAvailableBytesLen() {
 		int bytesRdy = 0;
 
@@ -608,6 +718,13 @@ namespace zvision
 	}
 
     //////////////////////////////////////////////////////////////////////////////////////////////
+    /**
+     * @brief Receive data synchronously into string buffer.
+     * 
+     * @param data Output buffer (pre-allocated string).
+     * @param len  Expected number of bytes to read.
+     * @return 0 on success, -1 on error, -2 if connection closed.
+     */
 	int TcpClient::SyncRecv(std::string& data, int len)
     {
         int flags = 0;
@@ -645,7 +762,13 @@ namespace zvision
         }
 
     }
-
+    /**
+     * @brief Receive data synchronously into raw buffer.
+     * 
+     * @param data Output buffer (char*).
+     * @param len  Expected number of bytes to read.
+     * @return 0 on success, -1 on error, -2 if connection closed.
+     */
     int TcpClient::SyncRecv(char* data, int len)
     {
         int flags = 0;
@@ -683,6 +806,11 @@ namespace zvision
     }
 
     //////////////////////////////////////////////////////////////////////////////////////////////
+    /**
+     * @brief Close the TCP connection and release socket.
+     * 
+     * @return 0 on success, error code otherwise.
+     */
     int TcpClient::Close()
     {
         int status = 0;
@@ -706,6 +834,11 @@ namespace zvision
     }
 
     //////////////////////////////////////////////////////////////////////////////////////////////
+    /**
+     * @brief Get last system error code (cross-platform).
+     * 
+     * @return Error code.
+     */
     int TcpClient::GetSysErrorCode()
     {
         int err = 0;
@@ -719,6 +852,11 @@ namespace zvision
     }
 
     //////////////////////////////////////////////////////////////////////////////////////////////
+    /**
+     * @brief Record error info (currently placeholder).
+     * 
+     * @return Empty string.
+     */
     std::string TcpClient::RecordErrorInfo()
     {
         int err = 0;
@@ -732,6 +870,13 @@ namespace zvision
     }
 
     //////////////////////////////////////////////////////////////////////////////////////////////
+    /**
+     * @brief Construct a UDP receiver.
+     * 
+     * @param port            Local port to bind.
+     * @param recv_timeout    Receive timeout in milliseconds.
+     * @param recv_buffer_len Receive buffer length in bytes.
+     */
     UdpReceiver::UdpReceiver(int port, int recv_timeout, int recv_buffer_len):
         local_port_(port),
         recv_timeout_ms_(recv_timeout),
@@ -749,6 +894,12 @@ namespace zvision
     }
 
     //////////////////////////////////////////////////////////////////////////////////////////////
+    /**
+     * @brief Join a multicast group.
+     * 
+     * @param mtip Multicast IP address string.
+     * @return 0 on success.
+     */
     int UdpReceiver::JoinMulticastGroup(std::string& mtip)
     {
         multicast_ip_ = mtip;
@@ -756,6 +907,11 @@ namespace zvision
     }
 
     //////////////////////////////////////////////////////////////////////////////////////////////
+    /**
+     * @brief Bind UDP socket to local port and configure options.
+     * 
+     * @return 0 on success, -1 on failure.
+     */
     int UdpReceiver::Bind()
     {
         if (!Env::Ok())
@@ -807,10 +963,17 @@ namespace zvision
                 Close();
                 return -1;
             }
-            else
+
+            // SO_REUSEPORT allows multiple sockets to bind to the same port
+            // This is needed on macOS for port reuse when reconnecting
+            #ifndef WIN32
+            int reuseport = 1;
+            if (0 != setsockopt(this->socket_, SOL_SOCKET, SO_REUSEPORT, (const char *)&reuseport, sizeof(reuseport)))
             {
-                ;
+                LOG_F(WARNING, "Set reuse port error, error code = %d.", GetSysErrorCode());
+                // Continue even if SO_REUSEPORT fails (not supported on all systems)
             }
+            #endif
 
             //set timeout
             #ifdef WIN32
@@ -873,6 +1036,14 @@ namespace zvision
     }
 
     //////////////////////////////////////////////////////////////////////////////////////////////
+    /**
+     * @brief Receive data synchronously from UDP socket.
+     * 
+     * @param data Output buffer (string).
+     * @param len  Output length of received data.
+     * @param ip   Output sender IP (host byte order).
+     * @return 0 on success, -1 on error, -2 if connection closed.
+     */
     int UdpReceiver::SyncRecv(std::string& data, int& len, uint32_t& ip)
     {
         len = 0;
@@ -943,6 +1114,11 @@ namespace zvision
     }
 
     //////////////////////////////////////////////////////////////////////////////////////////////
+    /**
+     * @brief Close UDP socket and drop multicast group if joined.
+     * 
+     * @return 0 on success, error code otherwise.
+     */
     int UdpReceiver::Close()
     {
         int status = 0;

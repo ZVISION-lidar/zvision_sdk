@@ -31,298 +31,118 @@
 
 #include "define.h"
 
+#define  GET_UINT32(x) ntohl(*((uint32_t *)(x)))
+#define  GET_UINT16(x) ntohs(*((uint16_t *)(x)))
+
 namespace zvision
 {
     class PointCloud;
-
-    class LidarPointsFilter;
-
-    struct FrameTimeStamp
-    {
-        FrameTimeStamp()
-            :timestamp(0)
-            ,sys_stamp(0)
-        {}
-
-        FrameTimeStamp(double stamp_, double sys_stamp_)
-        {
-            timestamp = stamp_;
-            sys_stamp = sys_stamp_;
-        }
-
-        double timestamp;   // from lidar udp data
-        double sys_stamp;   // the time that pc received
-    };
 
     struct LidarUdpPacket
     {
         std::string data;
         int ip;
         int ip_dst = 0xffffffff;
-        /* system time (uint:s)*/
-        double sys_stamp = .0f;
-        /* system time (uint:ns)*/
-        uint64_t stamp_ns_;
-    };
-
-    class MarkedPacket
-    {
-    public:
-        static bool IsValidMarkedPacket(std::string& pkt);
-    };
-
-    class CalibrationPacket
-    {
-    public:
-
-        static const int PACKET_LEN = 1040;
-
-        /** \brief Packet is valid calibration udp packet or not.
-        * \return true for yes, false for no.
-        */
-        static bool IsValidPacket(std::string& packet);
-
-        /** \brief Get scan mode from the cal packet.
-        * \return ScanMode.
-        */
-        static ScanMode GetScanMode(std::string& packet);
-
-        /** \brief Get the udp sequence number from the calibration packet.
-        * \return udp sequence number.
-        */
-        static int GetPacketSeq(std::string& packet);
-
-        /** \brief Get the max udp sequence number by scan mode.
-        * \return udp sequence number.
-        */
-        static int GetMaxSeq(zvision::ScanMode& mode);
-
-        /** \brief Get device type from the cal packet.
-        * \return DeviceType.
-        */
-        DeviceType GetDeviceType();
-
-        /** \brief Get the udp sequence number from the calibration packet.
-        * \return udp sequence number.
-        */
-        int GetPacketSeq();
-
-        /** \brief Process the raw cal udp packet to float(azimuth and elevation in degree format).
-        * \param[out] cal             calibration data
-        */
-        void ExtractData(std::vector<float>& cal);
-
-        /** \brief Process the raw cal udp packet to float(azimuth and elevation in degree format).
-        * \param[out] cal             calibration data
-        */
-        static void ExtractData(std::string& packet, std::vector<float>& cal);
-
-        /** \brief cal upd packet data.
-        */
-        char cal_data_[1040];
-
     };
 
     class PointCloudPacket
     {
     public:
 
-        static const int PACKET_LEN = 1304;
+        virtual ~PointCloudPacket() = default;
 
         /** \brief Packet is valid pointcloud udp packet or not.
         * \return true for yes, false for no.
         */
-        static bool IsValidPacket(std::string& packet);
-
-        /** \brief Packet is ptp timestamp mode or not.
-        * \return true for yes, false for no.
-        */
-        static bool IsPtpMode(std::string& packet);
-
-        /** \brief Get packet sending interval.
-        * \return packet sending interval (s).
-        */
-        static double GetPacketSendInterval(ScanMode mode);
+        virtual bool IsValidPacket(std::string& packet) = 0;
 
         /** \brief Get device type from the pointcloud packet.
         * \return DeviceType.
         */
-        static DeviceType GetDeviceType(std::string& packet);
+        virtual DeviceType GetDeviceType(std::string& packet) = 0;
+
+        /** \brief Get frame num from the pointcloud packet.
+        * \return frame Num.
+        */
+        virtual int GetFrameNum(std::string& packet) = 0;
 
         /** \brief Get scan mode from the pointcloud packet.
         * \return DeviceType.
         */
-        static ScanMode GetScanMode(std::string& packet);
+        virtual ScanMode GetScanMode(std::string& packet) = 0;
 
         /** \brief Get the udp sequence number from the pointcloud packet.
         * \return udp sequence number.
         */
-        static int GetPacketSeq(std::string& packet);
+        virtual int GetPacketSeq(std::string& packet) = 0;
 
-		/** \brief Get the udp packet count in one frame pointcloud.
-		* \return udp packet count( -1 for failure ).
-		*/
-		static int GetPacketCount(std::string& packet);
+        /** \brief Get the timestamp from the exciton pointcloud sampleB  packet.
+         * \return timestamp in second.
+         */
+        virtual uint64_t GetTimestamp(uint8_t *data) = 0;
 
-        /** \brief Get the echo count from the pointcloud packet.
-        * \return eho count( 1 for single echo and 2 for dual echo ).
+        /** \brief process the data depend the lidar type.
+         * \return success or not.
+         */
+        virtual int ProcessPacket(
+            std::string &packet,
+            angle_comp_t *angle_comp,
+            PointCloud &cloud
+        ) = 0;
+
+        /** \brief Reset any cross-packet parser state (e.g. revolution detection).
+         *  Default no-op; parsers that accumulate state across packets override it.
+         */
+        virtual void ResetParserState() {}
+
+        /** \brief Get the azimuth (degrees) of a point-cloud packet cheaply,
+         *         without decoding the full point cloud. Used by offline indexers
+         *         to detect revolution boundaries. Default returns false.
+         */
+        virtual bool GetPkgAngle(std::string& packet, double* az_deg)
+        {
+            (void)packet;
+            (void)az_deg;
+            return false;
+        }
+
+        /** \brief parse the pkg data to points data .
         */
-        static int GetEchoCount(std::string& packet);
+        virtual void Pkg2Points(std::string &packet, std::vector<float>& v_azi_comp, std::vector<float>& v_ele_comp, PointCloud &cloud) = 0;
 
-        /** \brief Get the timestamp from the pointcloud packet.
-        * \return timestamp in second.
+        /** \brief Packet is valid angle comp packet or not.
+        * \return true for yes, false for no.
         */
-        static double GetTimestamp(std::string& packet);
+        virtual bool IsValidAnglePacket(std::string& packet) = 0;
 
-        /** \brief Get the timestamp from the pointcloud packet.
-        * \return timestamp in nano second.
+        /** \brief Parse the angle comp package data to angle_comp.
         */
-        static uint64_t GetTimestampNS(std::string& packet);
+        virtual int ParseAnglePkg(std::string &packet, angle_comp_t &angle_comp) = 0;
 
-        /** \brief Process a pointcloud udp packet to points.
-        * \param[in] packet          udp data packet
-        * \param[in] cal_lut         points' cal data in sin-cos format
-        * \param[in] cloud           to store the pointcloud
-        * \param[in] filter
-        * \param[in] stamp_ns_ptr      manu set packet timestamp(uint:ns)
-        * \return 0 for ok, others for failure.
+        /** \brief Emit the given per-channel angle table as an embedded pcap
+         *  meta-record. The table is owned by PointCloudProducer and passed in, the
+         *  same way ProcessPacket()/ParseAnglePkg() receive it, so a parser keeps no
+         *  angle state of its own. Default no-op; MRZ16 overrides it so an offline
+         *  replay can carry angles without an external calibration file. */
+        virtual bool GetAngleMetaRecord(const angle_comp_t& angle_comp, std::vector<uint8_t>& out) const
+        {
+            (void)angle_comp;
+            (void)out;
+            return false;
+        }
+
+        /** \brief Packet is valid imu packet or not.
+        * \return true for yes, false for no.
         */
-        static int ProcessPacket(std::string& packet, CalibrationDataSinCosTable& cal_lut, PointCloud& cloud, LidarPointsFilter* filter = nullptr, uint64_t* stamp_ns_ptr = 0);
+        virtual bool IsValidImuPacket(std::string& packet) = 0;
 
-        /** \brief Convert a point data(4 bytes) to x y z.
-        * \param[in]  point           pointer to 4 bytes's point data
-        * \param[out] dis             points' distance
-        * \param[out] ref             points' reflectivity
-        * \param[in]  dis_bit         how many bits used for distance
-        * \param[in]  ref_bit         how many bits used for reflectivity
-        * \return None.
+        /** \brief Parse the imu package data to imu_data.
         */
-        static void ResolvePoint(const unsigned char* point, ReturnType& return_type, float& dis, int& ref, int dis_bit, int ref_bit);
+        virtual int ParseImuPkg(std::string &packet, imu_data_t &imu_data) = 0;
 
-        /** \brief pointcloud upd packet data.
-        */
-        char data_[1304];
-
-        /* system time (uint:s)*/
-        double sys_timestamp = 0;
-        /* system time (uint:ns)*/
-        uint64_t stamp_ns_;
+    protected:
+        int last_frame = -1; 
     };
-
-    // New architecture protocol
-    struct InternalFrameResolveInfo
-    {
-        int echo = 0;
-        int fovs = 0;
-        int lines = 0;
-        int points_per_line = 0;
-
-        int npoints = 0;
-        int udp_count = 0;
-        int groups_per_udp = 0;
-        int points_per_group = 0;
-        std::vector<int> points_offset_bytes_in_group;
-        int point_size = 0;
-        std::vector<int> fov_id_in_group;
-    };
-    typedef std::vector<BloomingPoint> BloomingPoints;
-
-    struct BloomingFrame
-    {
-        BloomingPoints points;
-        // udp timestamp unit:s
-        double timestamp = 0;
-        // system timestamp unit:s
-        double sys_stamp = 0;
-    };
-    typedef std::shared_ptr<BloomingFrame> BloomingFramePtr;
-    struct InternalPacketHeader
-    {
-        bool valid = false;
-        ScanMode scan_mode = ScanUnknown;
-        PacketType packet_type = Tp_PacketUnknown;
-        uint16_t product_version = 0;
-        std::string serial_number;
-        int seq = -1;
-        // resolve info
-        InternalFrameResolveInfo resolve_info;
-    };
-
-    class InternalPacket
-    {
-    public:
-
-        /** \brief packet header.
-        *   Product Id:       2 bytes   (uint16_t)
-        *   Product Version:  2 bytes   (uint16_t)
-        *   Frame id:         2 bytes   (uint16_t)
-        *   Reserved:         2 bytes   (uint16_t)
-        *   Content Type:     2 bytes   (uint16_t)
-        *   Block Id:         2 bytes   (uint16_t)
-        *   PayLoad Length:   4 bytes   (uint32_t)
-        */
-        static const int PACKET_HEADER_LEN = 16;
-
-        /** \brief packet tail.
-        *   timestamp: 10 bytes
-        *   reserved:   2 bytes
-        *   check sum:  4 bytes   (uint32_t)
-        */
-        static const int PACKET_TAIL_LEN = 16;
-
-        static const int DISTANCE_BITS = 19;
-
-        /** distance units 0.0015m (10ps). */
-        static const float DISTANCE_UNITS;
-
-        /** \brief Get packet type.
-        * \param[in] packet    udp data packet
-        * \param[out] type   return packet type
-        * \param[out] mode   return lidar scan mode
-        */
-        static void GetPacketType(const std::string& packet, PacketType& type, ScanMode& mode);
-
-        /** \brief Get the udp sequence number from the udp packet.
-        * \return udp sequence number, -1 for invalid.
-        */
-        static int GetPacketSeq(const std::string& packet);
-
-       /** \brief Get the timestamp from the blooming packet.
-        * \return timestamp in second.
-        */
-        static double GetTimestamp(const std::string& packet);
-
-        /** \brief Get the timestamp from the blooming packet.
-        */
-        static void GetTimestampNS(const std::string& packet, uint64_t& s, uint32_t& ms, uint32_t& us);
-
-
-        static bool GetFrameResolveInfo(const std::string& packet, InternalPacketHeader& header);
-
-    };
-
-    class BloomingPacket :public InternalPacket
-    {
-
-    public:
-        // v2:5152 v1:3872
-        static const int PACKET_LEN = 5152;
-        static const int DELTA_PACKRT_US = 500;
-        static const int FRAME_THRESHOLD_MS = 50;
-        /** \brief Process a blooming udp packet to points.
-        * \param[in] packet          udp data packet
-        * \param[in] cal_lut         calibration data
-        * \param[out] cloud          to store the pointcloud
-        * \return 0 for ok, others for failure.
-        */
-        static int ProcessPacket(const std::string& packet, const zvision::CalibrationDataSinCosTable& cal_lut, BloomingFrame& frame, InternalPacketHeader* header = nullptr);
-
-        static bool IsValidPacket(const std::string& packet);
-
-        uint8_t data[PACKET_LEN];
-        double sys_stamp = .0;
-    };
-
 }
 
 #endif //end PACKET_H_
